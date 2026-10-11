@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <None Update="PhysicsReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <ProjectReference Include="../../src/Ctr2.Assets/Ctr2.Assets.csproj" />
     <ProjectReference Include="../../src/Ctr2.Engine/Ctr2.Engine.csproj" />
     <ProjectReference Include="../../src/Ctr2.Desktop/Ctr2.Desktop.csproj" />

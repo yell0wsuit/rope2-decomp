@@ -8,6 +8,7 @@ using System.Threading;
 using Ctr2.Assets;
 using Ctr2.Desktop;
 using Ctr2.Engine;
+using Ctr2.Engine.Physics;
 
 using SDL3;
 
@@ -16,12 +17,14 @@ using SkiaSharp;
 try
 {
     AtlasFrame? selectedFrame = null;
+
     if (args.Length >= 5 && args[0] == "preview-resource")
     {
         SelectedResource selected = ResourcePreview.Load(args[1], int.Parse(args[2]), int.Parse(args[3]), int.Parse(args[4]));
         selectedFrame = selected.Frame;
         args = ["preview", selected.TexturePath, .. args[5..]];
     }
+
     if (args.Length == 3 && args[0] == "import")
     {
         using CancellationTokenSource cancel = new();
@@ -34,9 +37,11 @@ try
         Console.WriteLine($"Imported {manifest.Textures.Count} RAW textures into {Path.GetFullPath(args[2])}");
         return 0;
     }
-    if (args.Length >= 4 && args[0] is "preview-animation" or "preview-level")
+
+    if (args.Length >= 4 && args[0] is "preview-animation" or "preview-level" or "simulate-level")
     {
-        int width = 960, height = 720, frames = 0, resolution = 2;
+        int width = 960, height = 720, frames = 0, resolution = 2, ticks = 0, releaseAt = -1;
+        bool simulate = args[0] == "simulate-level";
         double seconds = 0;
         string? snapshot = null;
         for (int i = 4; i < args.Length; i += 2)
@@ -59,6 +64,12 @@ try
                 case "--resolution":
                     resolution = int.Parse(args[i + 1]);
                     break;
+                case "--ticks" when simulate:
+                    ticks = int.Parse(args[i + 1]);
+                    break;
+                case "--release-at" when simulate:
+                    releaseAt = int.Parse(args[i + 1]);
+                    break;
                 case "--time":
                     seconds = double.Parse(args[i + 1], CultureInfo.InvariantCulture);
                     break;
@@ -69,26 +80,49 @@ try
                     throw new ArgumentException("Unknown option: " + args[i]);
             }
         }
+
         if (width < 1 || height < 1 || width > 8192 || height > 8192 || frames < 0 || !double.IsFinite(seconds) || seconds < 0)
         {
             throw new ArgumentException("Preview dimensions must be 1–8192; frames and time must be nonnegative and finite.");
         }
-        bool isLevel = args[0] == "preview-level";
+
+        if (ticks < 0 || ticks > 36000 || releaseAt < -1)
+        {
+            throw new ArgumentException("Physics ticks must be 0–36000; release tick must be -1 or nonnegative.");
+        }
+
+        bool isLevel = args[0] != "preview-animation";
         using AnimationPreview? animation = isLevel ? null : AnimationPreview.Load(args[1], int.Parse(args[2]), args[3], resolution);
         (LevelDefinition Definition, LevelPreview Preview)? selectedLevel = isLevel
-            ? LevelPreview.Load(args[1], int.Parse(args[2]), int.Parse(args[3]), resolution) : null;
+            ? LevelPreview.Load(args[1], int.Parse(args[2]), int.Parse(args[3]), resolution, simulate) : null;
         using LevelPreview? levelPreview = selectedLevel?.Preview;
         Action<SKCanvas, int, int, double> draw = isLevel ? levelPreview!.Draw : animation!.Draw;
         string selection = isLevel ? selectedLevel!.Value.Definition.FileName : args[3];
+
         if (levelPreview != null)
         {
             Console.WriteLine($"Desktop level {args[2]}/{args[3]}: {selection}; logical canvas {levelPreview.Layout.Size.X}×{levelPreview.Layout.Size.Y}.");
-            Console.WriteLine("Diagnostic markers: coral=candy, gold=star, wheat=grab/link, brown=unsmoothed polygon, magenta=unsupported object. Om Nom uses IDLE/default costume.");
+            Console.WriteLine($"Diagnostic markers: {(simulate ? "candy uses original artwork" : "coral=candy")}, gold=star, wheat=grab/link, brown=unsmoothed polygon, magenta=unsupported object. Om Nom uses IDLE/default costume.");
             foreach (string diagnostic in levelPreview.Layout.Diagnostics)
             {
-                Console.WriteLine(diagnostic);
+                if (!simulate || !diagnostic.StartsWith("Static layout only", StringComparison.Ordinal))
+                {
+                    Console.WriteLine(diagnostic);
+                }
             }
         }
+
+        SimulationClock physicsClock = new();
+        if (simulate)
+        {
+            Console.WriteLine("Contact-free candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; terrain contacts, angular motion, sleeping, native swipe/cut fragments and level completion are pending. --release-at removes candy attachments only.");
+            for (int i = 0; i < ticks; i++)
+            {
+                levelPreview!.Simulation!.Step(releaseAt);
+            }
+            Console.WriteLine($"Physics tick {levelPreview!.Simulation!.Tick}.");
+        }
+
         if (snapshot != null)
         {
             using SKBitmap bitmap = new(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
@@ -100,8 +134,24 @@ try
             Console.WriteLine($"Rendered scene {selection} at {seconds.ToString(CultureInfo.InvariantCulture)} seconds: {snapshot}");
             return 0;
         }
-        return DesktopPreview.Run(width, height, frames, (canvas, w, h, elapsed) => draw(canvas, w, h, seconds + elapsed));
+
+        int result = DesktopPreview.Run(width, height, frames, (canvas, w, h, elapsed) =>
+        {
+            if (simulate)
+            {
+                _ = physicsClock.AdvanceTo(elapsed, () => levelPreview!.Simulation!.Step(releaseAt));
+            }
+            draw(canvas, w, h, seconds + elapsed);
+        });
+
+        if (simulate)
+        {
+            Console.WriteLine($"Physics tick {levelPreview!.Simulation!.Tick}.");
+        }
+
+        return result;
     }
+
     if (args.Length >= 2 && args[0] == "preview")
     {
         int width = 960, height = 720, frames = 0;
@@ -159,8 +209,10 @@ try
         }
         return DesktopPreview.Run(width, height, frames, (canvas, w, h, _) => AssetPreview.Draw(canvas, image, w, h, frame));
     }
+
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
+        "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [preview options]\n" +
         "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
@@ -168,6 +220,7 @@ try
         "Supply a dump from your own Windows game. This build previews assets and static level layouts; gameplay is not implemented.");
     return args.Length == 0 || args is ["--help"] ? 0 : 1;
 }
+
 catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or InvalidOperationException or JsonException or OperationCanceledException or FormatException or OverflowException)
 {
     Console.Error.WriteLine(error.Message);

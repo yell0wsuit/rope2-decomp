@@ -113,6 +113,25 @@ namespace Ctr2.Assets
             };
         }
 
+        /// <summary>Loads the matching Windows master-design XML through the same bounded cache path checks.</summary>
+        /// <param name="cache">Imported Windows cache root.</param>
+        /// <returns>The parsed master-design settings and body records.</returns>
+        /// <exception cref="InvalidDataException">The master design or cache path is invalid.</exception>
+        /// <exception cref="IOException">The master design cannot be read.</exception>
+        public static LevelDefinition LoadWindowsDesign(string cache)
+        {
+            string assets = Path.GetFullPath(Path.Combine(cache, "assets")), maps = Path.Combine(assets, "maps");
+            foreach (string directory in new[] { Path.GetFullPath(cache), assets, maps })
+            {
+                RejectLink(directory);
+            }
+            const string name = "%21_MasterGameDesignDocument.xml";
+            return Read(ReadFile(Path.Combine(maps, name))) with
+            {
+                FileName = name
+            };
+        }
+
         /// <summary>Reads one regular bounded file without following a final-component link.</summary>
         /// <param name="path">Local file path.</param>
         /// <returns>The UTF-8 text contents.</returns>

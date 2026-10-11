@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
 using Ctr2.Assets;
 using Ctr2.Engine;
+using Ctr2.Engine.Physics;
 
 using SkiaSharp;
 
@@ -16,6 +18,15 @@ namespace Ctr2.Desktop
     {
         /// <summary>Optional cached character animation owned by this preview.</summary>
         private AnimationPreview? omnom;
+        /// <summary>Optional classic candy atlas for the simulation preview.</summary>
+        private CandySprite? candy;
+        /// <summary>Gets the optional contact-free simulation attached to this scene.</summary>
+        /// <value>Null for static previews; otherwise mutable fixed-tick diagnostic state.</value>
+        public CandySimulation? Simulation
+        {
+            get; private set;
+        }
+
         /// <summary>Whether native resources have been released.</summary>
         private bool disposed;
 
@@ -31,18 +42,32 @@ namespace Ctr2.Desktop
         /// <param name="pack">One-based desktop pack ID.</param>
         /// <param name="level">One-based desktop level entry.</param>
         /// <param name="resolution">Known image density enum, independent of map coordinates.</param>
+        /// <param name="simulate">Whether to load master-design candy/rope physics and classic candy artwork.</param>
         /// <returns>The parsed level and a preview owning its decoded character assets.</returns>
         /// <exception cref="System.IO.InvalidDataException">The level, resource or animation is invalid.</exception>
         /// <exception cref="System.IO.IOException">A cache file cannot be read.</exception>
-        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution)
+        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution, bool simulate = false)
         {
             LevelDefinition definition = LevelReader.LoadWindows(cache, pack, level);
             LevelPreview preview = new(LevelLayout.Create(definition));
-            if (definition.Objects.Any(o => o.Kind == "omnom"))
+            try
             {
-                preview.omnom = AnimationPreview.Load(cache, 85, "IDLE", resolution);
+                if (definition.Objects.Any(o => o.Kind == "omnom"))
+                {
+                    preview.omnom = AnimationPreview.Load(cache, 85, "IDLE", resolution);
+                }
+                if (simulate)
+                {
+                    preview.Simulation = new CandySimulation(definition, LevelReader.LoadWindowsDesign(cache));
+                    preview.candy = new CandySprite(cache, resolution);
+                }
+                return (definition, preview);
             }
-            return (definition, preview);
+            catch
+            {
+                preview.Dispose();
+                throw;
+            }
         }
 
         /// <summary>Draws a uniformly fitted static scene, clipped to its authored logical canvas.</summary>
@@ -88,20 +113,37 @@ namespace Ctr2.Desktop
                 }
                 paint.Color = SKColors.Wheat;
                 paint.StrokeWidth = 3;
-                foreach (LevelRope rope in Layout.Ropes)
+                foreach (LevelRope rope in Simulation == null ? Layout.Ropes : [])
                 {
                     if (rope.End is Vector2 end)
                     {
                         canvas.DrawLine(rope.Start.X, rope.Start.Y, end.X, end.Y, paint);
                     }
                 }
+                if (Simulation != null)
+                {
+                    for (int i = 0; i < Simulation.RopeCount; i++)
+                    {
+                        IReadOnlyList<Vector2> points = Simulation.RopePoints(i);
+                        int end = points.Count - (Simulation.IsReleased(i) ? 1 : 0);
+                        for (int j = 1; j < end; j++)
+                        {
+                            canvas.DrawLine(points[j - 1].X, points[j - 1].Y, points[j].X, points[j].Y, paint);
+                        }
+                    }
+                }
+                int candyIndex = 0;
                 foreach (PlacedLevelObject placed in Layout.Objects)
                 {
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized")
                     {
                         continue;
                     }
-                    if (placed.Source.Kind == "omnom" && omnom != null)
+                    if (placed.Source.Kind == "candy" && Simulation != null)
+                    {
+                        candy!.Draw(canvas, Simulation.Candies[candyIndex++].Position * 200);
+                    }
+                    else if (placed.Source.Kind == "omnom" && omnom != null)
                     {
                         Vector2 origin = (-omnom.CanvasSize / 2) + new Vector2(-8, -11);
                         Matrix4x4 character = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
@@ -134,6 +176,7 @@ namespace Ctr2.Desktop
             if (!disposed)
             {
                 omnom?.Dispose();
+                candy?.Dispose();
                 disposed = true;
             }
         }

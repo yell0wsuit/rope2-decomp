@@ -109,4 +109,20 @@ git diff --check
 
 Tests use synthetic data and exercise conversion, malformed dumps, cache rollback, trim geometry, viewport mapping and rendered pixel readback. No original data is required for tests.
 
-Next: implement Box2D 2.2.1 with the identified CTR2 modifications, reproduce recorded candy/rope inputs at the original `0.0167` timestep and `15/30` solver iterations, then complete one original level using the established static layout and coordinate contracts. Physics, animation and visual parity have not been established. Web work follows the PC vertical slice.
+The desktop now includes a contact-free candy/rope simulation using Windows master
+body definitions, original fixed stepping, rope damping and stretch transitions:
+
+```sh
+dotnet run --project src/Ctr2.Desktop -- simulate-level cache/windows-alpha 1 1 --ticks 120
+dotnet run --project src/Ctr2.Desktop -- simulate-level cache/windows-alpha 1 1 --ticks 120 --release-at 30 --snapshot local/release.png
+```
+
+Use the preview sizing/resolution options to inspect other viewports. `--ticks`
+advances before the first frame; `--release-at` removes the final candy link before
+a zero-based tick. This is a diagnostic release rather than swipe cutting.
+See [physics scope and fixture provenance](src/Ctr2.Engine/Physics/PHYSICS.md).
+Synthetic numerical fixtures from C++ Box2D validate the supported subset; original-game
+runtime, animation and visual parity remain unverified.
+
+Next: add contacts and interactive rope cutting, then stars, consumption and
+completion for one original level. Web work follows the PC vertical slice.
