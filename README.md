@@ -109,20 +109,27 @@ git diff --check
 
 Tests use synthetic data and exercise conversion, malformed dumps, cache rollback, trim geometry, viewport mapping and rendered pixel readback. No original data is required for tests.
 
-The desktop now includes a contact-free candy/rope simulation using Windows master
-body definitions, original fixed stepping, rope damping and stretch transitions:
+The desktop includes candy/rope simulation with Windows master body definitions,
+fixed stepping, damping, stretch transitions, physical cut fragments and discrete
+candy contacts against smoothed static terrain. Drag the primary mouse button
+across a rope in the live preview; accepted cuts print replay arguments on exit.
 
 ```sh
-dotnet run --project src/Ctr2.Desktop -- simulate-level cache/windows-alpha 1 1 --ticks 120
-dotnet run --project src/Ctr2.Desktop -- simulate-level cache/windows-alpha 1 1 --ticks 120 --release-at 30 --snapshot local/release.png
+dotnet run --project src/Ctr2.Desktop -- simulate-level cache/windows-alpha 1 1
+dotnet run --project src/Ctr2.Desktop -- simulate-level cache/windows-alpha 1 1 --ticks 120 --cut 30:0:0:400:138 --snapshot local/cut.png
 ```
 
-Use the preview sizing/resolution options to inspect other viewports. `--ticks`
-advances before the first frame; `--release-at` removes the final candy link before
-a zero-based tick. This is a diagnostic release rather than swipe cutting.
-See [physics scope and fixture provenance](src/Ctr2.Engine/Physics/PHYSICS.md).
-Synthetic numerical fixtures from C++ Box2D validate the supported subset; original-game
-runtime, animation and visual parity remain unverified.
+Use preview sizing/resolution options to inspect other viewports. `--ticks` advances
+before the first frame. Repeat `--cut tick:rope:segment:x:y[:impulseX:impulseY]` for
+recorded input: ticks, ropes and pre-cut segments are zero-based; crossing points
+are logical coordinates, and optional tip impulses use kilogram-meters/second.
+Cuts run before their selected tick. Only one cut per rope is supported.
+`--release-at` retains the earlier diagnostic that removes the final candy link.
 
-Next: add contacts and interactive rope cutting, then stars, consumption and
-completion for one original level. Web work follows the PC vertical slice.
+See [physics scope and fixture provenance](src/Ctr2.Engine/Physics/PHYSICS.md).
+Synthetic numerical fixtures from C++ Box2D validate supported scenarios;
+original-game runtime, animation and visual parity remain unverified. Continuous
+collision detection is pending, so fast candy can tunnel through thin terrain.
+
+Next: continuous collision detection and broader contact verification, then stars,
+consumption and completion for one original level. Web work follows the PC slice.

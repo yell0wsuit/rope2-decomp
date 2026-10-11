@@ -5,7 +5,7 @@ using System.Numerics;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>A center-anchored circle body for the contact-free solver subset.</summary>
+    /// <summary>A circular body for center-anchor joints and supported static terrain contacts.</summary>
     public sealed class PhysicsBody
     {
         /// <summary>Gets the center in meters.</summary>
@@ -20,11 +20,64 @@ namespace Ctr2.Engine.Physics
         {
             get; internal set;
         }
+        /// <summary>Gets or sets whether this circle skips solid terrain contacts.</summary>
+        /// <value>True for rope material points and grab sensors.</value>
+        public bool IsSensor
+        {
+            get; set;
+        }
+        /// <summary>Gets the clockwise orientation in radians.</summary>
+        /// <value>The integrated circle angle.</value>
+        public float Angle
+        {
+            get; internal set;
+        }
+        /// <summary>Gets the clockwise angular velocity in radians per second.</summary>
+        /// <value>The velocity produced by friction impulses.</value>
+        public float AngularVelocity
+        {
+            get; internal set;
+        }
+        /// <summary>Gets or sets the nonnegative angular damping coefficient.</summary>
+        /// <value>The coefficient applied each fixed tick.</value>
+        public float AngularDamping
+        {
+            get;
+            set => field = Coefficient(value, 1000000);
+        }
+        /// <summary>Gets or sets the nonnegative fixture friction coefficient.</summary>
+        /// <value>The coefficient mixed with terrain using the geometric mean.</value>
+        public float Friction
+        {
+            get;
+            set => field = Coefficient(value, 100);
+        } = .2f;
+        /// <summary>Gets or sets the nonnegative coefficient of restitution.</summary>
+        /// <value>The coefficient mixed with terrain using the maximum.</value>
+        public float Restitution
+        {
+            get;
+            set => field = Coefficient(value, 10);
+        }
+
+        /// <summary>Rejects invalid public contact coefficients before assignment.</summary>
+        /// <param name="value">Requested coefficient.</param>
+        /// <param name="maximum">Supported upper bound.</param>
+        /// <returns>The validated coefficient.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The value is nonfinite or outside bounds.</exception>
+        private static float Coefficient(float value, float maximum)
+        {
+            return float.IsFinite(value) && value >= 0 && value <= maximum ? value : throw new ArgumentOutOfRangeException(nameof(value));
+        }
+
+        /// <summary>Gets the inverse moment of inertia of a uniform circular fixture.</summary>
+        /// <value>Zero for static bodies.</value>
+        internal float InverseInertia => Mass > 0 ? 2 / (Mass * Radius * Radius) : 0;
         /// <summary>Gets the circular fixture mass in kilograms; zero denotes a static body.</summary>
         /// <value>Density times circle area for a dynamic body.</value>
         public float Mass
         {
-            get;
+            get; internal set;
         }
         /// <summary>Gets the inverse mass used by constraints.</summary>
         /// <value>Zero for static bodies.</value>
@@ -89,7 +142,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Accumulated warm-start impulse.</summary>
         private float impulse;
         /// <summary>Gets the rope limit or spring rest length in meters.</summary>
-        /// <value>The configured positive length.</value>
+        /// <value>The configured nonnegative length.</value>
         public float Length
         {
             get;
@@ -197,8 +250,8 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>Contact-free, always-awake Box2D 2.2.1 integration and center-joint solver subset.</summary>
-    public sealed class PhysicsWorld
+    /// <summary>Always-awake Box2D 2.2.1 subset with center joints and discrete circle/static-polygon contacts.</summary>
+    public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>
         public const float TimeStep = 0.0167f;
@@ -210,6 +263,15 @@ namespace Ctr2.Engine.Physics
         private readonly List<PhysicsJoint> joints = [];
         /// <summary>Whether an earlier world step initialized warm starting.</summary>
         private bool stepped;
+
+        /// <summary>Checks whether a topology change fits before mutating the world.</summary>
+        /// <param name="extraBodies">Additional circle count.</param>
+        /// <param name="extraJoints">Additional constraint count.</param>
+        /// <returns>Whether both world budgets permit the addition.</returns>
+        internal bool CanAdd(int extraBodies, int extraJoints)
+        {
+            return bodies.Count + extraBodies <= 4096 && joints.Count + extraJoints <= 8192;
+        }
 
         /// <summary>Adds a circular body, using zero density to request a static anchor.</summary>
         /// <param name="position">Initial center in meters.</param>
@@ -234,7 +296,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Adds a center-anchor maximum-length constraint.</summary>
         /// <param name="a">First owned body.</param>
         /// <param name="b">Second owned body.</param>
-        /// <param name="length">Positive maximum separation in meters.</param>
+        /// <param name="length">Nonnegative maximum separation in meters.</param>
         /// <returns>The new rope constraint.</returns>
         public PhysicsJoint AddRope(PhysicsBody a, PhysicsBody b, float length)
         {
@@ -264,7 +326,8 @@ namespace Ctr2.Engine.Physics
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>
         public void Step()
         {
-            List<List<PhysicsJoint>> islands = SolverOrder();
+            List<List<PhysicsJoint>> islands = SolverOrder(out Dictionary<PhysicsBody, (int Island, int Order)>? bodyOrder);
+            List<List<TerrainContact>> contactIslands = BuildContacts(islands, bodyOrder);
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
             {
@@ -276,6 +339,18 @@ namespace Ctr2.Engine.Physics
                 {
                     body.Velocity += TimeStep * new Vector2(0, body.GravityScale * 10);
                     body.Velocity *= Math.Clamp(1 - (TimeStep * body.LinearDamping), 0, 1);
+                    body.AngularVelocity *= Math.Clamp(1 - (TimeStep * body.AngularDamping), 0, 1);
+                }
+            }
+            foreach (List<TerrainContact> contacts in contactIslands)
+            {
+                foreach (TerrainContact contact in contacts)
+                {
+                    contact.Initialize();
+                }
+                foreach (TerrainContact contact in contacts)
+                {
+                    contact.WarmStart();
                 }
             }
             foreach (PhysicsJoint joint in ordered)
@@ -288,6 +363,13 @@ namespace Ctr2.Engine.Physics
                 {
                     joint.SolveVelocity();
                 }
+                foreach (List<TerrainContact> contacts in contactIslands)
+                {
+                    foreach (TerrainContact contact in contacts)
+                    {
+                        contact.SolveVelocity();
+                    }
+                }
             }
             foreach (PhysicsBody body in bodies)
             {
@@ -297,12 +379,23 @@ namespace Ctr2.Engine.Physics
                     body.Velocity *= 2 / translation.Length();
                 }
                 body.Position += TimeStep * body.Velocity;
+                float rotation = TimeStep * body.AngularVelocity;
+                if (rotation * rotation > MathF.PI * MathF.PI / 4)
+                {
+                    body.AngularVelocity *= MathF.PI / 2 / MathF.Abs(rotation);
+                }
+                body.Angle += TimeStep * body.AngularVelocity;
             }
-            foreach (List<PhysicsJoint> island in islands)
+            for (int islandIndex = 0; islandIndex < islands.Count; islandIndex++)
             {
+                List<PhysicsJoint> island = islands[islandIndex];
                 for (int i = 0; i < 30; i++)
                 {
                     bool solved = true;
+                    foreach (TerrainContact contact in contactIslands[islandIndex])
+                    {
+                        solved = contact.SolvePosition() && solved;
+                    }
                     foreach (PhysicsJoint joint in island)
                     {
                         solved = joint.SolvePosition() && solved;
@@ -325,7 +418,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The owned constraint.</returns>
         private PhysicsJoint AddJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping)
         {
-            if (joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length <= 0 ||
+            if (joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length < 0 || (frequency > 0 && length == 0) ||
                 !float.IsFinite(frequency) || frequency < 0 || !float.IsFinite(damping) || damping < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(length));
@@ -336,9 +429,11 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Builds Box2D's depth-first joint order, without traversing through static bodies.</summary>
+        /// <param name="bodyOrder">Dynamic-body island memberships and depth-first traversal ranks.</param>
         /// <returns>The ordered constraints for all independent awake islands.</returns>
-        private List<List<PhysicsJoint>> SolverOrder()
+        private List<List<PhysicsJoint>> SolverOrder(out Dictionary<PhysicsBody, (int Island, int Order)> bodyOrder)
         {
+            bodyOrder = [];
             Dictionary<PhysicsBody, List<PhysicsJoint>> edges = [];
             foreach (PhysicsBody body in bodies)
             {
@@ -369,6 +464,7 @@ namespace Ctr2.Engine.Physics
                     {
                         continue;
                     }
+                    bodyOrder.Add(body, (islands.Count - 1, bodyOrder.Count));
                     List<PhysicsJoint> connected = edges[body];
                     for (int j = connected.Count - 1; j >= 0; j--)
                     {

@@ -44,16 +44,28 @@ namespace Ctr2.Desktop
         /// <summary>Draws the layered candy at a logical scene position, preserving density and trim offsets.</summary>
         /// <param name="canvas">Scene-transformed caller-owned canvas.</param>
         /// <param name="position">Logical body center.</param>
-        public void Draw(SKCanvas canvas, Vector2 position)
+        /// <param name="angle">Clockwise body rotation in radians.</param>
+        public void Draw(SKCanvas canvas, Vector2 position, float angle = 0)
         {
-            const float scale = 0.92f * 0.92f;
-            foreach (AtlasFrame frame in frames)
+            int saved = canvas.Save();
+            try
             {
-                Vector2 offset = (frame.LogicalOffset - (frame.LogicalCanvas / 2)) * scale;
-                SKRect source = new(frame.PixelX, frame.PixelY, frame.PixelX + frame.PixelWidth, frame.PixelY + frame.PixelHeight);
-                SKRect destination = new(position.X + offset.X, position.Y + offset.Y,
-                    position.X + offset.X + (frame.LogicalWidth * scale), position.Y + offset.Y + (frame.LogicalHeight * scale));
-                canvas.DrawBitmap(bitmap, source, destination, new SKSamplingOptions(SKFilterMode.Linear));
+                canvas.Translate(position.X, position.Y);
+                canvas.RotateRadians(angle);
+                position = Vector2.Zero;
+                const float scale = 0.92f * 0.92f;
+                foreach (AtlasFrame frame in frames)
+                {
+                    Vector2 offset = (frame.LogicalOffset - (frame.LogicalCanvas / 2)) * scale;
+                    SKRect source = new(frame.PixelX, frame.PixelY, frame.PixelX + frame.PixelWidth, frame.PixelY + frame.PixelHeight);
+                    SKRect destination = new(position.X + offset.X, position.Y + offset.Y,
+                        position.X + offset.X + (frame.LogicalWidth * scale), position.Y + offset.Y + (frame.LogicalHeight * scale));
+                    canvas.DrawBitmap(bitmap, source, destination, new SKSamplingOptions(SKFilterMode.Linear));
+                }
+            }
+            finally
+            {
+                canvas.RestoreToCount(saved);
             }
         }
 

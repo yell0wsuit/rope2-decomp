@@ -37,11 +37,12 @@ namespace Ctr2.Tests
         [Theory]
         [InlineData("game")]
         [InlineData("game_release")]
+        [InlineData("game_cut")]
         public void GameChainMatchesIndependentReference(string scenario)
         {
             LevelDefinition map = LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='70' y='40'/><grab x='0' y='0' length='105' target_id='c'/></layer></map>");
             CandySimulation scene = new(map, LevelReader.Read(Design));
-            string[][] samples = [.. File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "PhysicsReference.csv"))
+            string[][] samples = [.. File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, scenario == "game_cut" ? "RopeCutReference.csv" : "PhysicsReference.csv"))
                 .Select(line => line.Split(',')).Where(row => row[0] == scenario)];
             Assert.NotEmpty(samples);
             foreach (string[] row in samples)
@@ -49,6 +50,10 @@ namespace Ctr2.Tests
                 int target = int.Parse(row[1], CultureInfo.InvariantCulture);
                 while (scene.Tick < target)
                 {
+                    if (scenario == "game_cut" && scene.Tick == 30)
+                    {
+                        Assert.True(scene.Cut(0, 0, new(30, 20), new(.001f, 0)));
+                    }
                     scene.Step(scenario == "game_release" ? 60 : -1);
                 }
                 int body = int.Parse(row[2], CultureInfo.InvariantCulture);
@@ -58,8 +63,22 @@ namespace Ctr2.Tests
                     1 => 3,
                     2 => 1,
                     3 => 2,
+                    4 or 5 when scenario == "game_cut" => 0,
                     _ => throw new InvalidDataException()
                 };
+                if (scenario == "game_cut" && scene.Tick > 30)
+                {
+                    point = body switch
+                    {
+                        0 => 0,
+                        1 => 5,
+                        2 => 3,
+                        3 => 4,
+                        4 => 1,
+                        5 => 2,
+                        _ => throw new InvalidDataException()
+                    };
+                }
                 Vector2 position = scene.RopePoints(0)[point] / 200;
                 Assert.InRange(MathF.Abs(position.X - float.Parse(row[3], CultureInfo.InvariantCulture)), 0, .00002f);
                 Assert.InRange(MathF.Abs(position.Y - float.Parse(row[4], CultureInfo.InvariantCulture)), 0, .00002f);

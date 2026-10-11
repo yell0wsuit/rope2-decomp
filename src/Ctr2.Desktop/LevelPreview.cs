@@ -11,7 +11,7 @@ using SkiaSharp;
 
 namespace Ctr2.Desktop
 {
-    /// <summary>Draws static authored level geometry and an optional assembled Om Nom pose.</summary>
+    /// <summary>Draws authored level geometry, an optional assembled Om Nom pose, and supported candy physics.</summary>
     /// <remarks>Creates a geometry-only diagnostic preview, without loading original assets.</remarks>
     /// <param name="layout">Initial logical scene geometry.</param>
     public sealed class LevelPreview(LevelLayout layout) : IDisposable
@@ -20,7 +20,7 @@ namespace Ctr2.Desktop
         private AnimationPreview? omnom;
         /// <summary>Optional classic candy atlas for the simulation preview.</summary>
         private CandySprite? candy;
-        /// <summary>Gets the optional contact-free simulation attached to this scene.</summary>
+        /// <summary>Gets the optional candy, rope and static terrain simulation attached to this scene.</summary>
         /// <value>Null for static previews; otherwise mutable fixed-tick diagnostic state.</value>
         public CandySimulation? Simulation
         {
@@ -70,11 +70,11 @@ namespace Ctr2.Desktop
             }
         }
 
-        /// <summary>Draws a uniformly fitted static scene, clipped to its authored logical canvas.</summary>
+        /// <summary>Draws a uniformly fitted scene, clipped to its authored logical canvas.</summary>
         /// <param name="canvas">Caller-owned destination canvas.</param>
         /// <param name="width">Positive output width in pixels.</param>
         /// <param name="height">Positive output height in pixels.</param>
-        /// <param name="seconds">Nonnegative character pose time; geometry remains static.</param>
+        /// <param name="seconds">Nonnegative character pose time; physics uses its separate fixed clock.</param>
         /// <exception cref="ObjectDisposedException">The preview has been disposed.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Dimensions or time are invalid.</exception>
         public void Draw(SKCanvas canvas, int width, int height, double seconds)
@@ -99,11 +99,11 @@ namespace Ctr2.Desktop
                 };
                 canvas.DrawRect(0, 0, Layout.Size.X, Layout.Size.Y, paint);
                 paint.Color = new SKColor(132, 96, 64);
-                foreach (LevelPolygon polygon in Layout.Polygons)
+                foreach (IReadOnlyList<Vector2> vertices in Simulation == null ? Layout.Polygons.Select(p => p.Vertices) : Simulation.Terrain.Select(s => s.Outline))
                 {
                     using SKPathBuilder path = new();
-                    path.MoveTo(polygon.Vertices[0].X, polygon.Vertices[0].Y);
-                    foreach (Vector2 vertex in polygon.Vertices.Skip(1))
+                    path.MoveTo(vertices[0].X, vertices[0].Y);
+                    foreach (Vector2 vertex in vertices.Skip(1))
                     {
                         path.LineTo(vertex.X, vertex.Y);
                     }
@@ -124,11 +124,12 @@ namespace Ctr2.Desktop
                 {
                     for (int i = 0; i < Simulation.RopeCount; i++)
                     {
-                        IReadOnlyList<Vector2> points = Simulation.RopePoints(i);
-                        int end = points.Count - (Simulation.IsReleased(i) ? 1 : 0);
-                        for (int j = 1; j < end; j++)
+                        foreach (IReadOnlyList<Vector2> points in Simulation.RopeSegments(i))
                         {
-                            canvas.DrawLine(points[j - 1].X, points[j - 1].Y, points[j].X, points[j].Y, paint);
+                            for (int j = 1; j < points.Count; j++)
+                            {
+                                canvas.DrawLine(points[j - 1].X, points[j - 1].Y, points[j].X, points[j].Y, paint);
+                            }
                         }
                     }
                 }
@@ -141,7 +142,8 @@ namespace Ctr2.Desktop
                     }
                     if (placed.Source.Kind == "candy" && Simulation != null)
                     {
-                        candy!.Draw(canvas, Simulation.Candies[candyIndex++].Position * 200);
+                        PhysicsBody body = Simulation.Candies[candyIndex++];
+                        candy!.Draw(canvas, body.Position * 200, body.Angle);
                     }
                     else if (placed.Source.Kind == "omnom" && omnom != null)
                     {

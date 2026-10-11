@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Numerics;
 using System.Text.Json;
 using System.Threading;
 
@@ -42,6 +45,7 @@ try
     {
         int width = 960, height = 720, frames = 0, resolution = 2, ticks = 0, releaseAt = -1;
         bool simulate = args[0] == "simulate-level";
+        List<RopeCut> scheduledCuts = [];
         double seconds = 0;
         string? snapshot = null;
         for (int i = 4; i < args.Length; i += 2)
@@ -63,6 +67,28 @@ try
                     break;
                 case "--resolution":
                     resolution = int.Parse(args[i + 1]);
+                    break;
+                case "--cut" when simulate:
+                    if (scheduledCuts.Count >= 1024)
+                    {
+                        throw new ArgumentException("Too many cuts.");
+                    }
+
+                    string[] fields = args[i + 1].Split(':');
+                    if (fields.Length is not (5 or 7))
+                    {
+                        throw new ArgumentException("Cut format: tick:rope:segment:x:y[:impulseX:impulseY].");
+                    }
+
+                    int cutTick = int.Parse(fields[0], CultureInfo.InvariantCulture);
+                    if (cutTick is < 0 or > 36000)
+                    {
+                        throw new ArgumentException("Cut tick must be 0–36000.");
+                    }
+
+                    scheduledCuts.Add(new(cutTick, int.Parse(fields[1], CultureInfo.InvariantCulture), int.Parse(fields[2], CultureInfo.InvariantCulture),
+                        new(float.Parse(fields[3], CultureInfo.InvariantCulture), float.Parse(fields[4], CultureInfo.InvariantCulture)),
+                        fields.Length == 7 ? new(float.Parse(fields[5], CultureInfo.InvariantCulture), float.Parse(fields[6], CultureInfo.InvariantCulture)) : Vector2.Zero));
                     break;
                 case "--ticks" when simulate:
                     ticks = int.Parse(args[i + 1]);
@@ -102,7 +128,7 @@ try
         if (levelPreview != null)
         {
             Console.WriteLine($"Desktop level {args[2]}/{args[3]}: {selection}; logical canvas {levelPreview.Layout.Size.X}×{levelPreview.Layout.Size.Y}.");
-            Console.WriteLine($"Diagnostic markers: {(simulate ? "candy uses original artwork" : "coral=candy")}, gold=star, wheat=grab/link, brown=unsmoothed polygon, magenta=unsupported object. Om Nom uses IDLE/default costume.");
+            Console.WriteLine($"Diagnostic markers: {(simulate ? "candy uses original artwork" : "coral=candy")}, gold=star, wheat=grab/link, brown=terrain outline, magenta=unsupported object. Om Nom uses IDLE/default costume.");
             foreach (string diagnostic in levelPreview.Layout.Diagnostics)
             {
                 if (!simulate || !diagnostic.StartsWith("Static layout only", StringComparison.Ordinal))
@@ -113,12 +139,26 @@ try
         }
 
         SimulationClock physicsClock = new();
+        RopeInput? ropeInput = simulate ? new(levelPreview!.Simulation!, levelPreview.Layout.Size) : null;
+        SdlRopeInput? mouse = ropeInput != null ? new(ropeInput) : null;
+        Queue<RopeCut> replay = new(scheduledCuts.OrderBy(c => c.Tick));
+        void fixedStep()
+        {
+            CandySimulation scene = levelPreview!.Simulation!;
+            while (replay.TryPeek(out RopeCut? cut) && cut.Tick == scene.Tick)
+            {
+                _ = replay.Dequeue();
+                _ = scene.Cut(cut.Rope, cut.Segment, cut.Point, cut.Impulse);
+            }
+            ropeInput!.ApplyPending();
+            scene.Step(releaseAt);
+        }
         if (simulate)
         {
-            Console.WriteLine("Contact-free candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; terrain contacts, angular motion, sleeping, native swipe/cut fragments and level completion are pending. --release-at removes candy attachments only.");
+            Console.WriteLine("Candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; static terrain contacts and physical cut fragments enabled. Drag the primary mouse button across a rope. Continuous collision detection, dynamic terrain, sleeping and level completion are pending. --release-at removes candy attachments only.");
             for (int i = 0; i < ticks; i++)
             {
-                levelPreview!.Simulation!.Step(releaseAt);
+                fixedStep();
             }
             Console.WriteLine($"Physics tick {levelPreview!.Simulation!.Tick}.");
         }
@@ -139,14 +179,18 @@ try
         {
             if (simulate)
             {
-                _ = physicsClock.AdvanceTo(elapsed, () => levelPreview!.Simulation!.Step(releaseAt));
+                _ = physicsClock.AdvanceTo(elapsed, fixedStep);
             }
             draw(canvas, w, h, seconds + elapsed);
-        });
+        }, mouse == null ? null : mouse.Handle);
 
         if (simulate)
         {
             Console.WriteLine($"Physics tick {levelPreview!.Simulation!.Tick}.");
+            foreach (RopeCut cut in ropeInput!.Cuts)
+            {
+                Console.WriteLine(FormattableString.Invariant($"Cut replay: --cut {cut.Tick}:{cut.Rope}:{cut.Segment}:{cut.Point.X:R}:{cut.Point.Y:R}:{cut.Impulse.X:R}:{cut.Impulse.Y:R}"));
+            }
         }
 
         return result;
@@ -212,12 +256,12 @@ try
 
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
-        "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [preview options]\n" +
+        "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [--cut tick:rope:segment:x:y] [preview options]\n" +
         "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
         "  preview <cached PNG> [--width N] [--height N] [--snapshot new.png] [--frames N] [--frame metadata.json]\n" +
-        "Supply a dump from your own Windows game. This build previews assets and static level layouts; gameplay is not implemented.");
+        "Supply a dump from your own Windows game. This build previews assets, level layouts and candy/rope physics; complete gameplay remains pending.");
     return args.Length == 0 || args is ["--help"] ? 0 : 1;
 }
 
@@ -247,7 +291,8 @@ internal static class DesktopPreview
     /// Preview frame metadata is incompatible with the texture or canvas.
     /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">The drawing dimensions are invalid.</exception>
-    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw)
+    /// <param name="input">Optional event callback receiving window and pixel dimensions.</param>
+    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw, Action<SDL.Event, int, int, int, int>? input = null)
     {
         if (!SDL.Init(SDL.InitFlags.Video))
         {
@@ -278,6 +323,12 @@ internal static class DesktopPreview
             {
                 while (SDL.PollEvent(out SDL.Event evt))
                 {
+                    if (input != null)
+                    {
+                        Check(SDL.GetWindowSize(window, out int windowWidth, out int windowHeight));
+                        Check(SDL.GetWindowSizeInPixels(window, out int pixelWidth, out int pixelHeight));
+                        input(evt, windowWidth, windowHeight, pixelWidth, pixelHeight);
+                    }
                     if (evt.Type == (uint)SDL.EventType.Quit)
                     {
                         quit = true;

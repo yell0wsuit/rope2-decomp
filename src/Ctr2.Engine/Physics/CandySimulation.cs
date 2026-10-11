@@ -9,8 +9,8 @@ using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>A contact-free diagnostic scene built from original candy, grab and rope design data.</summary>
-    public sealed class CandySimulation
+    /// <summary>A diagnostic scene with authored candy, grab, rope and static terrain design data.</summary>
+    public sealed partial class CandySimulation
     {
         /// <summary>World owning all center bodies and constraints.</summary>
         private readonly PhysicsWorld world = new();
@@ -28,6 +28,13 @@ namespace Ctr2.Engine.Physics
         {
             get; private set;
         }
+        /// <summary>Gets static smoothed terrain shared by collision fixtures and diagnostic drawing.</summary>
+        /// <value>Immutable material outlines and triangulated meter-space fixtures.</value>
+        public IReadOnlyList<TerrainShape> Terrain
+        {
+            get;
+        }
+
         /// <summary>Gets the number of authored grab ropes.</summary>
         /// <value>The number of independent chains, including released chains.</value>
         public int RopeCount => ropes.Count;
@@ -36,11 +43,20 @@ namespace Ctr2.Engine.Physics
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
-        /// <remarks>Terrain contacts, sleeping, angular motion and other mechanics are not simulated.</remarks>
+        /// <remarks>Only circle/static-terrain contacts and center-anchor joints are supported; sleeping, CCD and other mechanics remain pending.</remarks>
         public CandySimulation(LevelDefinition level, LevelDefinition design)
         {
             LevelLayout layout = LevelLayout.Create(level);
+            Terrain = TerrainGeometry.Build(level, design);
+            foreach (TerrainShape shape in Terrain.Where(s => !s.IsSensor))
+            {
+                foreach (IReadOnlyList<Vector2> triangle in shape.Triangles)
+                {
+                    world.AddTerrain(triangle, shape.Friction, shape.Restitution);
+                }
+            }
             LevelElement candyDesign = Find(design, "candy"), grabDesign = Find(design, "grab"), pointDesign = Find(design, "ropeMaterialPoint");
+            this.pointDesign = pointDesign;
             LevelElement ropeDesign = Find(design, "rope_design");
             float bone = Value(ropeDesign, "bone_length") / 100;
             float frequency = Value(ropeDesign, "stretch_hertz");
@@ -138,7 +154,7 @@ namespace Ctr2.Engine.Physics
             }
             if (Tick == releaseAt)
             {
-                foreach (RopeChain rope in ropes)
+                foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
                 {
                     _ = world.Remove(rope.Joints[^1]);
                     if (rope.Stretch != null)
@@ -149,7 +165,7 @@ namespace Ctr2.Engine.Physics
                 }
             }
             world.Step();
-            foreach (RopeChain rope in ropes.Where(r => !r.Released))
+            foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
             }
@@ -238,7 +254,13 @@ namespace Ctr2.Engine.Physics
             }
             PhysicsBody body = world.AddCircle(position, radius, isStatic ? 0 : density, Value(design, "gravityScale"));
             body.LinearDamping = Value(design, "linearDamping");
-            return body;
+            body.AngularDamping = Value(design, "angularDamping");
+            body.Friction = Value(design, "friction", .2f);
+            body.Restitution = Value(design, "restitution", 0);
+            body.IsSensor = isStatic || design.Attributes.GetValueOrDefault("id", "") == "ropeMaterialPoint";
+            return body.AngularDamping < 0 || body.Friction < 0 || body.Friction > 100 || body.Restitution < 0 || body.Restitution > 10
+                ? throw new InvalidDataException("Unsupported circle material coefficients.")
+                : body;
         }
 
         /// <summary>Finds one uniquely named master design.</summary>
@@ -281,6 +303,8 @@ namespace Ctr2.Engine.Physics
             internal PhysicsJoint? Stretch;
             /// <summary>Whether the final attachment has been released diagnostically.</summary>
             internal bool Released;
+            /// <summary>Disconnected edge between two cut tips, or -1 before cutting.</summary>
+            internal int CutGap = -1;
 
             /// <summary>Initializes chain ownership and authored spring parameters.</summary>
             /// <param name="points">Ordered bodies.</param>
