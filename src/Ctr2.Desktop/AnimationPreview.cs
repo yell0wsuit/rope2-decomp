@@ -33,6 +33,10 @@ namespace Ctr2.Desktop
         /// <summary>Whether owned native resources have been released.</summary>
         private bool disposed;
 
+        /// <summary>Gets the authored root canvas dimensions in logical units.</summary>
+        /// <value>The positive width and height, independent of texture density.</value>
+        public Vector2 CanvasSize => new(root.Width!.Value, root.Height!.Value);
+
         /// <summary>Gets the longest selected scene track duration.</summary>
         /// <value>The duration in seconds; zero indicates a static pose.</value>
         public double Duration
@@ -122,10 +126,22 @@ namespace Ctr2.Desktop
                 Color = new SKColor(68, 73, 81)
             };
             canvas.DrawRect(new SKRect(topLeft.X, topLeft.Y, bottomRight.X, bottomRight.Y), background);
+            DrawTransformed(canvas, viewport.Transform, seconds);
+        }
+
+        /// <summary>Draws a pose through a caller-supplied scene transform without clearing or fitting the canvas.</summary>
+        /// <param name="canvas">Caller-owned destination canvas; its clipping and transform remain active.</param>
+        /// <param name="sceneTransform">Transform from authored root coordinates into the destination scene.</param>
+        /// <param name="seconds">Nonnegative elapsed scene time; the terminal pose holds.</param>
+        /// <exception cref="ObjectDisposedException">The preview has been disposed.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Time is invalid.</exception>
+        public void DrawTransformed(SKCanvas canvas, Matrix4x4 sceneTransform, double seconds)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
             foreach (AnimationSprite sprite in AnimationPose.Sample(root, scene, seconds, Size))
             {
                 AtlasFrame frame = geometry[(sprite.Source, sprite.Quad)];
-                Matrix4x4 transform = sprite.Transform * viewport.Transform;
+                Matrix4x4 transform = sprite.Transform * sceneTransform;
                 SKMatrix matrix = new(transform.M11, transform.M21, transform.M41, transform.M12, transform.M22, transform.M42, 0, 0, 1);
                 float[] tint = [sprite.Color.X, 0, 0, 0, 0, 0, sprite.Color.Y, 0, 0, 0, 0, 0, sprite.Color.Z, 0, 0, 0, 0, 0, sprite.Color.W, 0];
                 using SKColorFilter filter = SKColorFilter.CreateColorMatrix(tint);

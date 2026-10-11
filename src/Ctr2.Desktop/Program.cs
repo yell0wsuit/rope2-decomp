@@ -34,7 +34,7 @@ try
         Console.WriteLine($"Imported {manifest.Textures.Count} RAW textures into {Path.GetFullPath(args[2])}");
         return 0;
     }
-    if (args.Length >= 4 && args[0] == "preview-animation")
+    if (args.Length >= 4 && args[0] is "preview-animation" or "preview-level")
     {
         int width = 960, height = 720, frames = 0, resolution = 2;
         double seconds = 0;
@@ -73,19 +73,34 @@ try
         {
             throw new ArgumentException("Preview dimensions must be 1–8192; frames and time must be nonnegative and finite.");
         }
-        using AnimationPreview animation = AnimationPreview.Load(args[1], int.Parse(args[2]), args[3], resolution);
+        bool isLevel = args[0] == "preview-level";
+        using AnimationPreview? animation = isLevel ? null : AnimationPreview.Load(args[1], int.Parse(args[2]), args[3], resolution);
+        (LevelDefinition Definition, LevelPreview Preview)? selectedLevel = isLevel
+            ? LevelPreview.Load(args[1], int.Parse(args[2]), int.Parse(args[3]), resolution) : null;
+        using LevelPreview? levelPreview = selectedLevel?.Preview;
+        Action<SKCanvas, int, int, double> draw = isLevel ? levelPreview!.Draw : animation!.Draw;
+        string selection = isLevel ? selectedLevel!.Value.Definition.FileName : args[3];
+        if (levelPreview != null)
+        {
+            Console.WriteLine($"Desktop level {args[2]}/{args[3]}: {selection}; logical canvas {levelPreview.Layout.Size.X}×{levelPreview.Layout.Size.Y}.");
+            Console.WriteLine("Diagnostic markers: coral=candy, gold=star, wheat=grab/link, brown=unsmoothed polygon, magenta=unsupported object. Om Nom uses IDLE/default costume.");
+            foreach (string diagnostic in levelPreview.Layout.Diagnostics)
+            {
+                Console.WriteLine(diagnostic);
+            }
+        }
         if (snapshot != null)
         {
             using SKBitmap bitmap = new(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
             using SKCanvas canvas = new(bitmap);
-            animation.Draw(canvas, width, height, seconds);
+            draw(canvas, width, height, seconds);
             using SKData encoded = bitmap.Encode(SKEncodedImageFormat.Png, 100);
             using FileStream file = new(snapshot, FileMode.CreateNew);
             encoded.SaveTo(file);
-            Console.WriteLine($"Rendered scene {args[3]} at {seconds.ToString(CultureInfo.InvariantCulture)} seconds: {snapshot}");
+            Console.WriteLine($"Rendered scene {selection} at {seconds.ToString(CultureInfo.InvariantCulture)} seconds: {snapshot}");
             return 0;
         }
-        return DesktopPreview.Run(width, height, frames, (canvas, w, h, elapsed) => animation.Draw(canvas, w, h, seconds + elapsed));
+        return DesktopPreview.Run(width, height, frames, (canvas, w, h, elapsed) => draw(canvas, w, h, seconds + elapsed));
     }
     if (args.Length >= 2 && args[0] == "preview")
     {
@@ -146,10 +161,11 @@ try
     }
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
+        "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
         "  preview <cached PNG> [--width N] [--height N] [--snapshot new.png] [--frames N] [--frame metadata.json]\n" +
-        "Supply a dump from your own Windows game. This build previews assets; gameplay is not implemented.");
+        "Supply a dump from your own Windows game. This build previews assets and static level layouts; gameplay is not implemented.");
     return args.Length == 0 || args is ["--help"] ? 0 : 1;
 }
 catch (Exception error) when (error is IOException or InvalidDataException or ArgumentException or InvalidOperationException or JsonException or OperationCanceledException or FormatException or OverflowException)

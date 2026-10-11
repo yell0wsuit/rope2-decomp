@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -70,6 +71,15 @@ namespace Ctr2.Tests
                 }
                 using AnimationPreview preview = AnimationPreview.Load(root, 1, "IDLE", 2);
                 Assert.Equal(1, preview.Duration);
+                using (SKBitmap transformed = new(100, 100))
+                using (SKCanvas canvas = new(transformed))
+                {
+                    canvas.Clear(SKColors.Blue);
+                    preview.DrawTransformed(canvas, Matrix4x4.CreateTranslation(20, 30, 0), 0.5);
+                    Assert.Equal(new Vector2(10, 10), preview.CanvasSize);
+                    Assert.Equal(SKColors.Red, transformed.GetPixel(24, 32));
+                    Assert.Equal(SKColors.Blue, transformed.GetPixel(0, 0));
+                }
                 _ = Assert.Throws<InvalidDataException>(() => AnimationPreview.Load(root, 1, "missing", 2));
                 ResourceEntry imageResource = catalog.Resources[1] with
                 {

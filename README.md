@@ -2,7 +2,7 @@
 
 An early C# port using selected framework code from [CutTheRopeDX](https://github.com/yell0wsuit/cuttherope-dx). PC comes first; a web host is planned later.
 
-**Current build: local asset import, Windows resource metadata extraction, and desktop atlas/animated-character previews. Gameplay is not implemented yet.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
+**Current build: local asset import, Windows resource metadata extraction, and desktop atlas/animated-character and static level previews. Gameplay is not implemented yet.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
 
 ## Your game assets
 
@@ -36,6 +36,18 @@ dotnet run --project src/Ctr2.Desktop -- preview cache/windows/assets/omnom_640_
 ```
 
 For offscreen verification, add `--width 640 --height 960 --snapshot local/atlas.png`. Create the `local/` directory first; snapshots do not overwrite existing files. `--frames 3` runs a bounded desktop presentation smoke test.
+
+## Static level layout preview
+
+Select a level using its one-based pack and entry in the Windows desktop level list:
+
+```sh
+dotnet run --project src/Ctr2.Desktop -- preview-level cache/windows-alpha 1 2
+```
+
+Use `--width 640 --height 960 --snapshot local/level.png` for a deterministic offscreen image, `--resolution 4` for higher-density Om Nom textures, or `--frames 60` for a bounded desktop run. `--time` changes the character pose only. The loader uses `sortedlist_desktop.xml`; it preserves unknown objects/settings and reports pending mechanics.
+
+This is a **static diagnostic layout**, with assembled Om Nom, colored candy/star/grab markers, straight rope links and unsmoothed polygons. Editor coordinates and rope lengths double into logical units; texture density is independent. The canvas fits uniformly with centered margins. This does not yet reproduce the original background, camera, physics, interactions or level completion. Pack 1 level 1 intentionally starts Om Nom above the screen for its unimplemented special intro; level 2 shows his visible authored placement. See [level contracts and limitations](src/Ctr2.Assets/LEVEL_FORMAT.md).
 
 ## Conversion and scaling
 
@@ -97,4 +109,4 @@ git diff --check
 
 Tests use synthetic data and exercise conversion, malformed dumps, cache rollback, trim geometry, viewport mapping and rendered pixel readback. No original data is required for tests.
 
-Next: establish the original level-loading and gameplay coordinate contracts, connect the character to a first-level scene, and implement Box2D 2.2.1 with the identified CTR2 modifications, reproduce recorded candy/rope inputs at the original `0.0167` timestep and `15/30` solver iterations, and complete one original level. Physics, animation and visual parity have not been established. Web work follows the PC vertical slice.
+Next: implement Box2D 2.2.1 with the identified CTR2 modifications, reproduce recorded candy/rope inputs at the original `0.0167` timestep and `15/30` solver iterations, then complete one original level using the established static layout and coordinate contracts. Physics, animation and visual parity have not been established. Web work follows the PC vertical slice.

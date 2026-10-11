@@ -1,0 +1,141 @@
+using System;
+using System.Linq;
+using System.Numerics;
+
+using Ctr2.Assets;
+using Ctr2.Engine;
+
+using SkiaSharp;
+
+namespace Ctr2.Desktop
+{
+    /// <summary>Draws static authored level geometry and an optional assembled Om Nom pose.</summary>
+    /// <remarks>Creates a geometry-only diagnostic preview, without loading original assets.</remarks>
+    /// <param name="layout">Initial logical scene geometry.</param>
+    public sealed class LevelPreview(LevelLayout layout) : IDisposable
+    {
+        /// <summary>Optional cached character animation owned by this preview.</summary>
+        private AnimationPreview? omnom;
+        /// <summary>Whether native resources have been released.</summary>
+        private bool disposed;
+
+        /// <summary>Gets the initial layout and explicit pending-feature diagnostics.</summary>
+        /// <value>The immutable logical geometry used by this preview.</value>
+        public LevelLayout Layout
+        {
+            get;
+        } = layout;
+
+        /// <summary>Loads a Windows level and its default Om Nom IDLE animation when present.</summary>
+        /// <param name="cache">Imported Windows cache root.</param>
+        /// <param name="pack">One-based desktop pack ID.</param>
+        /// <param name="level">One-based desktop level entry.</param>
+        /// <param name="resolution">Known image density enum, independent of map coordinates.</param>
+        /// <returns>The parsed level and a preview owning its decoded character assets.</returns>
+        /// <exception cref="System.IO.InvalidDataException">The level, resource or animation is invalid.</exception>
+        /// <exception cref="System.IO.IOException">A cache file cannot be read.</exception>
+        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution)
+        {
+            LevelDefinition definition = LevelReader.LoadWindows(cache, pack, level);
+            LevelPreview preview = new(LevelLayout.Create(definition));
+            if (definition.Objects.Any(o => o.Kind == "omnom"))
+            {
+                preview.omnom = AnimationPreview.Load(cache, 85, "IDLE", resolution);
+            }
+            return (definition, preview);
+        }
+
+        /// <summary>Draws a uniformly fitted static scene, clipped to its authored logical canvas.</summary>
+        /// <param name="canvas">Caller-owned destination canvas.</param>
+        /// <param name="width">Positive output width in pixels.</param>
+        /// <param name="height">Positive output height in pixels.</param>
+        /// <param name="seconds">Nonnegative character pose time; geometry remains static.</param>
+        /// <exception cref="ObjectDisposedException">The preview has been disposed.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">Dimensions or time are invalid.</exception>
+        public void Draw(SKCanvas canvas, int width, int height, double seconds)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (!double.IsFinite(seconds) || seconds < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(seconds));
+            }
+            Viewport viewport = Viewport.Fit(width, height, Layout.Size.X, Layout.Size.Y);
+            canvas.Clear(new SKColor(24, 27, 32));
+            Matrix4x4 transform = viewport.Transform;
+            int saved = canvas.Save();
+            try
+            {
+                canvas.Concat(new SKMatrix(transform.M11, transform.M21, transform.M41, transform.M12, transform.M22, transform.M42, 0, 0, 1));
+                canvas.ClipRect(new SKRect(0, 0, Layout.Size.X, Layout.Size.Y));
+                using SKPaint paint = new()
+                {
+                    Color = new SKColor(42, 55, 48),
+                    IsAntialias = true
+                };
+                canvas.DrawRect(0, 0, Layout.Size.X, Layout.Size.Y, paint);
+                paint.Color = new SKColor(132, 96, 64);
+                foreach (LevelPolygon polygon in Layout.Polygons)
+                {
+                    using SKPathBuilder path = new();
+                    path.MoveTo(polygon.Vertices[0].X, polygon.Vertices[0].Y);
+                    foreach (Vector2 vertex in polygon.Vertices.Skip(1))
+                    {
+                        path.LineTo(vertex.X, vertex.Y);
+                    }
+                    path.Close();
+                    using SKPath outline = path.Detach();
+                    canvas.DrawPath(outline, paint);
+                }
+                paint.Color = SKColors.Wheat;
+                paint.StrokeWidth = 3;
+                foreach (LevelRope rope in Layout.Ropes)
+                {
+                    if (rope.End is Vector2 end)
+                    {
+                        canvas.DrawLine(rope.Start.X, rope.Start.Y, end.X, end.Y, paint);
+                    }
+                }
+                foreach (PlacedLevelObject placed in Layout.Objects)
+                {
+                    if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized")
+                    {
+                        continue;
+                    }
+                    if (placed.Source.Kind == "omnom" && omnom != null)
+                    {
+                        Vector2 origin = (-omnom.CanvasSize / 2) + new Vector2(-8, -11);
+                        Matrix4x4 character = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
+                            Matrix4x4.CreateRotationZ(placed.Angle * MathF.PI / 180) * Matrix4x4.CreateTranslation(point.X, point.Y, 0);
+                        omnom.DrawTransformed(canvas, character, seconds);
+                    }
+                    else
+                    {
+                        paint.Color = placed.Source.Kind switch
+                        {
+                            "candy" => SKColors.Coral,
+                            "star" => SKColors.Gold,
+                            "grab" => SKColors.Wheat,
+                            "omnom" => SKColors.LawnGreen,
+                            _ => SKColors.Magenta
+                        };
+                        canvas.DrawCircle(point.X, point.Y, placed.Source.Kind == "grab" ? 6 : 12, paint);
+                    }
+                }
+            }
+            finally
+            {
+                canvas.RestoreToCount(saved);
+            }
+        }
+
+        /// <summary>Releases owned character textures; repeated calls are safe.</summary>
+        public void Dispose()
+        {
+            if (!disposed)
+            {
+                omnom?.Dispose();
+                disposed = true;
+            }
+        }
+    }
+}
