@@ -30,25 +30,7 @@ namespace Ctr2.Desktop
         /// <exception cref="IOException">The sidecar or selected texture cannot be read.</exception>
         public static SelectedResource Load(string cache, int id, int resolution, int quad)
         {
-            ResourceCatalog catalog;
-            try
-            {
-                using FileStream sidecar = File.OpenRead(Path.Combine(cache, "resources.json"));
-                if (sidecar.Length > 16 * 1024 * 1024)
-                {
-                    throw new InvalidDataException("Resource sidecar exceeds size limit.");
-                }
-
-                catalog = JsonSerializer.Deserialize<ResourceCatalog>(sidecar) ?? throw new InvalidDataException("Empty resource catalog.");
-            }
-            catch (JsonException error)
-            {
-                throw new InvalidDataException("Malformed resource catalog.", error);
-            }
-            if (catalog.SchemaVersion != 1 || catalog.Resources == null || catalog.Resources.Any(r => r == null))
-            {
-                throw new InvalidDataException("Unsupported resource catalog schema or records.");
-            }
+            ResourceCatalog catalog = LoadCatalog(cache);
             ResourceEntry[] matches = [.. catalog.Resources.Where(r => r.Id == id && r.Resolution == resolution)];
             if (matches.Length != 1)
             {
@@ -64,6 +46,67 @@ namespace Ctr2.Desktop
             {
                 throw new InvalidDataException("Resource density is unknown for this resolution; use an explicitly traced frame sidecar.");
             }
+            string texture = ResolveTexture(cache, resource);
+            return new(texture, Geometry(resource, quad));
+        }
+
+        /// <summary>Constructs validated logical geometry for one catalog quad.</summary>
+        /// <param name="resource">Image resource metadata.</param>
+        /// <param name="quad">Selected quad index.</param>
+        /// <returns>Density-aware frame geometry.</returns>
+        internal static AtlasFrame Geometry(ResourceEntry resource, int quad)
+        {
+            float density = resource.PixelsPerLogicalUnit ?? throw new InvalidDataException("Unknown resource density.");
+            ResourceQuad frame = resource.Quads[quad] ?? throw new InvalidDataException("Missing quad geometry.");
+            if (!frame.IsAvailable)
+            {
+                throw new InvalidDataException("This quad is an unavailable placeholder in the source Windows build.");
+            }
+            try
+            {
+                AtlasFrame geometry = new(frame.X, frame.Y, frame.Width, frame.Height, frame.OffsetX, frame.OffsetY,
+                    resource.PreCutWidth, resource.PreCutHeight, density);
+                return geometry.LogicalCanvas.X <= 0 || geometry.LogicalCanvas.Y <= 0
+                    ? throw new InvalidDataException("Resource has no positive pre-cut canvas.")
+                    : geometry;
+            }
+            catch (ArgumentOutOfRangeException error)
+            {
+                throw new InvalidDataException("Invalid or empty resource quad geometry.", error);
+            }
+        }
+
+        /// <summary>Reads the bounded and versioned imported catalog.</summary>
+        /// <param name="cache">Cache root.</param>
+        /// <returns>The catalog.</returns>
+        internal static ResourceCatalog LoadCatalog(string cache)
+        {
+            ResourceCatalog catalog;
+            try
+            {
+                using FileStream sidecar = File.OpenRead(Path.Combine(cache, "resources.json"));
+                if (sidecar.Length > 16 * 1024 * 1024)
+                {
+                    throw new InvalidDataException("Resource sidecar exceeds size limit.");
+                }
+
+                catalog = JsonSerializer.Deserialize<ResourceCatalog>(sidecar) ?? throw new InvalidDataException("Empty resource catalog.");
+            }
+            catch (JsonException error)
+            {
+                throw new InvalidDataException("Malformed resource catalog.", error);
+            }
+            return catalog.SchemaVersion != 1 || catalog.Resources == null || catalog.Resources.Any(r => r == null)
+                ? throw new InvalidDataException("Unsupported resource catalog schema or records.")
+                : catalog;
+        }
+
+        /// <summary>Validates an image path and its imported byte binding.</summary>
+        /// <param name="cache">Cache root.</param>
+        /// <param name="resource">Image metadata.</param>
+        /// <returns>The absolute cached texture path.</returns>
+        internal static string ResolveTexture(string cache, ResourceEntry resource)
+        {
             if (string.IsNullOrEmpty(resource.Path) || resource.Path.Contains('/') || resource.Path.Contains('\\') || resource.Path.Contains(':') || resource.Path.Contains("..", StringComparison.Ordinal))
             {
                 throw new InvalidDataException("Unsafe resource texture path.");
@@ -87,23 +130,7 @@ namespace Ctr2.Desktop
                     throw new InvalidDataException("Cached texture no longer matches its resource metadata; import into a new cache.");
                 }
             }
-            ResourceQuad frame = resource.Quads[quad] ?? throw new InvalidDataException("Missing quad geometry.");
-            if (!frame.IsAvailable)
-            {
-                throw new InvalidDataException("This quad is an unavailable placeholder in the source Windows build.");
-            }
-            try
-            {
-                AtlasFrame geometry = new(frame.X, frame.Y, frame.Width, frame.Height, frame.OffsetX, frame.OffsetY,
-                    resource.PreCutWidth, resource.PreCutHeight, density);
-                return geometry.LogicalCanvas.X <= 0 || geometry.LogicalCanvas.Y <= 0
-                    ? throw new InvalidDataException("Resource has no positive pre-cut canvas.")
-                    : new(texture, geometry);
-            }
-            catch (ArgumentOutOfRangeException error)
-            {
-                throw new InvalidDataException("Invalid or empty resource quad geometry.", error);
-            }
+            return texture;
         }
     }
 }

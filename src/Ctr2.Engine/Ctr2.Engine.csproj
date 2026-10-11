@@ -1,1 +1,3 @@
-<Project Sdk="Microsoft.NET.Sdk" />
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup><ProjectReference Include="../Ctr2.Assets/Ctr2.Assets.csproj" /></ItemGroup>
+</Project>

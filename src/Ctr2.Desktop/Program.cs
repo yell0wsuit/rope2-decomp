@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Text.Json;
 using System.Threading;
@@ -31,6 +33,59 @@ try
         ImportManifest manifest = GameImport.ImportWindows(args[1], args[2], Console.WriteLine, cancel.Token);
         Console.WriteLine($"Imported {manifest.Textures.Count} RAW textures into {Path.GetFullPath(args[2])}");
         return 0;
+    }
+    if (args.Length >= 4 && args[0] == "preview-animation")
+    {
+        int width = 960, height = 720, frames = 0, resolution = 2;
+        double seconds = 0;
+        string? snapshot = null;
+        for (int i = 4; i < args.Length; i += 2)
+        {
+            if (i + 1 == args.Length)
+            {
+                throw new ArgumentException("Missing option value.");
+            }
+            switch (args[i])
+            {
+                case "--width":
+                    width = int.Parse(args[i + 1]);
+                    break;
+                case "--height":
+                    height = int.Parse(args[i + 1]);
+                    break;
+                case "--frames":
+                    frames = int.Parse(args[i + 1]);
+                    break;
+                case "--resolution":
+                    resolution = int.Parse(args[i + 1]);
+                    break;
+                case "--time":
+                    seconds = double.Parse(args[i + 1], CultureInfo.InvariantCulture);
+                    break;
+                case "--snapshot":
+                    snapshot = args[i + 1];
+                    break;
+                default:
+                    throw new ArgumentException("Unknown option: " + args[i]);
+            }
+        }
+        if (width < 1 || height < 1 || width > 8192 || height > 8192 || frames < 0 || !double.IsFinite(seconds) || seconds < 0)
+        {
+            throw new ArgumentException("Preview dimensions must be 1–8192; frames and time must be nonnegative and finite.");
+        }
+        using AnimationPreview animation = AnimationPreview.Load(args[1], int.Parse(args[2]), args[3], resolution);
+        if (snapshot != null)
+        {
+            using SKBitmap bitmap = new(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using SKCanvas canvas = new(bitmap);
+            animation.Draw(canvas, width, height, seconds);
+            using SKData encoded = bitmap.Encode(SKEncodedImageFormat.Png, 100);
+            using FileStream file = new(snapshot, FileMode.CreateNew);
+            encoded.SaveTo(file);
+            Console.WriteLine($"Rendered scene {args[3]} at {seconds.ToString(CultureInfo.InvariantCulture)} seconds: {snapshot}");
+            return 0;
+        }
+        return DesktopPreview.Run(width, height, frames, (canvas, w, h, elapsed) => animation.Draw(canvas, w, h, seconds + elapsed));
     }
     if (args.Length >= 2 && args[0] == "preview")
     {
@@ -87,10 +142,11 @@ try
             Console.WriteLine($"Rendered and saved {width}×{height} preview: {snapshot}");
             return 0;
         }
-        return DesktopPreview.Run(image, width, height, frames, frame);
+        return DesktopPreview.Run(width, height, frames, (canvas, w, h, _) => AssetPreview.Draw(canvas, image, w, h, frame));
     }
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
+        "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
         "  preview <cached PNG> [--width N] [--height N] [--snapshot new.png] [--frames N] [--frame metadata.json]\n" +
         "Supply a dump from your own Windows game. This build previews assets; gameplay is not implemented.");
@@ -106,15 +162,14 @@ catch (Exception error) when (error is IOException or InvalidDataException or Ar
 internal static class DesktopPreview
 {
     /// <summary>Runs the blocking SDL preview loop until quit or the requested frame limit.</summary>
-    /// <param name="image">Decoded texture retained by the caller for the entire loop.</param>
     /// <param name="width">Initial window width in SDL window coordinates.</param>
     /// <param name="height">Initial window height in SDL window coordinates.</param>
     /// <param name="frameLimit">Number of frames to present, or zero to run until the window closes.</param>
-    /// <param name="frame">Optional atlas geometry; null displays the entire image.</param>
+    /// <param name="draw">Draw callback receiving the canvas, pixel dimensions, and elapsed seconds.</param>
     /// <returns>Zero after normal shutdown or completion of the frame limit.</returns>
     /// <remarks>
     /// Drawing uses the actual window pixel size after resizing or DPI changes. SDL resources created here are
-    /// destroyed on exit; the caller-owned bitmap is not disposed.
+    /// destroyed on exit; the draw callback retains ownership of its resources.
     /// </remarks>
     /// <exception cref="InvalidOperationException">
     /// SDL initialization, resource creation, or presentation fails.
@@ -123,7 +178,7 @@ internal static class DesktopPreview
     /// Preview frame metadata is incompatible with the texture or canvas.
     /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">The drawing dimensions are invalid.</exception>
-    public static int Run(SKBitmap image, int width, int height, int frameLimit, AtlasFrame? frame)
+    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw)
     {
         if (!SDL.Init(SDL.InitFlags.Video))
         {
@@ -147,6 +202,7 @@ internal static class DesktopPreview
                 throw new InvalidOperationException(SDL.GetError());
             }
 
+            Stopwatch clock = Stopwatch.StartNew();
             int count = 0;
             bool quit = false;
             while (!quit && (frameLimit == 0 || count < frameLimit))
@@ -189,7 +245,7 @@ internal static class DesktopPreview
 
                     Check(SDL.SetTextureBlendMode(texture, SDL.BlendMode.None));
                 }
-                AssetPreview.Draw(canvas!, image, w, h, frame);
+                draw(canvas!, w, h, clock.Elapsed.TotalSeconds);
                 Check(SDL.UpdateTexture(texture, 0, pixels.GetPixels(), pixels.RowBytes));
                 Check(SDL.RenderTexture(renderer, texture, 0, 0));
                 Check(SDL.RenderPresent(renderer));

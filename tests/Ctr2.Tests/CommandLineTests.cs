@@ -50,6 +50,7 @@ namespace Ctr2.Tests
                 Directory.Delete(root, true);
             }
         }
+
         /// <summary>Verifies resource selection reaches the offscreen renderer with the selected trim geometry.</summary>
         /// <returns>A task that completes after rendering and pixel readback assertions.</returns>
         [Fact]

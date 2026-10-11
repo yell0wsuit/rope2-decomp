@@ -2,7 +2,7 @@
 
 An early C# port using selected framework code from [CutTheRopeDX](https://github.com/yell0wsuit/cuttherope-dx). PC comes first; a web host is planned later.
 
-**Current build: local asset import, Windows resource metadata extraction, and desktop atlas/resource preview. Gameplay and animation playback are not implemented yet.** The reused framework subset currently consists of DX's matrix stack; full rendering, animation, input and host reuse will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
+**Current build: local asset import, Windows resource metadata extraction, and desktop atlas/animated-character previews. Gameplay is not implemented yet.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
 
 ## Your game assets
 
@@ -43,7 +43,7 @@ Pipeline: **user's package dump → safe extraction → RAW decompression → st
 
 Atlas rectangles and offsets are **not in RAW files**. When the selected package root or archive contains `Game.exe`, import reads the matching executable's resource table and `ImageInfo` initializers statically and writes `resources.json`. The executable is never loaded or executed. The initial verified profile supports Windows x86 1.0.0.46 by exact SHA-256; an unknown executable fails with a diagnostic and import rolls back. Asset-directory-only imports still produce the original texture cache without resource metadata.
 
-The sidecar preserves original resource IDs, resolution enums, quad order, sample rectangles, trim offsets, and canvas sizes. Images are bound to cached bytes by SHA-256. Font and animation resource references are included, but font glyph metadata and animation playback are pending. Original Windows tables contain unused/placeholder quads outside some RAW textures: these retain their indices and coordinates and are marked unavailable rather than sampled. Native PNG/JPEG bounds are checked when previewing. See [extraction details](src/Ctr2.Assets/WINDOWS_METADATA.md).
+The sidecar preserves original resource IDs, resolution enums, quad order, sample rectangles, trim offsets, and canvas sizes. Images are bound to cached bytes by SHA-256. Font and animation resource references are included; font glyph metadata is pending. Original Windows tables contain unused/placeholder quads outside some RAW textures: these retain their indices and coordinates and are marked unavailable rather than sampled. Native PNG/JPEG bounds are checked when previewing. See [extraction details](src/Ctr2.Assets/WINDOWS_METADATA.md).
 
 Preview a quad by its original resource ID and resolution enum:
 
@@ -52,6 +52,18 @@ dotnet run --project src/Ctr2.Desktop -- preview-resource cache/windows 215 2 0 
 ```
 
 In the supported build, ID 215 is Om Nom's atlas; quad 0 is an individual antenna part, not the assembled character. Resolution 2 uses density 1; resolution 4 uses density 1.56. Windows-specific resolution 6 retains unknown density and cannot be selected through this command until its scaling is traced. Add `--snapshot local/quad.png` for an offscreen render or `--frames 3` for a bounded desktop run. Reimport a full package into a new cache to add metadata to an older cache.
+
+Preview an assembled character scene using its animation resource ID and exact scene name:
+
+```sh
+dotnet run --project src/Ctr2.Desktop -- preview-animation cache/windows 85 IDLE
+```
+
+In the supported Windows build, animation ID 85 is Om Nom. Use `--time 0.7 --snapshot local/omnom.png` for a deterministic pose, or `--frames 60` for bounded live playback. `--resolution 4` selects higher-density image resources; the animation coordinates and authored root canvas stay in logical units. Unknown scene names report available names. Playback runs once and holds the terminal pose. The preview retains the authored default costume; game-selected hats and other resource substitutions are not applied.
+
+The animation reader supports bounded protobuf element trees, scenes, position/scale/color/skew tracks and visibility/quad/anchor/rotation-center/delay actions. Equal-time actions are preserved, repeated property tracks append, and interpolation respects authored frame durations. Animated parts use trimmed dimensions and custom anchors; atlas trim offsets apply only when restoring the original canvas, which the source animation loader does not enable. Nested transforms and tint follow the source tree. Textures are checked against catalog hashes and bounded to a total decoded budget of 128 MiB. See [animation contracts](src/Ctr2.Assets/ANIMATION_FORMAT.md).
+
+This is a diagnostic character preview. Gameplay scene switching, callbacks, resource replacement, sound, and original-screen visual parity remain pending. The desktop window uses SDL and Skia, and is currently a separate preview host.
 
 Caches generated before the alpha-conversion correction must be reimported into a new directory; changing the renderer cannot repair their already converted PNGs. Local development now uses `cache/windows-alpha`.
 
@@ -85,4 +97,4 @@ git diff --check
 
 Tests use synthetic data and exercise conversion, malformed dumps, cache rollback, trim geometry, viewport mapping and rendered pixel readback. No original data is required for tests.
 
-Next: load `.pb` animation trees/timelines using the extracted Windows resource IDs and render one animated character through additional DX framework seams. Then implement Box2D 2.2.1 with the identified CTR2 modifications, reproduce recorded candy/rope inputs at the original `0.0167` timestep and `15/30` solver iterations, and complete one original level. Physics, animation and visual parity have not been established. Web work follows the PC vertical slice.
+Next: establish the original level-loading and gameplay coordinate contracts, connect the character to a first-level scene, and implement Box2D 2.2.1 with the identified CTR2 modifications, reproduce recorded candy/rope inputs at the original `0.0167` timestep and `15/30` solver iterations, and complete one original level. Physics, animation and visual parity have not been established. Web work follows the PC vertical slice.
