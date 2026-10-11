@@ -250,7 +250,7 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>Always-awake Box2D 2.2.1 subset with center joints and discrete circle/static-polygon contacts.</summary>
+    /// <summary>Always-awake Box2D 2.2.1 subset with center joints and circle/static-polygon contacts.</summary>
     public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>
@@ -326,6 +326,17 @@ namespace Ctr2.Engine.Physics
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>
         public void Step()
         {
+            Dictionary<PhysicsBody, (Vector2 Position, float Angle)>? starts = ContinuousPhysics && terrain.Count > 0 ? new() : null;
+            if (starts != null)
+            {
+                foreach (PhysicsBody body in bodies)
+                {
+                    if (body.Mass > 0 && !body.IsSensor)
+                    {
+                        starts.Add(body, (body.Position, body.Angle));
+                    }
+                }
+            }
             List<List<PhysicsJoint>> islands = SolverOrder(out Dictionary<PhysicsBody, (int Island, int Order)>? bodyOrder);
             List<List<TerrainContact>> contactIslands = BuildContacts(islands, bodyOrder);
             List<PhysicsJoint> ordered = [];
@@ -405,6 +416,10 @@ namespace Ctr2.Engine.Physics
                         break;
                     }
                 }
+            }
+            if (starts != null)
+            {
+                SolveContinuous(starts);
             }
             stepped = true;
         }

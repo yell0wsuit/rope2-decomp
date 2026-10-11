@@ -34,9 +34,9 @@ namespace Ctr2.Tests
             try
             {
                 File.WriteAllText(Path.Combine(maps, "sortedlist_desktop.xml"), "<filelist><pack id='1'><file short='test.xml'/></pack></filelist>");
-                string map = "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='200' y='147'/><grab x='200' y='43' length='105' target_id='c'/><polygon_materialized x='0' y='300' material='wood' polygon='320,0,320,40,0,40,' smoothFactor='1'/></layer></map>";
+                string map = "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='200' y='147'/><grab x='200' y='43' length='105' target_id='c'/><star x='200' y='194'/><star x='200' y='237'/><star x='250' y='200'/><polygon_materialized x='0' y='300' material='wood' polygon='320,0,320,40,0,40,' smoothFactor='1'/></layer></map>";
                 File.WriteAllText(Path.Combine(maps, "test.xml"), map);
-                File.WriteAllText(Path.Combine(maps, "%21_MasterGameDesignDocument.xml"), CandySimulationTests.Design.Replace("</layer></map>", "<polygon id='wood' body_type='static' friction='0.4' restitution='0.4' isSensor='false'/></layer></map>"));
+                File.WriteAllText(Path.Combine(maps, "%21_MasterGameDesignDocument.xml"), CandySimulationTests.Design.Replace("</layer></map>", "<circle id='star' body_type='kinematic' radius='13' isSensor='true' linearVelocityX='0' linearVelocityY='0' angularVelocity='0'/><polygon id='wood' body_type='static' friction='0.4' restitution='0.4' isSensor='false'/></layer></map>"));
                 string image = Path.Combine(root, "assets", "synthetic.png");
                 byte[] pixels = new byte[8 * 8 * 4];
                 for (int i = 0; i < 64; i++)
@@ -69,8 +69,18 @@ namespace Ctr2.Tests
                 await process.WaitForExitAsync(TestContext.Current.CancellationToken);
                 Assert.True(process.ExitCode == 0, await error);
                 Assert.Contains("Physics tick 180", await output);
+                Assert.Contains("Stars collected: 2/3", await output);
+                Assert.Contains("star 0, candy 0", await output);
+                Assert.Contains("star 1, candy 0", await output);
+                Assert.DoesNotContain("star 2, candy 0", await output);
                 using SKBitmap bitmap = SKBitmap.Decode(snapshot);
                 Viewport viewport = Viewport.Fit(width, height, 640, 960);
+                Vector2 missedStar = viewport.ToScreen(new(500, 400));
+                Assert.Equal(SKColors.Gold, bitmap.GetPixel((int)missedStar.X, (int)missedStar.Y));
+                Vector2 collectedStar = viewport.ToScreen(new(400, 388));
+                Assert.NotEqual(SKColors.Gold, bitmap.GetPixel((int)collectedStar.X, (int)collectedStar.Y));
+                Vector2 sensorEdge = viewport.ToScreen(new(523, 400));
+                Assert.Equal(SKColors.Gold, bitmap.GetPixel((int)sensorEdge.X, (int)sensorEdge.Y));
                 bool candyFound = false;
                 for (int y = 550; y <= 585; y++)
                 {

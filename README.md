@@ -110,8 +110,8 @@ git diff --check
 Tests use synthetic data and exercise conversion, malformed dumps, cache rollback, trim geometry, viewport mapping and rendered pixel readback. No original data is required for tests.
 
 The desktop includes candy/rope simulation with Windows master body definitions,
-fixed stepping, damping, stretch transitions, physical cut fragments and discrete
-candy contacts against smoothed static terrain. Drag the primary mouse button
+fixed stepping, damping, stretch transitions, physical cut fragments, swept
+candy contacts against smoothed static terrain and stationary star collection. Drag the primary mouse button
 across a rope in the live preview; accepted cuts print replay arguments on exit.
 
 ```sh
@@ -128,8 +128,17 @@ Cuts run before their selected tick. Only one cut per rope is supported.
 
 See [physics scope and fixture provenance](src/Ctr2.Engine/Physics/PHYSICS.md).
 Synthetic numerical fixtures from C++ Box2D validate supported scenarios;
-original-game runtime, animation and visual parity remain unverified. Continuous
-collision detection is pending, so fast candy can tunnel through thin terrain.
+original-game runtime, animation and visual parity remain unverified. Swept
+circle/static-convex contacts prevent tunneling through thin terrain in the tested
+scenarios. This uses an analytical sweep, with bounded contact-only substeps, rather
+than the complete Box2D time-of-impact solver.
 
-Next: continuous collision detection and broader contact verification, then stars,
-consumption and completion for one original level. Web work follows the PC slice.
+Stationary stars use the matching master sensor radius and current candy position
+at the start of each fixed tick. Collection removes the gold diagnostic marker;
+the console reports zero-based contact events and the collected/total count.
+Fast passages can skip sensors, matching their unswept contact behavior. Moving
+stars fail explicitly. Star artwork, particles, sound and Om Nom collection remain
+pending.
+
+Next: dynamic polygon bodies for Om Nom, the first-level intro, candy consumption
+and completion, plus broader collision verification. Web work follows the PC slice.

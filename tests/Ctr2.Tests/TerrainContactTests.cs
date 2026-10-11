@@ -24,7 +24,10 @@ namespace Ctr2.Tests
         [InlineData("corner")]
         public void MatchesNumericalContactFixture(string scenario)
         {
-            PhysicsWorld world = new();
+            PhysicsWorld world = new()
+            {
+                ContinuousPhysics = false
+            };
             Vector2[] polygon = scenario switch
             {
                 "slope" or "corner" => [new(-2, 1), new(2, 2), new(2, 3), new(-2, 2)],

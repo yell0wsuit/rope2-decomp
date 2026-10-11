@@ -134,6 +134,7 @@ namespace Ctr2.Desktop
                     }
                 }
                 int candyIndex = 0;
+                int starIndex = 0;
                 foreach (PlacedLevelObject placed in Layout.Objects)
                 {
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized")
@@ -144,6 +145,15 @@ namespace Ctr2.Desktop
                     {
                         PhysicsBody body = Simulation.Candies[candyIndex++];
                         candy!.Draw(canvas, body.Position * 200, body.Angle);
+                    }
+                    else if (placed.Source.Kind == "star" && Simulation != null)
+                    {
+                        SimulationStar star = Simulation.Stars[starIndex++];
+                        if (!star.CollectedAt.HasValue)
+                        {
+                            paint.Color = SKColors.Gold;
+                            canvas.DrawCircle(star.Position.X * 200, star.Position.Y * 200, star.Radius * 200, paint);
+                        }
                     }
                     else if (placed.Source.Kind == "omnom" && omnom != null)
                     {

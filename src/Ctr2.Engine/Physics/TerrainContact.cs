@@ -234,14 +234,15 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Corrects penetration using the original Baumgarte factor and maximum correction.</summary>
-        /// <returns>Whether penetration is within three linear slops.</returns>
-        internal bool SolvePosition()
+        /// <param name="continuous">Whether to use time-of-impact correction strength and tolerance.</param>
+        /// <returns>Whether penetration is within the selected slop tolerance.</returns>
+        internal bool SolvePosition(bool continuous = false)
         {
             Vector2 n = faceNormal;
             float separation = Vector2.Dot(Body.Position - point, n) - (Body.Radius + Skin);
-            float correction = Math.Clamp(.2f * (separation + PhysicsWorld.LinearSlop), -.2f, 0);
+            float correction = Math.Clamp((continuous ? .75f : .2f) * (separation + PhysicsWorld.LinearSlop), -.2f, 0);
             Body.Position -= correction * n;
-            return separation >= -3 * PhysicsWorld.LinearSlop;
+            return separation >= -(continuous ? 1.5f : 3) * PhysicsWorld.LinearSlop;
         }
 
         /// <summary>Gets velocity at the friction application point.</summary>

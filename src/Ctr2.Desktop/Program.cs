@@ -151,16 +151,23 @@ try
                 _ = scene.Cut(cut.Rope, cut.Segment, cut.Point, cut.Impulse);
             }
             ropeInput!.ApplyPending();
+            int collected = scene.StarCollections.Count;
             scene.Step(releaseAt);
+            for (int i = collected; i < scene.StarCollections.Count; i++)
+            {
+                StarCollection star = scene.StarCollections[i];
+                Console.WriteLine($"Star collected: tick {star.Tick}, star {star.Star}, candy {star.Candy}.");
+            }
         }
         if (simulate)
         {
-            Console.WriteLine("Candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; static terrain contacts and physical cut fragments enabled. Drag the primary mouse button across a rope. Continuous collision detection, dynamic terrain, sleeping and level completion are pending. --release-at removes candy attachments only.");
+            Console.WriteLine("Candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; static terrain contacts and physical cut fragments enabled. Drag the primary mouse button across a rope. Swept circle/static-terrain contacts and stationary candy/star collection are enabled. Dynamic terrain, sleeping, Om Nom physics and level completion are pending. --release-at removes candy attachments only.");
             for (int i = 0; i < ticks; i++)
             {
                 fixedStep();
             }
             Console.WriteLine($"Physics tick {levelPreview!.Simulation!.Tick}.");
+            Console.WriteLine($"Stars collected: {levelPreview.Simulation.StarCollections.Count}/{levelPreview.Simulation.Stars.Count}.");
         }
 
         if (snapshot != null)
@@ -187,6 +194,7 @@ try
         if (simulate)
         {
             Console.WriteLine($"Physics tick {levelPreview!.Simulation!.Tick}.");
+            Console.WriteLine($"Stars collected: {levelPreview.Simulation.StarCollections.Count}/{levelPreview.Simulation.Stars.Count}.");
             foreach (RopeCut cut in ropeInput!.Cuts)
             {
                 Console.WriteLine(FormattableString.Invariant($"Cut replay: --cut {cut.Tick}:{cut.Rope}:{cut.Segment}:{cut.Point.X:R}:{cut.Point.Y:R}:{cut.Impulse.X:R}:{cut.Impulse.Y:R}"));

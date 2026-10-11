@@ -1,8 +1,8 @@
-# Candy, cutting and static terrain physics slice
+# Candy, cutting, terrain and star physics slice
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It implements always-awake circle bodies,
-center-anchored rope/soft-distance joints and discrete circle/static-convex contacts.
+center-anchored rope/soft-distance joints and circle/static-convex contacts.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
 
 Implementation research stays private and outside tracked files. Do not commit
@@ -85,6 +85,53 @@ texturing, scratches and the original triangle ordering remain unverified.
 Analytic synthetic geometry tests check curved square midpoints and concave area;
 these are not an original-runtime geometry capture.
 
+## Swept terrain contacts
+
+`PhysicsWorld.ContinuousPhysics` defaults to true. The discrete step retains each
+solid dynamic circle's initial transform; a subsequent analytical sweep finds the
+first entry into static convex terrain expanded by the target circle radius.
+Faces use ray/offset-plane intersection; rounded vertices use ray/circle roots.
+The target is `max(linearSlop, circleRadius - linearSlop)`, matching the polygon
+skin contribution to Box2D's time-of-impact target. Existing overlaps remain with
+the discrete solver. Static anchors and sensor circles skip the sweep.
+
+At an impact, circle position and angle advance to the hit fraction. Touching
+terrain contacts receive up to 20 position iterations (Baumgarte 0.75, tolerance
+1.5 slops), then 15 velocity iterations without warm starting. The remaining tick
+integrates the resulting velocity without repeating gravity, damping or joint
+solving. Further impacts repeat this process, capped at 32 per circle per tick.
+Budget exhaustion retains the last safe transform. Time-of-impact impulses are
+not cached into the next discrete step. A manifold disagreement also retains the
+safe transform rather than continuing through the fixture.
+
+This is an analytical circle/static-convex subset, not a port of Box2D's general
+GJK/separation-function TOI solver. Circle/circle impacts, dynamic polygons, native
+contact lifetime/order and arbitrary multi-body TOI islands remain unsupported.
+The switch can disable sweeps for isolated discrete fixture verification.
+
+## Stationary stars
+
+Master and placement attributes merge for star sensors, including radius overrides.
+Supported stars are stationary kinematic circle sensors with default collision
+filtering. Nonempty paths, normalized paths, nonzero velocities, unsupported body
+types and invalid radii fail explicitly. Geometry is in meters; marker drawing
+converts to logical scene units independently of image density.
+
+Star overlap runs before world integration, matching contact-begin timing. Each
+star collects once through a candy circle; rope points and grab sensors cannot
+collect. Collection stores an immutable star snapshot and a zero-based
+`StarCollection(Tick, Star, Candy)` record. Simultaneous contacts use authored
+star/candy order as a deterministic diagnostic tie-break; native callback order
+is not claimed. Sensor overlap accepts ten floating-point epsilons of distance,
+as Box2D's sensor distance test does. Sensors are not swept: a fast candy can pass
+between contact samples without collecting a star. Star sensors add no solver
+bodies and cannot alter candy/rope trajectories or island traversal.
+
+The preview hides collected markers and reports events/counts on the console.
+Star animation/particles/audio, moving stars, Om Nom collection and score/save
+integration are pending. Level 1's off-screen Om Nom uses a dynamic polygon and
+requires body/intro support before consumption and completion can be faithful.
+
 ## Numerical fixtures
 
 The private C++ harness uses licensed upstream Box2D 2.2.1 with linear slop changed
@@ -96,6 +143,8 @@ belong in commits. Tests require neither native compilation nor game assets.
 | --- | --- |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `RopeCutReference.csv` | Synthetic `game_cut` chain, cut before zero-based tick 30 with crossing `(30,20)` logical units and tip impulse `(0.001,0)`. Same columns as above; new tips are body indices 4/5. |
+| `ContinuousReference.csv` | Thin floor, restitution, slope, rounded vertex and repeated floor/ceiling impacts. `scenario,tick,x,y,vx,vy,angle,angularVelocity` |
+| `StarReference.csv` | Falling candy, fast unswept sensor passage, tangent and small miss. `scenario,tick,collectedMask,x,y`; zero-based contact ticks, state sampled after integration. |
 | `TerrainReference.csv` | Floor, bounce, slope friction/spin, vertex, rope-attached candy and simultaneous sloped-floor/wall contacts. `scenario,tick,x,y,vx,vy,angle,angularVelocity` |
 
 CSV rows are headerless. Positions are meters, velocities meters/second, angles
@@ -103,13 +152,19 @@ radians and angular velocities radians/second. Samples cover tick 1 and every
 tenth tick through 180. Component tolerance is `0.00002`. Sleeping is disabled;
 terrain references also disable continuous physics to isolate supported discrete
 contacts. `game` names identify invented test scenes, not original-game captures.
-Scene definitions are in the corresponding C# tests.
+Scene definitions are in the corresponding C# tests. Continuous fixtures sample
+every completed tick 1–10 under extreme gravity (800) and the two-meter translation
+clamp, producing speeds near 120 m/s. Analytical root finding differs from native
+TOI tolerance/search; continuous-fixture tolerances are 0.001 meters/radians and
+0.01 meters/second or radians/second, while discrete/contact-free tolerances remain
+unchanged. Sensor fixtures sample zero-based ticks 0–119, require exact collected
+masks and use the original 0.00002 position tolerance.
 
 ## Remaining acceptance work
 
-There is no continuous collision/TOI solver, sleeping, circle/circle collision,
-dynamic terrain, noncenter anchors, candy consumption, stars, hazards, intro or
-completion logic. Fast circles can tunnel through thin terrain. Complex contact
+There is no general Box2D continuous solver, sleeping, circle/circle collision,
+dynamic terrain, noncenter anchors, candy consumption, moving stars, Om Nom
+collection, hazards, intro or completion logic. Complex contact
 persistence/order, native triangle ordering and original recorded-input parity
 need further verification. The rope draws physical polylines without native
 texturing; candy flare/skins/masks and cut presentation remain pending. Web work

@@ -9,7 +9,7 @@ using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>A diagnostic scene with authored candy, grab, rope and static terrain design data.</summary>
+    /// <summary>A diagnostic scene with authored candy, grab, rope, stationary star and static terrain design data.</summary>
     public sealed partial class CandySimulation
     {
         /// <summary>World owning all center bodies and constraints.</summary>
@@ -43,7 +43,7 @@ namespace Ctr2.Engine.Physics
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
-        /// <remarks>Only circle/static-terrain contacts and center-anchor joints are supported; sleeping, CCD and other mechanics remain pending.</remarks>
+        /// <remarks>Only circle/static-terrain contacts and center-anchor joints are supported; sleeping, dynamic polygons and other mechanics remain pending.</remarks>
         public CandySimulation(LevelDefinition level, LevelDefinition design)
         {
             LevelLayout layout = LevelLayout.Create(level);
@@ -141,6 +141,9 @@ namespace Ctr2.Engine.Physics
                 ropes.Add(new(points, constraints, length, frequency));
             }
             Candies = candies.AsReadOnly();
+            LoadStars(layout, design);
+            Stars = stars.AsReadOnly();
+            StarCollections = starCollections.AsReadOnly();
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>
@@ -164,6 +167,7 @@ namespace Ctr2.Engine.Physics
                     rope.Released = true;
                 }
             }
+            CollectStars();
             world.Step();
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
