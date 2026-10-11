@@ -35,6 +35,13 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
+        /// <summary>Gets validated initial polygon definitions for characters awaiting dynamic integration.</summary>
+        /// <value>Immutable authored data; these definitions do not move or collide in this diagnostic slice.</value>
+        public IReadOnlyList<PolygonBodyDefinition> CharacterDefinitions
+        {
+            get;
+        }
+
         /// <summary>Gets the number of authored grab ropes.</summary>
         /// <value>The number of independent chains, including released chains.</value>
         public int RopeCount => ropes.Count;
@@ -47,6 +54,7 @@ namespace Ctr2.Engine.Physics
         public CandySimulation(LevelDefinition level, LevelDefinition design)
         {
             LevelLayout layout = LevelLayout.Create(level);
+            CharacterDefinitions = PolygonBodyDefinition.LoadCharacters(level, design);
             Terrain = TerrainGeometry.Build(level, design);
             foreach (TerrainShape shape in Terrain.Where(s => !s.IsSensor))
             {

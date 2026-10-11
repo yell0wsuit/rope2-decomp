@@ -28,25 +28,8 @@ namespace Ctr2.Engine.Physics
             {
                 throw new ArgumentException("Invalid convex terrain fixture.");
             }
-            Vector2[] points = [.. vertices];
-            Vector2[] normals = new Vector2[points.Length];
-            for (int i = 0; i < points.Length; i++)
-            {
-                Vector2 p = points[i], edge = points[(i + 1) % points.Length] - p;
-                if (!float.IsFinite(p.X) || !float.IsFinite(p.Y) || MathF.Abs(p.X) > 10000 || MathF.Abs(p.Y) > 10000 || edge.LengthSquared() < 1e-10f)
-                {
-                    throw new ArgumentException("Invalid terrain vertex.");
-                }
-                normals[i] = Vector2.Normalize(new(edge.Y, -edge.X));
-                for (int j = 0; j < points.Length; j++)
-                {
-                    if (j != i && j != (i + 1) % points.Length && Vector2.Dot(normals[i], points[j] - p) >= -1e-7f)
-                    {
-                        throw new ArgumentException("Terrain fixture must be strictly convex and counterclockwise.");
-                    }
-                }
-            }
-            terrain.Add(new(points, normals, friction, restitution));
+            ConvexPolygon polygon = new(vertices);
+            terrain.Add(new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution));
         }
 
         /// <summary>Rebuilds supported manifolds and assigns contacts to independent dynamic-body islands.</summary>

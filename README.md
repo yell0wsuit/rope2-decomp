@@ -140,5 +140,10 @@ Fast passages can skip sensors, matching their unswept contact behavior. Moving
 stars fail explicitly. Star artwork, particles, sound and Om Nom collection remain
 pending.
 
-Next: dynamic polygon bodies for Om Nom, the first-level intro, candy consumption
+The polygon foundation now validates Om Nom's authored shape and body fields,
+including its local centroid and moments of inertia. These are initial definitions;
+Om Nom still uses his static authored pose until polygon contacts and integration
+are implemented.
+
+Next: polygon terrain contacts and dynamic bodies for Om Nom, the first-level intro, candy consumption
 and completion, plus broader collision verification. Web work follows the PC slice.

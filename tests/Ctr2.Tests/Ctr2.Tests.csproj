@@ -2,6 +2,8 @@
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
     <None Update="RopeCutReference.csv" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="PolygonMassReference.csv" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="PolygonOverlapReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="StarReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ContinuousReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="TerrainReference.csv" CopyToOutputDirectory="PreserveNewest" />

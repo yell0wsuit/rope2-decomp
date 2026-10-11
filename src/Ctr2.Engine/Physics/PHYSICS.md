@@ -132,6 +132,44 @@ Star animation/particles/audio, moving stars, Om Nom collection and score/save
 integration are pending. Level 1's off-screen Om Nom uses a dynamic polygon and
 requires body/intro support before consumption and completion can be faithful.
 
+## Polygon body foundation
+
+`ConvexPolygon` owns three to eight strictly convex counterclockwise meter-space
+vertices and outward normals. Static terrain uses the same validation. Geometry
+rejects duplicate/short edges, invalid winding, nonconvex outlines and coordinates
+outside ten thousand meters. World-vertex snapshots use the authored body origin;
+rotating around the center of mass requires the later body integrator to recover
+that origin from its center transform.
+
+Mass data preserves fixture mass, local centroid and moments of inertia about
+both the authored origin and the center of mass. Triangle integration uses a
+nearby reference point, as licensed Box2D 2.2.1 does. Center inertia is calculated
+before shifting to the original origin, avoiding cancellation from subtracting
+large origin moments. Zero density still yields the geometric centroid. Convex
+circle overlap includes the polygon skin and sensor-distance epsilon, handles
+rounded vertices, and supports rotated body origins.
+
+`PolygonBodyDefinition.LoadCharacters` merges the Om Nom polygon master with its
+placement, includes the implicit local zero, removes an optional closing zero,
+and normalizes winding while preserving that first vertex. Editor positions and
+vertices divide by 100 to meters; authored angles convert to clockwise radians.
+Validated material, damping, gravity, fixed-rotation, mass and centroid data stay
+separate from simulation state. Unsupported initial motion, smoothing, paths,
+normalization, sensor/bullet modes and collision filters fail explicitly.
+
+The original polygon body loader creates compound triangle fixtures from its
+smoothed path, including convex outlines. `Shape` currently describes the convex
+outline for mass/centroid and overlap preparation; it does not reproduce those
+fixture IDs, triangulation order or internal skin edges. Future body integration
+must preserve compound triangle fixtures and verify their contact topology rather
+than treating this outline as one original convex fixture.
+
+`CandySimulation.CharacterDefinitions` exposes these immutable initial definitions.
+They are not integrated polygon bodies and do not provide character contacts,
+movement or collection yet. Current artwork still uses the initial authored pose.
+Polygon/terrain manifolds, angular contact impulses and coupled two-point solving
+must precede Om Nom integration, intro, consumption and completion.
+
 ## Numerical fixtures
 
 The private C++ harness uses licensed upstream Box2D 2.2.1 with linear slop changed
@@ -143,6 +181,8 @@ belong in commits. Tests require neither native compilation nor game assets.
 | --- | --- |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `RopeCutReference.csv` | Synthetic `game_cut` chain, cut before zero-based tick 30 with crossing `(30,20)` logical units and tip impulse `(0.001,0)`. Same columns as above; new tips are body indices 4/5. |
+| `PolygonMassReference.csv` | Four invented convex shapes at densities 0, 0.5 and 3.25. `scenario,density,mass,centerX,centerY,originInertia,centerInertia` |
+| `PolygonOverlapReference.csv` | The same four shapes with seven transformed circle queries each, including face skin/tangency and vertex misses. `scenario,circleIndex,centerX,centerY,radius,originX,originY,angle,overlaps` |
 | `ContinuousReference.csv` | Thin floor, restitution, slope, rounded vertex and repeated floor/ceiling impacts. `scenario,tick,x,y,vx,vy,angle,angularVelocity` |
 | `StarReference.csv` | Falling candy, fast unswept sensor passage, tangent and small miss. `scenario,tick,collectedMask,x,y`; zero-based contact ticks, state sampled after integration. |
 | `TerrainReference.csv` | Floor, bounce, slope friction/spin, vertex, rope-attached candy and simultaneous sloped-floor/wall contacts. `scenario,tick,x,y,vx,vy,angle,angularVelocity` |
@@ -158,7 +198,9 @@ clamp, producing speeds near 120 m/s. Analytical root finding differs from nativ
 TOI tolerance/search; continuous-fixture tolerances are 0.001 meters/radians and
 0.01 meters/second or radians/second, while discrete/contact-free tolerances remain
 unchanged. Sensor fixtures sample zero-based ticks 0–119, require exact collected
-masks and use the original 0.00002 position tolerance.
+masks and use the original 0.00002 position tolerance. Polygon mass fixtures require
+0.00002 component tolerance; circle overlap fixtures require exact Boolean results.
+Polygon fixtures contain only invented geometry, not Om Nom game vertices.
 
 ## Remaining acceptance work
 
