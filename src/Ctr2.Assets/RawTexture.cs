@@ -22,7 +22,8 @@ namespace Ctr2.Assets
         /// <returns>Decoded source dimensions, original format identifier, and straight RGBA8 pixels.</returns>
         /// <remarks>
         /// Validates the 15-byte little-endian header, declared sizes, zlib envelope, and Adler-32 checksum.
-        /// Supports RGBA8888, RGB565, RGBA4444, RGB5A1, and A8; A8 expands to white RGB with source alpha. Row
+        /// Supports RGBA8888, RGB565, RGBA4444, RGB5A1, and A8. Packed RGBA textures store premultiplied RGB;
+        /// these are unpremultiplied once for straight-alpha PNG export. A8 expands to white RGB with source alpha. Row
         /// order is preserved, and density or quad metadata is not inferred.
         /// </remarks>
         /// <exception cref="InvalidDataException">
@@ -153,7 +154,31 @@ namespace Ctr2.Assets
                     rgba[dst + 3] = (byte)((p & 1) * 255);
                 }
             }
+            if (format is 0 or 2 or 3)
+            {
+                Unpremultiply(rgba);
+            }
             return new(width, height, format, rgba);
+        }
+
+        /// <summary>Converts packed RGBA source colors to the straight-alpha contract expected by PNG.</summary>
+        /// <param name="rgba">Decoded premultiplied RGBA pixels, modified in place without changing alpha.</param>
+        /// <remarks>Rounds to the nearest byte, clamps quantized colors, and clears RGB at zero alpha.</remarks>
+        private static void Unpremultiply(Span<byte> rgba)
+        {
+            for (int pixel = 0; pixel < rgba.Length; pixel += 4)
+            {
+                int alpha = rgba[pixel + 3];
+                if (alpha == 255)
+                {
+                    continue;
+                }
+                for (int channel = 0; channel < 3; channel++)
+                {
+                    rgba[pixel + channel] = alpha == 0 ? (byte)0 :
+                        (byte)Math.Min(255, ((rgba[pixel + channel] * 255) + (alpha / 2)) / alpha);
+                }
+            }
         }
 
         /// <summary>Fills the remaining compressed buffer from one source part and rejects surplus bytes.</summary>

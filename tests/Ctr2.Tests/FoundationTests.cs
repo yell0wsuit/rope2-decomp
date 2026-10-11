@@ -81,9 +81,9 @@ namespace Ctr2.Tests
         /// <param name="input">Packed bytes for one source pixel.</param>
         /// <param name="expected">Expected four decoded RGBA bytes.</param>
         [Theory]
-        [InlineData(0, new byte[] { 17, 34, 51, 68 }, new byte[] { 17, 34, 51, 68 })]
+        [InlineData(0, new byte[] { 17, 34, 51, 68 }, new byte[] { 64, 128, 191, 68 })]
         [InlineData(1, new byte[] { 0, 248 }, new byte[] { 255, 0, 0, 255 })]
-        [InlineData(2, new byte[] { 0x48, 0xf2 }, new byte[] { 255, 34, 68, 136 })]
+        [InlineData(2, new byte[] { 0x48, 0xf2 }, new byte[] { 255, 64, 128, 136 })]
         [InlineData(3, new byte[] { 1, 248 }, new byte[] { 255, 0, 0, 255 })]
         [InlineData(4, new byte[] { 128 }, new byte[] { 255, 255, 255, 128 })]
         public void DecodesOriginalPixelFormats(byte format, byte[] input, byte[] expected)
@@ -91,11 +91,40 @@ namespace Ctr2.Tests
             Assert.Equal(expected, RawTexture.Load(Raw(format, input)).Rgba);
         }
 
+        /// <summary>Verifies premultiplied RAW edges are exported once to straight alpha before PNG compositing.</summary>
+        [Fact]
+        public void RawPngRoundtripDoesNotMultiplyAlphaTwice()
+        {
+            RawTexture texture = RawTexture.Load(Raw(0, [128, 0, 0, 128, 0, 0, 0, 0], width: 2));
+            using MemoryStream encoded = new();
+            PngWriter.Write(encoded, texture.Width, texture.Height, texture.Rgba);
+            using SKBitmap image = SKBitmap.Decode(encoded.ToArray());
+            Assert.Equal(new SKColor(255, 0, 0, 128), image.GetPixel(0, 0));
+            using SKBitmap output = new(2, 1);
+            using SKCanvas canvas = new(output);
+            canvas.Clear(SKColors.Black);
+            canvas.DrawBitmap(image, new SKRect(0, 0, 2, 1), new SKSamplingOptions(SKFilterMode.Nearest));
+            Assert.Equal(new SKColor(128, 0, 0), output.GetPixel(0, 0));
+            Assert.Equal(SKColors.Black, output.GetPixel(1, 0));
+        }
+
+        /// <summary>Verifies zero-alpha packed RGBA pixels discard unusable RGB values.</summary>
+        /// <param name="format">Packed RGBA format.</param>
+        /// <param name="input">Zero-alpha pixel, including arbitrary RGB.</param>
+        [Theory]
+        [InlineData(0, new byte[] { 17, 34, 51, 0 })]
+        [InlineData(2, new byte[] { 0x40, 0x82 })]
+        [InlineData(3, new byte[] { 0, 248 })]
+        public void ClearsTransparentRgb(byte format, byte[] input)
+        {
+            Assert.Equal(new byte[] { 0, 0, 0, 0 }, RawTexture.Load(Raw(format, input)).Rgba);
+        }
+
         /// <summary>Verifies a split compressed payload is joined before decoding.</summary>
         [Fact]
         public void JoinsContinuationFiles()
         {
-            Assert.Equal(new byte[] { 1, 2, 3, 4 }, RawTexture.Load(Raw(0, [1, 2, 3, 4], split: true)).Rgba);
+            Assert.Equal(new byte[] { 64, 128, 191, 4 }, RawTexture.Load(Raw(0, [1, 2, 3, 4], split: true)).Rgba);
         }
 
         /// <summary>Verifies a missing RAW continuation fails instead of producing a partial texture.</summary>
@@ -235,6 +264,17 @@ namespace Ctr2.Tests
             string dump = Dump(), archive = Path.Combine(root, "dump.appx");
             ZipFile.CreateFromDirectory(dump, archive);
             _ = Assert.Single(GameImport.ImportWindows(archive, Path.Combine(root, "cache"), cancellationToken: TestContext.Current.CancellationToken).Textures);
+        }
+
+        /// <summary>Verifies an unsupported executable rolls back the import instead of publishing guessed metadata.</summary>
+        [Fact]
+        public void UnknownExecutablePreventsPublication()
+        {
+            string dump = Dump(), cache = Path.Combine(root, "cache");
+            File.WriteAllBytes(Path.Combine(dump, "Game.exe"), [0x4d, 0x5a]);
+            _ = Assert.Throws<InvalidDataException>(() => GameImport.ImportWindows(dump, cache, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.False(Directory.Exists(cache));
+            Assert.Empty(Directory.GetDirectories(root, ".ctr2-import-*"));
         }
 
         /// <summary>Verifies a malformed texture prevents publication and removes staging files.</summary>

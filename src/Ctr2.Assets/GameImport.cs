@@ -49,7 +49,8 @@ namespace Ctr2.Assets
         /// <param name="source">Extracted package root, asset directory, or ZIP, APPX, or MSIX package path.</param>
         /// <param name="destination">New cache directory, outside the source tree; it must not already exist.</param>
         /// <param name="progress">
-        /// Optional synchronous callback receiving each relative source path before conversion or copying.
+        /// Optional synchronous callback receiving each relative source path before conversion or copying, and
+        /// metadata extraction status messages.
         /// </param>
         /// <param name="cancellationToken">
         /// Cancellation checked between files and while extracting archive chunks.
@@ -58,8 +59,10 @@ namespace Ctr2.Assets
         /// <remarks>
         /// The source is read without modification. Files are staged in a sibling directory and published by
         /// directory move. On failure, staging cleanup is attempted. RAW continuations are joined, textures
-        /// become PNGs, and other assets are copied unchanged. Unknown density remains null; quad metadata is
-        /// not inferred. Callback exceptions propagate and trigger cleanup.
+        /// become PNGs, and other assets are copied unchanged. Unknown density remains null. If Game.exe is
+        /// present, a verified executable profile supplies
+        /// resources.json; unsupported builds fail instead of guessing metadata. Callback exceptions propagate
+        /// and trigger cleanup.
         /// </remarks>
         /// <exception cref="ArgumentException">Source and destination overlap, or a path is invalid.</exception>
         /// <exception cref="IOException">
@@ -160,6 +163,21 @@ namespace Ctr2.Assets
                 if (textures.Count == 0)
                 {
                     throw new InvalidDataException("No RAW textures found in the selected Windows assets.");
+                }
+
+                string executable = Path.Combine(dump, "Game.exe");
+                if (File.Exists(executable))
+                {
+                    if ((File.GetAttributes(executable) & FileAttributes.ReparsePoint) != 0)
+                    {
+                        throw new InvalidDataException("Linked Windows executables are unsupported.");
+                    }
+                    progress?.Invoke("Reading Windows resource metadata");
+                    ResourceCatalog catalog = WindowsMetadata.Load(executable, cancellationToken);
+                    catalog = catalog.BindToCache(target, textures, cancellationToken);
+                    int unavailable = catalog.Resources.Sum(r => r.Quads.Count(q => !q.IsAvailable));
+                    progress?.Invoke($"Resource metadata: {catalog.Resources.Count} variants; {unavailable} unavailable placeholder quads.");
+                    File.WriteAllText(Path.Combine(staging, "resources.json"), JsonSerializer.Serialize(catalog, JsonOptions));
                 }
 
                 ImportManifest manifest = new(1, "windows", textures);

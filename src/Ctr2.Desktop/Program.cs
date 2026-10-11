@@ -13,6 +13,13 @@ using SkiaSharp;
 
 try
 {
+    AtlasFrame? selectedFrame = null;
+    if (args.Length >= 5 && args[0] == "preview-resource")
+    {
+        SelectedResource selected = ResourcePreview.Load(args[1], int.Parse(args[2]), int.Parse(args[3]), int.Parse(args[4]));
+        selectedFrame = selected.Frame;
+        args = ["preview", selected.TexturePath, .. args[5..]];
+    }
     if (args.Length == 3 && args[0] == "import")
     {
         using CancellationTokenSource cancel = new();
@@ -63,7 +70,11 @@ try
         }
 
         using SKBitmap image = SKBitmap.Decode(args[1]) ?? throw new InvalidDataException("Cannot decode preview image.");
-        AtlasFrame? frame = framePath == null ? null : (JsonSerializer.Deserialize<PreviewFrame>(File.ReadAllText(framePath))
+        if (selectedFrame != null && framePath != null)
+        {
+            throw new ArgumentException("A resource selection already supplies frame metadata; omit --frame.");
+        }
+        AtlasFrame? frame = framePath == null ? selectedFrame : (JsonSerializer.Deserialize<PreviewFrame>(File.ReadAllText(framePath))
             ?? throw new InvalidDataException("Empty atlas frame metadata.")).ToFrame();
         if (snapshot != null)
         {
@@ -80,6 +91,7 @@ try
     }
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
+        "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
         "  preview <cached PNG> [--width N] [--height N] [--snapshot new.png] [--frames N] [--frame metadata.json]\n" +
         "Supply a dump from your own Windows game. This build previews assets; gameplay is not implemented.");
     return args.Length == 0 || args is ["--help"] ? 0 : 1;
