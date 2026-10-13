@@ -175,7 +175,7 @@ namespace Ctr2.Desktop
             {
                 ForestResult.Won => "Level complete",
                 ForestResult.Lost => "Try again",
-                ForestResult.Running => throw new NotImplementedException(),
+                ForestResult.Running => "Feed Om Nom",
                 _ => "Feed Om Nom"
             };
             canvas.DrawText($"{status}   Stars: {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}", 12, 27, SKTextAlign.Left, font, text);

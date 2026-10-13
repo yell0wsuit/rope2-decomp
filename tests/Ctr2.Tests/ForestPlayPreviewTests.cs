@@ -20,8 +20,13 @@ namespace Ctr2.Tests
     public sealed class ForestPlayPreviewTests
     {
         /// <summary>Rendering cannot advance game callbacks; fixed ticks complete feeding and restart restores candy.</summary>
-        [Fact]
-        public async Task PlaybackCompletionUsesFixedTicksAndRestartRestoresArtwork()
+        /// <param name="ticks">Fixed ticks to advance before the command renders its status.</param>
+        /// <param name="result">Expected command result at that tick.</param>
+        [Theory]
+        [InlineData(0, "Running")]
+        [InlineData(1, "Running")]
+        [InlineData(20, "Won")]
+        public async Task PlaybackCompletionUsesFixedTicksAndRestartRestoresArtwork(int ticks, string result)
         {
             string root = Path.Combine(Path.GetTempPath(), "ctr2-play-" + Guid.NewGuid());
             string assets = Path.Combine(root, "assets"), maps = Path.Combine(assets, "maps");
@@ -68,7 +73,7 @@ namespace Ctr2.Tests
                     RedirectStandardError = true,
                     RedirectStandardOutput = true
                 };
-                foreach (string arg in new[] { typeof(LevelPreview).Assembly.Location, "play-level", root, "1", "1", "--ticks", "20", "--snapshot", snapshot })
+                foreach (string arg in new[] { typeof(LevelPreview).Assembly.Location, "play-level", root, "1", "1", "--ticks", ticks.ToString(System.Globalization.CultureInfo.InvariantCulture), "--snapshot", snapshot })
                 {
                     start.ArgumentList.Add(arg);
                 }
@@ -78,7 +83,7 @@ namespace Ctr2.Tests
                 await process.WaitForExitAsync(TestContext.Current.CancellationToken);
                 string error = await errors;
                 Assert.True(process.ExitCode == 0, error);
-                Assert.Contains("Result: Won", await output);
+                Assert.Contains("Result: " + result, await output);
                 Assert.True(File.Exists(snapshot));
                 Assert.Equal("MOUTH_CLOSE", session.Simulation.Gameplay.Scene);
                 Assert.NotEqual(SKColors.Red, bitmap.GetPixel(200, 200));
