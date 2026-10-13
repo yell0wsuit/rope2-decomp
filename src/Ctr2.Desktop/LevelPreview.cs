@@ -68,7 +68,7 @@ namespace Ctr2.Desktop
                 if (play)
                 {
                     preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache));
-                    foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL" })
+                    foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING" })
                     {
                         preview.omnom!.SelectScene(scene);
                     }

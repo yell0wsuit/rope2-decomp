@@ -52,7 +52,7 @@ namespace Ctr2.Tests
                     new(133, "red.png", 0, 2, 1, 8, 8, [new(0, 0, 8, 8, 0, 0), new(0, 0, 8, 8, 0, 0)], Hash("red")),
                     new(7, "green.png", 0, 2, 1, 8, 8, [new(0, 0, 8, 8, 0, 0)], Hash("green"))]);
                 File.WriteAllText(Path.Combine(root, "resources.json"), JsonSerializer.Serialize(catalog));
-                string[] names = ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL"];
+                string[] names = ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING"];
                 byte[] track = AnimationPreviewTests.Message((1, 0), (2, AnimationPreviewTests.Message((1, 0f), (2, 0f), (3, 0f))),
                     (2, AnimationPreviewTests.Message((1, .1f), (2, 0f), (3, 0f))));
                 byte[] part = AnimationPreviewTests.Message([(1, 1), (3, 7), .. names.Select((_, i) => (10, (object)AnimationPreviewTests.Message((1, i), (5, track))))]);

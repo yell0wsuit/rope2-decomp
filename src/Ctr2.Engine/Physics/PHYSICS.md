@@ -253,7 +253,15 @@ and waits for its animation callback; a character leaving the dry canvas loses
 immediately, including while chewing. Dry bounds use the source margin plus 150
 logical units, with zero screen offset in this fitted diagnostic canvas.
 
-This is not the full Om Nom state machine: falling/landing/standing, turning,
+Falling presentation retains a 59-entry zero-initialized velocity history. Newest
+5/29/59-sample averages drive the source directional fall threshold and sustained
+settling conditions. Terrain contact latches through the supported world contact
+manifolds; sensor terrain cannot land a character. Airborne mouth/chewing scenes
+retain distinct completion callbacks and stale-revision guards. Restart discards
+the motion history and contact latch. This does not change any body velocity,
+collision constant or solver iteration count.
+
+This is not the full Om Nom state machine: procedural bump/rolling/standing, turning,
 costume substitutions, particles/audio, native contact ordering and general CCD
 remain pending. Physical overlap is a discrete compound fixture test, not the
 complete native dynamic-contact graph. The original fade completion queues

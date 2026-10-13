@@ -55,7 +55,8 @@ and static terrain in an ordinary dry forest level. Physical candy contact start
 eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Other mechanics and the first level's special negative-spawn arrival report an
-unsupported-scope error. Falling/landing/standing animations, selected costumes,
+unsupported-scope error. Falling/landing and airborne eating use source velocity
+history and terrain contacts. Procedural bump/standing animations, selected costumes,
 native scenery/rope/star artwork, particles, sound, saves and original-game parity
 remain pending. Scenery and stars still use the diagnostic drawing.
 
@@ -183,5 +184,5 @@ mass. Polygon contacts are discrete and can tunnel at high speed. The original
 intro, standing/gameplay adjustments and general dynamic-body collision remain pending.
 
 The opt-in `play-level` slice adds character/candy contact, consumption and completion.
-Next: falling/landing presentation, the first-level intro, native scenery and
+Next: the first-level intro, procedural landing/standing effects, native scenery and
 broader collision verification. Web work follows the PC slice.

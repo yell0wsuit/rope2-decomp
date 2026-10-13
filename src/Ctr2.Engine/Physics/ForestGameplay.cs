@@ -37,6 +37,14 @@ namespace Ctr2.Engine.Physics
         Idle,
         /// <summary>Candy is within the opening distance.</summary>
         MouthOpen,
+        /// <summary>Sustained downward or upward airborne motion.</summary>
+        Falling,
+        /// <summary>Airborne character with candy nearby.</summary>
+        FallingMouthOpen,
+        /// <summary>Closing the airborne mouth after candy moves away.</summary>
+        FallingMouthClose,
+        /// <summary>Chewing while airborne until a supported landing or completion.</summary>
+        FallingChewing,
         /// <summary>Eating and chewing after physical contact.</summary>
         Chewing,
         /// <summary>A required object left the scene.</summary>
@@ -50,7 +58,7 @@ namespace Ctr2.Engine.Physics
     public sealed record CandyConsumption(int Tick, int Candy, int Character);
 
     /// <summary>Opt-in gameplay state for one ordinary dry forest candy and character.</summary>
-    public sealed class ForestGameplay
+    public sealed partial class ForestGameplay
     {
         private readonly CandySimulation simulation;
         private readonly Vector2 canvas;
@@ -123,11 +131,12 @@ namespace Ctr2.Engine.Physics
             {
                 consumptions.Add(new(simulation.Tick, 0, 0));
                 CandyState = ForestCandyState.Eating;
-                CharacterState = ForestCharacterState.Chewing;
+                bool airborne = CharacterState == ForestCharacterState.FallingMouthOpen;
+                CharacterState = airborne ? ForestCharacterState.FallingChewing : ForestCharacterState.Chewing;
                 candy.IsSensor = true;
                 candy.GravityScale = 0;
                 candy.Velocity = 5 * (character.Origin - candy.Position);
-                SetScene("MOUTH_CLOSE");
+                SetScene(airborne ? "FALLING_MOUTH_CLOSE" : "MOUTH_CLOSE");
             }
         }
 
@@ -138,6 +147,8 @@ namespace Ctr2.Engine.Physics
                 return;
             }
             PhysicsBody candy = simulation.Candies[0], character = simulation.Characters[0];
+            motion.Sample(character.Velocity);
+            collidedWithTerrain |= simulation.CharacterTouchesTerrain();
             if (Outside(character.Origin, 70))
             {
                 CharacterState = ForestCharacterState.Fail;
@@ -154,13 +165,14 @@ namespace Ctr2.Engine.Physics
                     CandyState = ForestCandyState.Removed;
                 }
             }
-            if (CharacterState == ForestCharacterState.Chewing)
+            if (CharacterState is ForestCharacterState.Chewing or ForestCharacterState.FallingChewing)
             {
                 chewingTime += PhysicsWorld.TimeStep;
                 if (chewingTime >= 2.8f)
                 {
                     Finish(ForestResult.Won);
                 }
+                UpdateAirborneState();
                 return;
             }
             if (CharacterState == ForestCharacterState.Fail)
@@ -187,6 +199,17 @@ namespace Ctr2.Engine.Physics
                     CharacterState = ForestCharacterState.Idle;
                     SetScene("MOUTH_CLOSE");
                 }
+                else if (CharacterState == ForestCharacterState.Falling && distance < 150)
+                {
+                    CharacterState = ForestCharacterState.FallingMouthOpen;
+                    SetScene("FALLING_MOUTH_OPEN");
+                }
+                else if (CharacterState == ForestCharacterState.FallingMouthOpen && distance > 170)
+                {
+                    CharacterState = ForestCharacterState.FallingMouthClose;
+                    SetScene("FALLING_MOUTH_CLOSE");
+                }
+                UpdateAirborneState();
             }
         }
 
@@ -202,6 +225,23 @@ namespace Ctr2.Engine.Physics
             if (CharacterState == ForestCharacterState.Fail)
             {
                 Finish(ForestResult.Lost);
+            }
+            else if (CharacterState == ForestCharacterState.FallingChewing)
+            {
+                if (scene == "FALLING_MOUTH_CLOSE")
+                {
+                    SetScene("FALLING_CHEWING");
+                }
+                else if (scene == "FALLING_CHEWING")
+                {
+                    Finish(ForestResult.Won);
+                }
+            }
+            else if (CharacterState == ForestCharacterState.FallingMouthClose && scene == "FALLING_MOUTH_CLOSE")
+            {
+                CharacterState = ForestCharacterState.Falling;
+                collidedWithTerrain = false;
+                SetScene("FALLING");
             }
             else if (CharacterState == ForestCharacterState.Chewing)
             {
