@@ -62,9 +62,10 @@ namespace Ctr2.Engine.Physics
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
         /// <param name="play">Whether to enable the supported ordinary forest gameplay slice.</param>
+        /// <param name="forestArrival">Whether the host selected the first production forest entry.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
         /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
-        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false)
+        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool forestArrival = false)
         {
             LevelLayout layout = LevelLayout.Create(level);
             CharacterDefinitions = PolygonBodyDefinition.LoadCharacters(level, design);
@@ -177,7 +178,7 @@ namespace Ctr2.Engine.Physics
             LoadStars(layout, design);
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
-            Gameplay = play ? new ForestGameplay(this, layout, level) : null;
+            Gameplay = play ? new ForestGameplay(this, layout, level, forestArrival) : null;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>

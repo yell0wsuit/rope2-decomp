@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -66,18 +67,32 @@ namespace Ctr2.Engine.Physics
         private float eatingTime;
         private float chewingTime;
 
-        internal ForestGameplay(CandySimulation simulation, LevelLayout layout, LevelDefinition level)
+        internal ForestGameplay(CandySimulation simulation, LevelLayout layout, LevelDefinition level, bool forestArrival)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized")) ||
-                layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "tutorial_swipe")) ||
+                (!forestArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)) ||
                 level.Settings.Any(s => s.Kind == "gameDesign" && s.Attributes.GetValueOrDefault("location", "forest") != "forest"))
             {
-                throw new InvalidDataException("Play supports one candy and one Om Nom in an ordinary dry forest level; special arrival and other mechanics are pending.");
+                throw new InvalidDataException("Play supports one candy and one Om Nom in a dry forest level; negative spawn requires the first forest entry and other mechanics are pending.");
             }
             this.simulation = simulation;
             canvas = layout.Size;
             Consumptions = consumptions.AsReadOnly();
+            ArrivalLeaves = forestArrival ? new ForestLeafBurst((simulation.Characters[0].Origin * 200) + new Vector2(0, 20)) : null;
+            PlacedLevelObject[] hints = [.. layout.Objects.Where(o => o.Source.Kind == "tutorial_swipe")];
+            if (hints.Length > 1)
+            {
+                throw new InvalidDataException("Multiple swipe hints are outside the supported forest slice.");
+            }
+            if (hints.Length == 1)
+            {
+                if (!float.TryParse(hints[0].Source.Attributes.GetValueOrDefault("delay", "0"), NumberStyles.Float, CultureInfo.InvariantCulture, out float delay) || !float.IsFinite(delay) || delay < 0 || delay > 36000)
+                {
+                    throw new InvalidDataException("Invalid swipe hint delay.");
+                }
+                SwipeTutorial = new(hints[0].Position!.Value, hints[0].Angle, delay);
+            }
         }
 
         /// <summary>Gets the current level result.</summary>
@@ -119,6 +134,21 @@ namespace Ctr2.Engine.Physics
         }
         /// <summary>Gets the opacity during the original short candy disappearance.</summary>
         public float CandyOpacity => CandyState == ForestCandyState.Active ? 1 : CandyState == ForestCandyState.Removed ? 0 : Math.Clamp(1 - (eatingTime / .2f), 0, 1);
+        /// <summary>Gets the optional first-entry leaf burst; it never participates in physics.</summary>
+        public ForestLeafBurst? ArrivalLeaves
+        {
+            get;
+        }
+        /// <summary>Gets the optional nonphysical swipe hint and its fixed-tick timing.</summary>
+        public ForestSwipeTutorial? SwipeTutorial
+        {
+            get;
+        }
+        /// <summary>Notifies the authored hint of a primary pointer press.</summary>
+        public void NotifyTouchDown()
+        {
+            SwipeTutorial?.TouchDown();
+        }
 
         internal void BeforeStep()
         {
@@ -146,6 +176,8 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
+            ArrivalLeaves?.Step();
+            SwipeTutorial?.Step();
             PhysicsBody candy = simulation.Candies[0], character = simulation.Characters[0];
             motion.Sample(character.Velocity);
             collidedWithTerrain |= simulation.CharacterTouchesTerrain();

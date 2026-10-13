@@ -154,17 +154,22 @@ namespace Ctr2.Desktop
         /// <param name="canvas">Caller-owned destination canvas; its clipping and transform remain active.</param>
         /// <param name="sceneTransform">Transform from authored root coordinates into the destination scene.</param>
         /// <param name="seconds">Nonnegative elapsed scene time; the terminal pose holds.</param>
+        /// <param name="opacity">Container opacity between zero and one.</param>
         /// <exception cref="ObjectDisposedException">The preview has been disposed.</exception>
         /// <exception cref="ArgumentOutOfRangeException">Time is invalid.</exception>
-        public void DrawTransformed(SKCanvas canvas, Matrix4x4 sceneTransform, double seconds)
+        public void DrawTransformed(SKCanvas canvas, Matrix4x4 sceneTransform, double seconds, float opacity = 1)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
+            if (!float.IsFinite(opacity) || opacity < 0 || opacity > 1)
+            {
+                throw new ArgumentOutOfRangeException(nameof(opacity));
+            }
             foreach (AnimationSprite sprite in AnimationPose.Sample(root, scene, seconds, Size))
             {
                 AtlasFrame frame = geometry[(sprite.Source, sprite.Quad)];
                 Matrix4x4 transform = sprite.Transform * sceneTransform;
                 SKMatrix matrix = new(transform.M11, transform.M21, transform.M41, transform.M12, transform.M22, transform.M42, 0, 0, 1);
-                float[] tint = [sprite.Color.X, 0, 0, 0, 0, 0, sprite.Color.Y, 0, 0, 0, 0, 0, sprite.Color.Z, 0, 0, 0, 0, 0, sprite.Color.W, 0];
+                float[] tint = [sprite.Color.X, 0, 0, 0, 0, 0, sprite.Color.Y, 0, 0, 0, 0, 0, sprite.Color.Z, 0, 0, 0, 0, 0, sprite.Color.W * opacity, 0];
                 using SKColorFilter filter = SKColorFilter.CreateColorMatrix(tint);
                 using SKPaint paint = new()
                 {

@@ -9,17 +9,19 @@ namespace Ctr2.Engine.Physics
     {
         private readonly LevelDefinition level;
         private readonly LevelDefinition design;
+        private readonly bool forestArrival;
         private SimulationClock clock = new();
         private double hostTime;
         private double activeTime;
         private bool rebase;
         private bool paused;
         /// <summary>Creates a supported session from immutable authored level and design definitions.</summary>
-        public ForestSession(LevelDefinition level, LevelDefinition design)
+        public ForestSession(LevelDefinition level, LevelDefinition design, bool forestArrival = false)
         {
             this.level = level;
             this.design = design;
-            Simulation = new(level, design, play: true);
+            this.forestArrival = forestArrival;
+            Simulation = new(level, design, play: true, forestArrival: forestArrival);
             Input = new(Simulation, LevelLayout.Create(level).Size);
         }
         /// <summary>Gets the current simulation, replaced on restart.</summary>
@@ -54,7 +56,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Restores the initial level and cancels held and queued input.</summary>
         public void Restart()
         {
-            CandySimulation replacement = new(level, design, play: true);
+            CandySimulation replacement = new(level, design, play: true, forestArrival: forestArrival);
             Input.Cancel();
             Simulation = replacement;
             Input = new(Simulation, LevelLayout.Create(level).Size);

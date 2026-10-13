@@ -20,6 +20,8 @@ namespace Ctr2.Desktop
         private AnimationPreview? omnom;
         /// <summary>Optional classic candy atlas for the simulation preview.</summary>
         private CandySprite? candy;
+        private ForestLeafSprites? forestLeaves;
+        private AnimationPreview? swipeTutorial;
         private int sceneRevision = -1;
         private CandySimulation? animatedSimulation;
         /// <summary>Gets the optional playable session with pause and restart ownership.</summary>
@@ -67,7 +69,15 @@ namespace Ctr2.Desktop
                 }
                 if (play)
                 {
-                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache));
+                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), forestArrival: pack == 1 && level == 1);
+                    if (preview.Session.Simulation.Gameplay!.ArrivalLeaves != null)
+                    {
+                        preview.forestLeaves = new ForestLeafSprites(cache, resolution);
+                    }
+                    if (preview.Session.Simulation.Gameplay.SwipeTutorial != null)
+                    {
+                        preview.swipeTutorial = AnimationPreview.Load(cache, 104, "SWIPE_LOOP", resolution);
+                    }
                     foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING" })
                     {
                         preview.omnom!.SelectScene(scene);
@@ -120,6 +130,10 @@ namespace Ctr2.Desktop
                     IsAntialias = true
                 };
                 canvas.DrawRect(0, 0, Layout.Size.X, Layout.Size.Y, paint);
+                if (Simulation?.Gameplay?.ArrivalLeaves is ForestLeafBurst leaves)
+                {
+                    forestLeaves!.Draw(canvas, leaves.Particles);
+                }
                 paint.Color = new SKColor(132, 96, 64);
                 foreach (IReadOnlyList<Vector2> vertices in Simulation == null ? Layout.Polygons.Select(p => p.Vertices) : Simulation.Terrain.Select(s => s.Outline))
                 {
@@ -160,6 +174,10 @@ namespace Ctr2.Desktop
                 int characterIndex = 0;
                 foreach (PlacedLevelObject placed in Layout.Objects)
                 {
+                    if (Session != null && placed.Source.Kind == "tutorial_swipe")
+                    {
+                        continue;
+                    }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized")
                     {
                         continue;
@@ -216,6 +234,14 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(point.X, point.Y, placed.Source.Kind == "grab" ? 6 : 12, paint);
                     }
                 }
+                if (Simulation?.Gameplay?.SwipeTutorial is ForestSwipeTutorial hint && hint.Opacity > 0)
+                {
+                    Vector2 origin = (-swipeTutorial!.CanvasSize / 2) + new Vector2(90, 0);
+                    Matrix4x4 transformHint = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
+                        Matrix4x4.CreateRotationZ(hint.Angle * MathF.PI / 180) * Matrix4x4.CreateTranslation(hint.Position.X, hint.Position.Y, 0);
+                    double time = swipeTutorial.Duration > 0 ? hint.AnimationSeconds % swipeTutorial.Duration : 0;
+                    swipeTutorial.DrawTransformed(canvas, transformHint, time, hint.Opacity);
+                }
             }
             finally
             {
@@ -257,6 +283,8 @@ namespace Ctr2.Desktop
                 }
                 omnom?.Dispose();
                 candy?.Dispose();
+                forestLeaves?.Dispose();
+                swipeTutorial?.Dispose();
                 disposed = true;
             }
         }

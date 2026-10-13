@@ -37,9 +37,9 @@ dotnet run --project src/Ctr2.Desktop -- preview cache/windows/assets/omnom_640_
 
 For offscreen verification, add `--width 640 --height 960 --snapshot local/atlas.png`. Create the `local/` directory first; snapshots do not overwrite existing files. `--frames 3` runs a bounded desktop presentation smoke test.
 
-## Play an ordinary forest level
+## Play a forest level
 
-After importing a full Windows package, start with pack 1, entry 2:
+After importing a full Windows package, start with pack 1, entry 1 or 2:
 
 ```sh
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2
@@ -50,12 +50,15 @@ resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.
 Restart restores the initial physics, stars, animation, input and replay clock.
 
-This first slice supports one candy and one Om Nom, stationary stars, basic grabs
-and static terrain in an ordinary dry forest level. Physical candy contact starts
+This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
+a swipe hint and static terrain in a dry forest level. Physical candy contact starts
 eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
-Other mechanics and the first level's special negative-spawn arrival report an
-unsupported-scope error. Falling/landing and airborne eating use source velocity
+Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
+leaf burst. The authored swipe hint appears after its delay; an early pointer
+press dismisses it, while an active hint fades after a press. No invented input
+lock or camera movement is applied. Other mechanics report an unsupported-scope
+error. Falling/landing and airborne eating use source velocity
 history and terrain contacts. Procedural bump/standing animations, selected costumes,
 native scenery/rope/star artwork, particles, sound, saves and original-game parity
 remain pending. Scenery and stars still use the diagnostic drawing.
@@ -73,6 +76,10 @@ original-game physics or visual parity:
 ```sh
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2 --ticks 600 --cut 0:0:0:519.25:343.5 --cut 0:1:0:138.66667:156.33333 --snapshot local/forest-win.png
 ```
+
+Pack 1/entry 1 also completed with 3/3 stars at tick 309 (feeding at tick 179)
+using `--ticks 600 --cut 30:0:0:400:138`. Leaf randomness is deterministic for
+repeatable diagnostics; native randomness and visual parity remain unverified.
 
 ## Static level layout preview
 
@@ -184,5 +191,5 @@ mass. Polygon contacts are discrete and can tunnel at high speed. The original
 intro, standing/gameplay adjustments and general dynamic-body collision remain pending.
 
 The opt-in `play-level` slice adds character/candy contact, consumption and completion.
-Next: the first-level intro, procedural landing/standing effects, native scenery and
+Next: procedural landing/standing effects, native scenery and
 broader collision verification. Web work follows the PC slice.

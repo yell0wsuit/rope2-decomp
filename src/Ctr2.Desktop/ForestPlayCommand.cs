@@ -76,10 +76,13 @@ namespace Ctr2.Desktop
                 while (replay.TryPeek(out RopeCut? cut) && cut.Tick == session.Simulation.Tick)
                 {
                     _ = replay.Dequeue();
-                    _ = session.Simulation.Cut(cut.Rope, cut.Segment, cut.Point, cut.Impulse);
+                    if (session.Simulation.Cut(cut.Rope, cut.Segment, cut.Point, cut.Impulse))
+                    {
+                        session.Simulation.Gameplay!.NotifyTouchDown();
+                    }
                 }
             };
-            Console.WriteLine("Forest play: swipe to cut; R restart; Space pause/resume; Escape exit. Scenery is diagnostic; special arrival and broader mechanics are pending.");
+            Console.WriteLine("Forest play: swipe to cut; R restart; Space pause/resume; Escape exit. Scenery is diagnostic; broader mechanics are pending.");
             for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == ForestResult.Running; i++)
             {
                 session.Step();
@@ -125,6 +128,10 @@ namespace Ctr2.Desktop
                     }
                     if (!session.Paused && session.Simulation.Gameplay!.Result == ForestResult.Running)
                     {
+                        if ((SDL.EventType)evt.Type == SDL.EventType.MouseButtonDown && evt.Button.Button == 1 && evt.Button.Which != uint.MaxValue)
+                        {
+                            session.Simulation.Gameplay.NotifyTouchDown();
+                        }
                         new SdlRopeInput(session.Input).Handle(evt, windowWidth, windowHeight, pixelWidth, pixelHeight);
                     }
                 }, title: "Cut the Rope 2 — forest play");

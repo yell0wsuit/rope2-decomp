@@ -137,7 +137,7 @@ bodies and cannot alter candy/rope trajectories or island traversal.
 The preview hides collected markers and reports events/counts on the console.
 Star animation/particles/audio, moving stars, Om Nom collection and score/save
 integration are pending. Level 1's off-screen Om Nom uses a dynamic polygon and
-requires intro support before consumption and completion can be faithful.
+uses the explicit first-entry arrival in opt-in play; the diagnostic remains physical-only.
 
 ## Dynamic compound characters
 
@@ -196,8 +196,9 @@ terrain and two independent bodies sharing a floor. These do not
 prove native broadphase/contact-order parity or original Om Nom movement.
 
 Character polygons use discrete contacts even when circle CCD is enabled. Polygon
-CCD, character/candy collision, standing/gameplay adjustments, star collection,
-intro, eating and level completion are pending.
+CCD, general dynamic-body collision, standing/gameplay adjustments and character
+star collection remain pending. The opt-in gameplay layer below adds feeding,
+first-entry arrival and completion without a general dynamic-contact solver.
 
 ## Numerical fixtures
 
@@ -235,8 +236,9 @@ Polygon fixtures contain only invented geometry, not Om Nom game vertices.
 ## Opt-in forest gameplay
 
 `CandySimulation(..., play: true)` adds a bounded ordinary dry-forest slice with
-one candy and one Om Nom. Other object kinds, multiple protagonists/candies and
-the negative-spawn special arrival fail explicitly. Diagnostics remain opt-out
+one candy and one Om Nom. Other mechanics and multiple protagonists/candies fail
+explicitly. The desktop host selects first-entry arrival only for pack 1/entry 1;
+other negative spawns still fail. Diagnostics remain opt-out
 and retain their numerical fixture behavior.
 
 Current compound polygon/circle overlap at pre-step positions starts consumption
@@ -267,10 +269,39 @@ remain pending. Physical overlap is a discrete compound fixture test, not the
 complete native dynamic-contact graph. The original fade completion queues
 destruction; this subset retires after the completed fixed tick reaches 0.2 seconds.
 
+## First forest arrival and swipe hint
+
+The first desktop forest entry preserves its authored negative character position
+and ordinary dynamic-body fall. Source initialization starts idle and suppresses
+the ordinary greeting. No separate camera trajectory, delay or input lock is
+invented. Its 30-leaf background burst runs solely in logical presentation units:
+angle 90 +/-60 degrees, speed 280 +/-120, radial acceleration 320 +/-160,
+tangential acceleration 60 +/-20, gravity (0,400), lifetime 1.5 seconds, initial
+independent scales 1.2 +/-0.3 and end scales 0.4 +/-0.1. Leaf variants, rotation
+and initial position noise are bounded and deterministic; no particle enters the
+physics world. Restart rebuilds the initial burst and fixed-tick timing.
+
+The matching Windows executable uses image resource 163, quads 9 through 11.
+The Android reference uses resource 162; that table is not used with Windows
+textures. Sample rectangles and density come from the verified Windows catalog.
+Leaves use trimmed dimensions about their centers, preserving original particle
+layout. Native random sequences, exact color/blend rounding and original runtime
+presentation remain unverified.
+
+One authored `tutorial_swipe` is supported independently of arrival. Position
+doubles into logical units and angle remains authored degrees. Delay expires on
+fixed ticks, then Windows animation 104 `SWIPE_LOOP` repeats. Primary pointer down
+before the delay removes the hint; afterward it fades over 0.4 seconds. Accepted
+scheduled replay cuts apply the same dismissal notification. This replays accepted
+cuts, not all original raw touch events. Pause freezes hint/particle timing, and
+restart restores the delay. Other tutorial kinds and multiple hints fail explicitly.
+Delay accumulation and subtracting the native remaining delay may differ by one
+floating-point tick; exact original timing/visual parity still needs runtime comparison.
+
 ## Remaining acceptance work (broader engine)
 
 There is no general Box2D continuous solver, polygon CCD, sleeping, dynamic-body solid collision,
-dynamic terrain, noncenter anchors, moving stars, hazards or special intro logic.
+dynamic terrain, noncenter anchors, moving stars, hazards or broader intro logic.
 Broader consumption and completion mechanics beyond the opt-in forest slice,
 complex contact
 persistence/order, native triangle ordering and original recorded-input parity
