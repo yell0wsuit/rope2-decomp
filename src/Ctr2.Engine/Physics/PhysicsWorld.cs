@@ -86,7 +86,7 @@ namespace Ctr2.Engine.Physics
         /// <value>The authored gravity scale.</value>
         public float GravityScale
         {
-            get;
+            get; internal set;
         }
         /// <summary>Gets the circle radius in meters, or zero for a compound polygon.</summary>
         /// <value>The authored radius, independent of visual dimensions.</value>
@@ -321,6 +321,27 @@ namespace Ctr2.Engine.Physics
         public bool Remove(PhysicsJoint joint)
         {
             return joints.Remove(joint);
+        }
+
+        /// <summary>Removes an owned body and every attached constraint and cached terrain contact between steps.</summary>
+        /// <param name="body">Body to retire.</param>
+        /// <returns>Whether the body belonged to this world.</returns>
+        internal bool RemoveBody(PhysicsBody body)
+        {
+            if (!bodies.Remove(body))
+            {
+                return false;
+            }
+            _ = joints.RemoveAll(j => j.A == body || j.B == body);
+            foreach ((PhysicsBody, TerrainFixture, int) key in new List<(PhysicsBody, TerrainFixture, int)>(contacts.Keys))
+            {
+                if (key.Item1 == body)
+                {
+                    _ = contacts.Remove(key);
+                }
+            }
+            polygonFixtureCount -= body.PolygonFixtures.Count;
+            return true;
         }
 
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>

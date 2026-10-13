@@ -128,10 +128,10 @@ namespace Ctr2.Engine.Physics
         public IReadOnlyList<IReadOnlyList<Vector2>> RopeSegments(int index)
         {
             RopeChain rope = ropes[index];
-            Vector2[] points = [.. rope.Points.Select(p => p.Position * 200)];
+            Vector2[] points = [.. (rope.Released ? rope.Points.SkipLast(1) : rope.Points).Select(p => p.Position * 200)];
             return rope.CutGap >= 0
                 ? Array.AsReadOnly<IReadOnlyList<Vector2>>([Array.AsReadOnly(points[..(rope.CutGap + 1)]), Array.AsReadOnly(points[(rope.CutGap + 1)..])])
-                : Array.AsReadOnly<IReadOnlyList<Vector2>>([Array.AsReadOnly(rope.Released ? points[..^1] : points)]);
+                : Array.AsReadOnly<IReadOnlyList<Vector2>>([Array.AsReadOnly(points)]);
         }
 
         /// <summary>Validates finite bounded public cut vectors.</summary>

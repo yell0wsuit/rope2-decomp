@@ -16,6 +16,11 @@ namespace Ctr2.Engine.Physics
         private readonly PhysicsWorld world = new();
         /// <summary>Authored rope chains in grab order.</summary>
         private readonly List<RopeChain> ropes = [];
+        /// <summary>Gets optional ordinary forest gameplay state; null retains diagnostic behavior.</summary>
+        public ForestGameplay? Gameplay
+        {
+            get;
+        }
         /// <summary>Gets the simulated candies in authored order.</summary>
         /// <value>A read-only view of the dynamic candy bodies, in meters.</value>
         public IReadOnlyList<PhysicsBody> Candies
@@ -56,9 +61,10 @@ namespace Ctr2.Engine.Physics
         /// <summary>Creates a center-attachment simulation using a parsed level and matching master design.</summary>
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
+        /// <param name="play">Whether to enable the supported ordinary forest gameplay slice.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
         /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
-        public CandySimulation(LevelDefinition level, LevelDefinition design)
+        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false)
         {
             LevelLayout layout = LevelLayout.Create(level);
             CharacterDefinitions = PolygonBodyDefinition.LoadCharacters(level, design);
@@ -171,6 +177,7 @@ namespace Ctr2.Engine.Physics
             LoadStars(layout, design);
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
+            Gameplay = play ? new ForestGameplay(this, layout, level) : null;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>
@@ -195,12 +202,14 @@ namespace Ctr2.Engine.Physics
                 }
             }
             CollectStars();
+            Gameplay?.BeforeStep();
             world.Step();
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
             }
             Tick = checked(Tick + 1);
+            Gameplay?.AfterStep();
         }
 
         /// <summary>Snapshots a chain's current world centers in logical scene units.</summary>

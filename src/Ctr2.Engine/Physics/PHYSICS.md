@@ -232,11 +232,39 @@ masks and use the original 0.00002 position tolerance. Polygon mass fixtures req
 0.00002 component tolerance; circle overlap fixtures require exact Boolean results.
 Polygon fixtures contain only invented geometry, not Om Nom game vertices.
 
-## Remaining acceptance work
+## Opt-in forest gameplay
+
+`CandySimulation(..., play: true)` adds a bounded ordinary dry-forest slice with
+one candy and one Om Nom. Other object kinds, multiple protagonists/candies and
+the negative-spawn special arrival fail explicitly. Diagnostics remain opt-out
+and retain their numerical fixture behavior.
+
+Current compound polygon/circle overlap at pre-step positions starts consumption
+once. Stars are processed first in deterministic authored order; original native
+callback ordering is not claimed. Eating candy becomes a sensor, loses gravity,
+and receives velocity toward Om Nom's body origin. It fades for 0.2 seconds before
+post-step removal clears world joints/contacts and all terminal rope attachments,
+including cut tails. It cannot collect further stars during this phase.
+
+Ground presentation follows `MOUTH_CLOSE` into `CHEWING`. Matching scene/revision
+completion wins once; the traced 2.8-second timer is a fallback. Mouth opening and
+closing use 150/170 logical-unit distance thresholds. A lost candy requests `FAIL`
+and waits for its animation callback; a character leaving the dry canvas loses
+immediately, including while chewing. Dry bounds use the source margin plus 150
+logical units, with zero screen offset in this fitted diagnostic canvas.
+
+This is not the full Om Nom state machine: falling/landing/standing, turning,
+costume substitutions, particles/audio, native contact ordering and general CCD
+remain pending. Physical overlap is a discrete compound fixture test, not the
+complete native dynamic-contact graph. The original fade completion queues
+destruction; this subset retires after the completed fixed tick reaches 0.2 seconds.
+
+## Remaining acceptance work (broader engine)
 
 There is no general Box2D continuous solver, polygon CCD, sleeping, dynamic-body solid collision,
-dynamic terrain, noncenter anchors, candy consumption, moving stars, Om Nom
-collection, hazards, intro or completion logic. Complex contact
+dynamic terrain, noncenter anchors, moving stars, hazards or special intro logic.
+Broader consumption and completion mechanics beyond the opt-in forest slice,
+complex contact
 persistence/order, native triangle ordering and original recorded-input parity
 need further verification. The rope draws physical polylines without native
 texturing; candy flare/skins/masks and cut presentation remain pending. Web work
