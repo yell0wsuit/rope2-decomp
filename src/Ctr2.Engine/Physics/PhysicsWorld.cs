@@ -5,8 +5,8 @@ using System.Numerics;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>A circular body for center-anchor joints and supported static terrain contacts.</summary>
-    public sealed class PhysicsBody
+    /// <summary>A circle or compound polygon body for supported fixed-step physics.</summary>
+    public sealed partial class PhysicsBody
     {
         /// <summary>Gets the center in meters.</summary>
         /// <value>The current world-space center.</value>
@@ -70,9 +70,9 @@ namespace Ctr2.Engine.Physics
             return float.IsFinite(value) && value >= 0 && value <= maximum ? value : throw new ArgumentOutOfRangeException(nameof(value));
         }
 
-        /// <summary>Gets the inverse moment of inertia of a uniform circular fixture.</summary>
+        /// <summary>Gets the inverse centroid moment of inertia of the owned fixtures.</summary>
         /// <value>Zero for static bodies.</value>
-        internal float InverseInertia => Mass > 0 ? 2 / (Mass * Radius * Radius) : 0;
+        internal float InverseInertia => Mass <= 0 || FixedRotation ? 0 : PolygonFixtures.Count > 0 ? 1 / (Mass * field) : 2 / (Mass * Radius * Radius);
         /// <summary>Gets the circular fixture mass in kilograms; zero denotes a static body.</summary>
         /// <value>Density times circle area for a dynamic body.</value>
         public float Mass
@@ -88,7 +88,7 @@ namespace Ctr2.Engine.Physics
         {
             get;
         }
-        /// <summary>Gets the radius in meters.</summary>
+        /// <summary>Gets the circle radius in meters, or zero for a compound polygon.</summary>
         /// <value>The authored radius, independent of visual dimensions.</value>
         public float Radius
         {
@@ -250,7 +250,7 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>Always-awake Box2D 2.2.1 subset with center joints and circle/static-polygon contacts.</summary>
+    /// <summary>Always-awake Box2D 2.2.1 subset with circle center joints and circle/polygon contacts against static terrain.</summary>
     public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>
@@ -331,14 +331,14 @@ namespace Ctr2.Engine.Physics
             {
                 foreach (PhysicsBody body in bodies)
                 {
-                    if (body.Mass > 0 && !body.IsSensor)
+                    if (body.Mass > 0 && !body.IsSensor && body.PolygonFixtures.Count == 0)
                     {
                         starts.Add(body, (body.Position, body.Angle));
                     }
                 }
             }
             List<List<PhysicsJoint>> islands = SolverOrder(out Dictionary<PhysicsBody, (int Island, int Order)>? bodyOrder);
-            List<List<TerrainContact>> contactIslands = BuildContacts(islands, bodyOrder);
+            List<List<PhysicsContact>> contactIslands = BuildContacts(islands, bodyOrder);
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
             {
@@ -353,13 +353,13 @@ namespace Ctr2.Engine.Physics
                     body.AngularVelocity *= Math.Clamp(1 - (TimeStep * body.AngularDamping), 0, 1);
                 }
             }
-            foreach (List<TerrainContact> contacts in contactIslands)
+            foreach (List<PhysicsContact> contacts in contactIslands)
             {
-                foreach (TerrainContact contact in contacts)
+                foreach (PhysicsContact contact in contacts)
                 {
                     contact.Initialize();
                 }
-                foreach (TerrainContact contact in contacts)
+                foreach (PhysicsContact contact in contacts)
                 {
                     contact.WarmStart();
                 }
@@ -374,9 +374,9 @@ namespace Ctr2.Engine.Physics
                 {
                     joint.SolveVelocity();
                 }
-                foreach (List<TerrainContact> contacts in contactIslands)
+                foreach (List<PhysicsContact> contacts in contactIslands)
                 {
-                    foreach (TerrainContact contact in contacts)
+                    foreach (PhysicsContact contact in contacts)
                     {
                         contact.SolveVelocity();
                     }
@@ -403,7 +403,7 @@ namespace Ctr2.Engine.Physics
                 for (int i = 0; i < 30; i++)
                 {
                     bool solved = true;
-                    foreach (TerrainContact contact in contactIslands[islandIndex])
+                    foreach (PhysicsContact contact in contactIslands[islandIndex])
                     {
                         solved = contact.SolvePosition() && solved;
                     }
@@ -433,7 +433,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The owned constraint.</returns>
         private PhysicsJoint AddJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping)
         {
-            if (joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length < 0 || (frequency > 0 && length == 0) ||
+            if (joints.Count >= 8192 || a.PolygonFixtures.Count > 0 || b.PolygonFixtures.Count > 0 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length < 0 || (frequency > 0 && length == 0) ||
                 !float.IsFinite(frequency) || frequency < 0 || !float.IsFinite(damping) || damping < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(length));

@@ -135,6 +135,7 @@ namespace Ctr2.Desktop
                 }
                 int candyIndex = 0;
                 int starIndex = 0;
+                int characterIndex = 0;
                 foreach (PlacedLevelObject placed in Layout.Objects)
                 {
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized")
@@ -157,9 +158,17 @@ namespace Ctr2.Desktop
                     }
                     else if (placed.Source.Kind == "omnom" && omnom != null)
                     {
+                        Vector2 position = point;
+                        float angle = placed.Angle * MathF.PI / 180;
+                        if (Simulation != null)
+                        {
+                            PhysicsBody body = Simulation.Characters[characterIndex++];
+                            position = body.Origin * 200;
+                            angle = body.Angle;
+                        }
                         Vector2 origin = (-omnom.CanvasSize / 2) + new Vector2(-8, -11);
                         Matrix4x4 character = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
-                            Matrix4x4.CreateRotationZ(placed.Angle * MathF.PI / 180) * Matrix4x4.CreateTranslation(point.X, point.Y, 0);
+                            Matrix4x4.CreateRotationZ(angle) * Matrix4x4.CreateTranslation(position.X, position.Y, 0);
                         omnom.DrawTransformed(canvas, character, seconds);
                     }
                     else

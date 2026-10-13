@@ -161,7 +161,7 @@ try
         }
         if (simulate)
         {
-            Console.WriteLine("Candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; static terrain contacts and physical cut fragments enabled. Drag the primary mouse button across a rope. Swept circle/static-terrain contacts and stationary candy/star collection are enabled. Dynamic terrain, sleeping, Om Nom physics and level completion are pending. --release-at removes candy attachments only.");
+            Console.WriteLine("Candy/rope diagnostic: fixed dt=0.0167, 15/30 solver iterations; static terrain contacts and physical cut fragments enabled. Drag the primary mouse button across a rope. Swept circle/static-terrain contacts, compound character/static-terrain contacts and stationary candy/star collection are enabled. Dynamic terrain, sleeping, polygon CCD, character/candy collision, intro, consumption and level completion are pending. --release-at removes candy attachments only.");
             for (int i = 0; i < ticks; i++)
             {
                 fixedStep();

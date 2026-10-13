@@ -2,7 +2,7 @@
 
 An early C# port using selected framework code from [CutTheRopeDX](https://github.com/yell0wsuit/cuttherope-dx). PC comes first; a web host is planned later.
 
-**Current build: local asset import, Windows resource metadata extraction, and desktop atlas/animated-character and static level previews. Gameplay is not implemented yet.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
+**Current build: local asset import, Windows resource metadata extraction, desktop previews and a candy/rope/character physics diagnostic. A playable game is still in progress.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
 
 ## Your game assets
 
@@ -140,10 +140,11 @@ Fast passages can skip sensors, matching their unswept contact behavior. Moving
 stars fail explicitly. Star artwork, particles, sound and Om Nom collection remain
 pending.
 
-The polygon foundation now validates Om Nom's authored shape and body fields,
-including its local centroid and moments of inertia. These are initial definitions;
-Om Nom still uses his static authored pose until polygon contacts and integration
-are implemented.
+Om Nom now uses a dynamic compound polygon body with authored density, gravity,
+damping and fixed rotation. Triangle fixtures collide with static terrain; artwork
+follows the simulated body origin and angle, independently of its offset center of
+mass. Polygon contacts are discrete and can tunnel at high speed. The original
+intro, standing/gameplay adjustments and character/candy collision remain pending.
 
-Next: polygon terrain contacts and dynamic bodies for Om Nom, the first-level intro, candy consumption
-and completion, plus broader collision verification. Web work follows the PC slice.
+Next: character/candy contacts, the first-level intro, candy consumption and
+completion, plus broader collision verification. Web work follows the PC slice.

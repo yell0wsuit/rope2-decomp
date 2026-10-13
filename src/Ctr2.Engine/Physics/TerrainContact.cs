@@ -13,7 +13,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Monotonic contact creation sequence, matching prepended body contact edges.</summary>
         private long contactSequence;
         /// <summary>Previous active contacts, retaining accumulated normal and tangent impulses.</summary>
-        private Dictionary<(PhysicsBody, TerrainFixture), TerrainContact> contacts = [];
+        private Dictionary<(PhysicsBody, TerrainFixture, int), PhysicsContact> contacts = [];
 
         /// <summary>Adds one convex static terrain fixture; vertices are copied into the world.</summary>
         /// <param name="vertices">Three to eight counterclockwise world-space vertices in meters.</param>
@@ -29,17 +29,17 @@ namespace Ctr2.Engine.Physics
                 throw new ArgumentException("Invalid convex terrain fixture.");
             }
             ConvexPolygon polygon = new(vertices);
-            terrain.Add(new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution));
+            terrain.Add(new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center));
         }
 
         /// <summary>Rebuilds supported manifolds and assigns contacts to independent dynamic-body islands.</summary>
         /// <param name="islands">Independent joint groups, including free-body groups.</param>
         /// <param name="bodyOrder">Dynamic-body group memberships and traversal ranks.</param>
         /// <returns>Contact groups parallel to the joint groups.</returns>
-        private List<List<TerrainContact>> BuildContacts(List<List<PhysicsJoint>> islands, Dictionary<PhysicsBody, (int Island, int Order)> bodyOrder)
+        private List<List<PhysicsContact>> BuildContacts(List<List<PhysicsJoint>> islands, Dictionary<PhysicsBody, (int Island, int Order)> bodyOrder)
         {
-            List<List<TerrainContact>> groups = [.. islands.Select(_ => new List<TerrainContact>())];
-            Dictionary<(PhysicsBody, TerrainFixture), TerrainContact> active = [];
+            List<List<PhysicsContact>> groups = [.. islands.Select(_ => new List<PhysicsContact>())];
+            Dictionary<(PhysicsBody, TerrainFixture, int), PhysicsContact> active = [];
             foreach (PhysicsBody body in bodies)
             {
                 if (body.Mass == 0 || body.IsSensor)
@@ -49,30 +49,31 @@ namespace Ctr2.Engine.Physics
 
                 foreach (TerrainFixture fixture in terrain)
                 {
-                    TerrainContact? contact = TerrainContact.Create(body, fixture);
-                    if (contact == null)
+                    for (int localIndex = 0; localIndex < Math.Max(1, body.PolygonFixtures.Count); localIndex++)
                     {
-                        continue;
+                        PhysicsContact? contact = body.PolygonFixtures.Count == 0 ? TerrainContact.Create(body, fixture) :
+                            PolygonContact.Create(body, body.PolygonFixtures[localIndex], fixture);
+                        if (contact == null)
+                        {
+                            continue;
+                        }
+                        (PhysicsBody, TerrainFixture, int) key = (body, fixture, localIndex);
+                        if (contacts.TryGetValue(key, out PhysicsContact? previous))
+                        {
+                            contact.Restore(previous);
+                            contact.CreationOrder = previous.CreationOrder;
+                        }
+                        if (contact.CreationOrder == 0)
+                        {
+                            contact.CreationOrder = ++contactSequence;
+                        }
+                        active.Add(key, contact);
+                        int index = bodyOrder[body].Island;
+                        groups[index].Add(contact);
                     }
-
-                    (PhysicsBody body, TerrainFixture fixture) key = (body, fixture);
-                    if (contacts.TryGetValue(key, out TerrainContact? previous))
-                    {
-                        contact.NormalImpulse = previous.NormalImpulse;
-                        contact.TangentImpulse = previous.TangentImpulse;
-                        contact.CreationOrder = previous.CreationOrder;
-                    }
-                    if (contact.CreationOrder == 0)
-                    {
-                        contact.CreationOrder = ++contactSequence;
-                    }
-
-                    active.Add(key, contact);
-                    int index = bodyOrder[body].Island;
-                    groups[index].Add(contact);
                 }
             }
-            foreach (List<TerrainContact> group in groups)
+            foreach (List<PhysicsContact> group in groups)
             {
                 group.Sort((a, b) => bodyOrder[a.Body].Order != bodyOrder[b.Body].Order ?
                     bodyOrder[a.Body].Order.CompareTo(bodyOrder[b.Body].Order) : b.CreationOrder.CompareTo(a.CreationOrder));
@@ -87,10 +88,11 @@ namespace Ctr2.Engine.Physics
     /// <param name="Normals">Outward face normals.</param>
     /// <param name="Friction">Fixture friction.</param>
     /// <param name="Restitution">Fixture restitution.</param>
-    internal sealed record TerrainFixture(Vector2[] Points, Vector2[] Normals, float Friction, float Restitution);
+    /// <param name="Center">World-space polygon centroid.</param>
+    internal sealed record TerrainFixture(Vector2[] Points, Vector2[] Normals, float Friction, float Restitution, Vector2 Center);
 
     /// <summary>A single-point static convex polygon/circle manifold and sequential impulse constraint.</summary>
-    internal sealed class TerrainContact
+    internal sealed class TerrainContact : PhysicsContact
     {
         /// <summary>CTR2 polygon skin radius, twice its linear slop.</summary>
         private const float Skin = 2 * PhysicsWorld.LinearSlop;
@@ -117,12 +119,10 @@ namespace Ctr2.Engine.Physics
         private float bias;
         /// <summary>Gets the dynamic circle for body-edge traversal ordering.</summary>
         /// <value>The contacted circle.</value>
-        internal PhysicsBody Body
+        internal override PhysicsBody Body
         {
             get;
         }
-        /// <summary>Original creation sequence retained across touching frames.</summary>
-        internal long CreationOrder;
         /// <summary>Selected narrowphase feature for diagnostics; polygon/circle impulse ID remains zero.</summary>
         internal readonly int Feature;
         /// <summary>Accumulated nonnegative normal impulse.</summary>
@@ -185,8 +185,19 @@ namespace Ctr2.Engine.Physics
             return new(body, fixture, (a + b) * .5f, fixture.Normals[face], face);
         }
 
+        /// <summary>Restores the native polygon/circle feature-zero accumulated impulses.</summary>
+        /// <param name="previous">Earlier contact for the same fixture pair.</param>
+        internal override void Restore(PhysicsContact previous)
+        {
+            if (previous is TerrainContact contact)
+            {
+                NormalImpulse = contact.NormalImpulse;
+                TangentImpulse = contact.TangentImpulse;
+            }
+        }
+
         /// <summary>Computes effective masses, restitution and warm-start velocity changes.</summary>
-        internal void Initialize()
+        internal override void Initialize()
         {
             normal = faceNormal;
             tangent = new(normal.Y, -normal.X);
@@ -200,13 +211,13 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Applies retained contact impulses before joint warm starting.</summary>
-        internal void WarmStart()
+        internal override void WarmStart()
         {
             Apply((NormalImpulse * normal) + (TangentImpulse * tangent));
         }
 
         /// <summary>Solves tangent friction before the unilateral normal constraint.</summary>
-        internal void SolveVelocity()
+        internal override void SolveVelocity()
         {
             float oldTangent = TangentImpulse;
             TangentImpulse = Math.Clamp(oldTangent - (tangentMass * Vector2.Dot(ContactVelocity(), tangent)), -friction * NormalImpulse, friction * NormalImpulse);
@@ -219,7 +230,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Corrects penetration using the original Baumgarte factor and maximum correction.</summary>
         /// <param name="continuous">Whether to use time-of-impact correction strength and tolerance.</param>
         /// <returns>Whether penetration is within the selected slop tolerance.</returns>
-        internal bool SolvePosition(bool continuous = false)
+        internal override bool SolvePosition(bool continuous = false)
         {
             Vector2 n = faceNormal;
             float separation = Vector2.Dot(Body.Position - point, n) - (Body.Radius + Skin);

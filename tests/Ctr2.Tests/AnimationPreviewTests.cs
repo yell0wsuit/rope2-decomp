@@ -112,7 +112,7 @@ namespace Ctr2.Tests
         /// <summary>Writes a small synthetic protobuf message.</summary>
         /// <param name="fields">Field number and typed value pairs.</param>
         /// <returns>The encoded bytes.</returns>
-        private static byte[] Message(params (int Tag, object Value)[] fields)
+        internal static byte[] Message(params (int Tag, object Value)[] fields)
         {
             using MemoryStream stream = new();
             using BinaryWriter writer = new(stream);

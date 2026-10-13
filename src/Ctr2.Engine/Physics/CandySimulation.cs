@@ -35,9 +35,16 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
-        /// <summary>Gets validated initial polygon definitions for characters awaiting dynamic integration.</summary>
-        /// <value>Immutable authored data; these definitions do not move or collide in this diagnostic slice.</value>
+        /// <summary>Gets immutable authored polygon definitions for the simulated characters.</summary>
+        /// <value>Initial authored data; dynamic transforms are available separately through Characters.</value>
         public IReadOnlyList<PolygonBodyDefinition> CharacterDefinitions
+        {
+            get;
+        }
+
+        /// <summary>Gets simulated compound polygon characters in authored definition order.</summary>
+        /// <value>Dynamic bodies whose positions are centers of mass; artwork uses their origins.</value>
+        public IReadOnlyList<PhysicsBody> Characters
         {
             get;
         }
@@ -50,7 +57,7 @@ namespace Ctr2.Engine.Physics
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
-        /// <remarks>Only circle/static-terrain contacts and center-anchor joints are supported; sleeping, dynamic polygons and other mechanics remain pending.</remarks>
+        /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
         public CandySimulation(LevelDefinition level, LevelDefinition design)
         {
             LevelLayout layout = LevelLayout.Create(level);
@@ -148,6 +155,18 @@ namespace Ctr2.Engine.Physics
                 }
                 ropes.Add(new(points, constraints, length, frequency));
             }
+            List<PhysicsBody> characters = [];
+            foreach (PolygonBodyDefinition definition in CharacterDefinitions)
+            {
+                PhysicsBody character = world.AddPolygon(definition.Shape, definition.Origin, definition.Density,
+                    definition.GravityScale, definition.Angle, definition.FixedRotation);
+                character.LinearDamping = definition.LinearDamping;
+                character.AngularDamping = definition.AngularDamping;
+                character.Friction = definition.Friction;
+                character.Restitution = definition.Restitution;
+                characters.Add(character);
+            }
+            Characters = characters.AsReadOnly();
             Candies = candies.AsReadOnly();
             LoadStars(layout, design);
             Stars = stars.AsReadOnly();

@@ -89,7 +89,7 @@ namespace Ctr2.Engine.Physics
                 Matrix3x2 transform = Matrix3x2.CreateRotation(placed.Angle * MathF.PI / 180) * Matrix3x2.CreateTranslation(placed.Position!.Value);
                 List<Vector2> outline = [.. smooth.Select(p => Vector2.Transform(p, transform))];
                 ValidateSimple(outline);
-                List<IReadOnlyList<Vector2>> triangles = Triangulate(outline);
+                List<IReadOnlyList<Vector2>> triangles = Triangulate(smooth, placed.Position!.Value, placed.Angle);
                 triangleCount += triangles.Count;
                 if (triangleCount > 4096)
                 {
@@ -154,55 +154,120 @@ namespace Ctr2.Engine.Physics
                 ((left * before) + (right * current)) / (left + right));
         }
 
-        /// <summary>Triangulates a simple counterclockwise boundary without adding convex-hull fill.</summary>
-        /// <param name="outline">Logical path.</param>
-        /// <returns>Counterclockwise world-space triangles.</returns>
-        private static List<IReadOnlyList<Vector2>> Triangulate(List<Vector2> outline)
+        /// <summary>Clips ears in the original order and places each triangle with its static body transform.</summary>
+        /// <param name="contour">Smoothed local path in logical units, relative to the authored position.</param>
+        /// <param name="position">Authored body position in logical units.</param>
+        /// <param name="degrees">Authored clockwise body angle in degrees.</param>
+        /// <returns>Counterclockwise world-space triangles in meters.</returns>
+        /// <remarks>Like the original, a contour that stops yielding ears, such as a final collinear triple, keeps the triangles clipped so far.
+        /// Ears that collapse to zero meter-space area are clipped without a fixture; the original keeps them as zero-area Box2D fixtures.</remarks>
+        private static List<IReadOnlyList<Vector2>> Triangulate(List<Vector2> contour, Vector2 position, float degrees)
         {
-            List<Vector2> remaining = [.. outline];
+            int n = contour.Count;
+            int[] order = new int[n];
+            bool positive = Area(contour) > 0;
+            for (int i = 0; i < n; i++)
+            {
+                order[i] = positive ? i : n - 1 - i;
+            }
+
+            float angle = (float)(degrees * 3.14159265 / 180.0), cos = MathF.Cos(angle), sin = MathF.Sin(angle);
+            Vector2 origin = ToMeters(position);
             List<IReadOnlyList<Vector2>> result = [];
-            while (remaining.Count > 3)
+            int remaining = n, attempts = 2 * n, v = n - 1;
+            while (remaining > 2 && attempts-- > 0)
             {
-                bool clipped = false;
-                for (int i = 0; i < remaining.Count; i++)
+                int u = remaining <= v ? 0 : v;
+                v = remaining <= u + 1 ? 0 : u + 1;
+                int w = remaining <= v + 1 ? 0 : v + 1;
+                if (!Snip(contour, u, v, w, remaining, order))
                 {
-                    Vector2 a = remaining[(i + remaining.Count - 1) % remaining.Count], b = remaining[i], c = remaining[(i + 1) % remaining.Count];
-                    float area = Cross(b - a, c - b);
-                    if (MathF.Abs(area) < 1e-5f)
-                    {
-                        remaining.RemoveAt(i);
-                        clipped = true;
-                        break;
-                    }
-                    if (area < 0)
-                    {
-                        continue;
-                    }
-
-                    bool occupied = remaining.Where((_, index) => index != i && index != (i + 1) % remaining.Count && index != (i + remaining.Count - 1) % remaining.Count)
-                        .Any(p => Cross(b - a, p - a) >= -1e-5f && Cross(c - b, p - b) >= -1e-5f && Cross(a - c, p - c) >= -1e-5f);
-                    if (occupied)
-                    {
-                        continue;
-                    }
-
-                    result.Add(Array.AsReadOnly([a / 200, b / 200, c / 200]));
-                    remaining.RemoveAt(i);
-                    clipped = true;
-                    break;
+                    continue;
                 }
-                if (!clipped)
+
+                Vector2 a = ToMeters(contour[order[u]]), b = ToMeters(contour[order[v]]), c = ToMeters(contour[order[w]]);
+                if (Cross(b - a, c - b) < 0)
                 {
-                    throw new InvalidDataException("Terrain cannot be triangulated safely.");
+                    (b, c) = (c, b);
                 }
-            }
-            if (remaining.Count != 3 || Cross(remaining[1] - remaining[0], remaining[2] - remaining[1]) <= 1e-5f)
-            {
-                throw new InvalidDataException("Degenerate final terrain triangle.");
-            }
 
-            result.Add(Array.AsReadOnly(remaining.Select(p => p / 200).ToArray()));
+                Vector2 first = Place(a, origin, cos, sin), second = Place(b, origin, cos, sin), third = Place(c, origin, cos, sin);
+                if (Cross(second - first, third - second) != 0)
+                {
+                    result.Add(Array.AsReadOnly([first, second, third]));
+                }
+
+                Array.Copy(order, v + 1, order, v, remaining - v - 1);
+                remaining--;
+                attempts = 2 * remaining;
+            }
             return result;
+        }
+
+        /// <summary>Computes the original single-precision signed contour area.</summary>
+        /// <param name="contour">Cyclic path.</param>
+        /// <returns>Half the shoelace sum.</returns>
+        private static float Area(List<Vector2> contour)
+        {
+            float area = 0;
+            for (int p = contour.Count - 1, q = 0; q < contour.Count; p = q++)
+            {
+                area += (contour[p].X * contour[q].Y) - (contour[q].X * contour[p].Y);
+            }
+            return area * .5f;
+        }
+
+        /// <summary>Tests whether a positive candidate ear contains no other remaining vertex, including boundary points.</summary>
+        /// <param name="contour">Cyclic path.</param>
+        /// <param name="u">Previous remaining index.</param>
+        /// <param name="v">Candidate ear index.</param>
+        /// <param name="w">Next remaining index.</param>
+        /// <param name="count">Remaining vertex count.</param>
+        /// <param name="order">Remaining contour indices.</param>
+        /// <returns>Whether the candidate may be clipped.</returns>
+        private static bool Snip(List<Vector2> contour, int u, int v, int w, int count, int[] order)
+        {
+            Vector2 a = contour[order[u]], b = contour[order[v]], c = contour[order[w]];
+            if (((b.X - a.X) * (c.Y - a.Y)) - ((b.Y - a.Y) * (c.X - a.X)) < 1e-10)
+            {
+                return false;
+            }
+
+            for (int p = 0; p < count; p++)
+            {
+                if (p == u || p == v || p == w)
+                {
+                    continue;
+                }
+
+                Vector2 point = contour[order[p]];
+                if (((c.X - b.X) * (point.Y - b.Y)) - ((c.Y - b.Y) * (point.X - b.X)) >= 0 &&
+                    ((a.X - c.X) * (point.Y - c.Y)) - ((a.Y - c.Y) * (point.X - c.X)) >= 0 &&
+                    ((b.X - a.X) * (point.Y - a.Y)) - ((b.Y - a.Y) * (point.X - a.X)) >= 0)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>Converts logical units to meters with the original double-precision divisor.</summary>
+        /// <param name="point">Logical point.</param>
+        /// <returns>The meter-space point.</returns>
+        private static Vector2 ToMeters(Vector2 point)
+        {
+            return new((float)(point.X / 200.0), (float)(point.Y / 200.0));
+        }
+
+        /// <summary>Applies a Box2D rotation and translation to one local fixture vertex.</summary>
+        /// <param name="local">Local vertex in meters.</param>
+        /// <param name="origin">Body position in meters.</param>
+        /// <param name="cos">Body angle cosine.</param>
+        /// <param name="sin">Body angle sine.</param>
+        /// <returns>The world vertex.</returns>
+        private static Vector2 Place(Vector2 local, Vector2 origin, float cos, float sin)
+        {
+            return new(((cos * local.X) - (sin * local.Y)) + origin.X, ((sin * local.X) + (cos * local.Y)) + origin.Y);
         }
 
         /// <summary>Orients the path counterclockwise while retaining its first authored vertex.</summary>

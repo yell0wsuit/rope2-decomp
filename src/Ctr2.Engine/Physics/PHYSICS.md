@@ -1,8 +1,9 @@
-# Candy, cutting, terrain and star physics slice
+# Candy, character, cutting, terrain and star physics slice
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
-[the original license](BOX2D_LICENSE.txt). It implements always-awake circle bodies,
-center-anchored rope/soft-distance joints and circle/static-convex contacts.
+[the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
+circle center-anchored rope/soft-distance joints and circle/polygon contacts against
+static convex terrain.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
 
 Implementation research stays private and outside tracked files. Do not commit
@@ -28,8 +29,8 @@ depth-first joint/body order and stop position iterations independently.
 Contacts initialize masses and restitution bias before contact warm starting and
 joint initialization. Velocity solving applies joint impulses before contact
 friction/normal impulses. Position solving corrects contacts before joints.
-Polygon/circle impulses persist across face and vertex transitions within a
-fixture. Touching contact edges use reverse creation order within each traversed
+Circle impulses persist across face and vertex transitions within a fixture.
+Polygon impulses persist only for matching clipped manifold feature IDs. Touching contact edges use reverse creation order within each traversed
 body. The broadphase is bounded exhaustive candidate testing, not native Box2D's
 dynamic tree; contact lifetime and complex multi-fixture ordering still need
 broader original-runtime comparison.
@@ -73,15 +74,21 @@ Live time accumulates fixed ticks; bounded catch-up retains unprocessed backlog.
 Static `polygon_materialized` shapes resolve their material in the Windows master
 document. Paths include the implicit local origin, double editor vertices, orient
 the boundary, and sample periodic chord-parameter Akima curves according to
-`smoothFactor`. Ear clipping produces counterclockwise triangle fixtures in meters.
+`smoothFactor`. The original ear clipper runs on the local logical-unit path: it
+continues from each clipped ear, rejects candidates whose doubled area is below
+`1e-10` or that contain any remaining vertex (boundary included), and keeps the
+triangles clipped so far if it stops finding ears. Each triangle is converted to
+meters, swapped to counterclockwise order and placed with the static body's
+rotation and translation. Ears that collapse to zero meter-space area are clipped
+without a fixture, whereas the original keeps them as zero-area Box2D fixtures.
 Translation and authored polygon rotation apply to both drawing and collision.
 Material sensors remain visual-only in this solid-contact subset.
 
 Geometry validates finite coordinates, duplicate edges, nonadjacent intersections,
-zero area and triangulation failure. Paths are bounded to 512 sampled vertices,
+and zero area. Paths are bounded to 512 sampled vertices,
 smoothing factors 1–16, and 4096 total triangles. Dynamic materials and normalized
 paths fail explicitly. The diagnostic fill shares the smoothed boundary; native
-texturing, scratches and the original triangle ordering remain unverified.
+texturing and scratches remain unverified.
 Analytic synthetic geometry tests check curved square midpoints and concave area;
 these are not an original-runtime geometry capture.
 
@@ -105,7 +112,7 @@ not cached into the next discrete step. A manifold disagreement also retains the
 safe transform rather than continuing through the fixture.
 
 This is an analytical circle/static-convex subset, not a port of Box2D's general
-GJK/separation-function TOI solver. Circle/circle impacts, dynamic polygons, native
+GJK/separation-function TOI solver. Circle/circle impacts, polygon sweeps, native
 contact lifetime/order and arbitrary multi-body TOI islands remain unsupported.
 The switch can disable sweeps for isolated discrete fixture verification.
 
@@ -130,16 +137,16 @@ bodies and cannot alter candy/rope trajectories or island traversal.
 The preview hides collected markers and reports events/counts on the console.
 Star animation/particles/audio, moving stars, Om Nom collection and score/save
 integration are pending. Level 1's off-screen Om Nom uses a dynamic polygon and
-requires body/intro support before consumption and completion can be faithful.
+requires intro support before consumption and completion can be faithful.
 
-## Polygon body foundation
+## Dynamic compound characters
 
 `ConvexPolygon` owns three to eight strictly convex counterclockwise meter-space
 vertices and outward normals. Static terrain uses the same validation. Geometry
 rejects duplicate/short edges, invalid winding, nonconvex outlines and coordinates
 outside ten thousand meters. World-vertex snapshots use the authored body origin;
-rotating around the center of mass requires the later body integrator to recover
-that origin from its center transform.
+`PhysicsBody.Origin` recovers that origin from the integrated center of mass and
+rotated local centroid.
 
 Mass data preserves fixture mass, local centroid and moments of inertia about
 both the authored origin and the center of mass. Triangle integration uses a
@@ -150,25 +157,47 @@ circle overlap includes the polygon skin and sensor-distance epsilon, handles
 rounded vertices, and supports rotated body origins.
 
 `PolygonBodyDefinition.LoadCharacters` merges the Om Nom polygon master with its
-placement, includes the implicit local zero, removes an optional closing zero,
-and normalizes winding while preserving that first vertex. Editor positions and
-vertices divide by 100 to meters; authored angles convert to clockwise radians.
-Validated material, damping, gravity, fixed-rotation, mass and centroid data stay
-separate from simulation state. Unsupported initial motion, smoothing, paths,
-normalization, sensor/bullet modes and collision filters fail explicitly.
+placement and includes the implicit local zero. The original Om Nom initializer
+always sets `normalizeShape`, overriding authored values: every logical-unit point,
+including the implicit zero and an optional closing zero, is centered on its
+vertex mean while the body origin stays at the placement. The loader then removes
+the closing zero and normalizes winding while preserving the first vertex. Editor
+positions and vertices divide by 100 to meters; authored angles convert to
+clockwise radians. Validated material, damping, gravity, fixed-rotation, mass and
+centroid data stay separate from simulation state. Unsupported initial motion,
+smoothing, paths, sensor/bullet modes and collision filters fail explicitly.
 
-The original polygon body loader creates compound triangle fixtures from its
-smoothed path, including convex outlines. `Shape` currently describes the convex
-outline for mass/centroid and overlap preparation; it does not reproduce those
-fixture IDs, triangulation order or internal skin edges. Future body integration
-must preserve compound triangle fixtures and verify their contact topology rather
-than treating this outline as one original convex fixture.
+The original polygon body loader creates compound triangle fixtures, including
+convex outlines. `PhysicsWorld.AddPolygon` triangulates the supported convex outline
+in cyclic ear order, combines fixture mass data in creation order and preserves
+internal fixture skin edges. Synthetic five-vertex geometry checks the triangle
+sequence. Compound inertia sums centroid moments and parallel-axis offsets directly
+to retain precision for small shapes far from their local origin. `compound: false` creates a single convex fixture for isolated solver
+verification. The world limits bodies to 4096 and dynamic polygon fixtures to 8192;
+failed additions do not mutate either budget. Polygon joints fail explicitly until
+local anchor constraints are supported.
 
-`CandySimulation.CharacterDefinitions` exposes these immutable initial definitions.
-They are not integrated polygon bodies and do not provide character contacts,
-movement or collection yet. Current artwork still uses the initial authored pose.
-Polygon/terrain manifolds, angular contact impulses and coupled two-point solving
-must precede Om Nom integration, intro, consumption and completion.
+`CandySimulation.CharacterDefinitions` retains immutable initial definitions;
+`Characters` holds the corresponding integrated bodies in authored order. Character
+bodies use authored density, gravity, damping, friction, restitution and fixed
+rotation. Linear motion integrates the center of mass. Artwork follows the body
+origin and clockwise angle, retaining the authored animation canvas offset and
+texture density independently of viewport scaling. The static `preview-level`
+command still draws the initial authored placement.
+
+Polygon/static-convex collision selects a reference edge, clips its incident edge
+to a one/two-point manifold and restores impulses by feature ID. Friction precedes
+the coupled two-point unilateral normal solve; ill-conditioned manifolds retain
+one velocity point. Position correction uses both manifold points and centroid
+inertia. Each compound fixture creates an independent terrain constraint. Eleven
+invented single/compound trajectories compare against upstream Box2D,
+including fixed rotation, bounce, slope, offset centers, free fall, triangulated
+terrain and two independent bodies sharing a floor. These do not
+prove native broadphase/contact-order parity or original Om Nom movement.
+
+Character polygons use discrete contacts even when circle CCD is enabled. Polygon
+CCD, character/candy collision, standing/gameplay adjustments, star collection,
+intro, eating and level completion are pending.
 
 ## Numerical fixtures
 
@@ -181,6 +210,7 @@ belong in commits. Tests require neither native compilation nor game assets.
 | --- | --- |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `RopeCutReference.csv` | Synthetic `game_cut` chain, cut before zero-based tick 30 with crossing `(30,20)` logical units and tip impulse `(0.001,0)`. Same columns as above; new tips are body indices 4/5. |
+| `PolygonContactReference.csv` | Flat/tilted/bouncing/offset/compound/fixed-rotation/slope/free-fall polygon bodies, triangulated terrain and two bodies sharing a floor. `scenario,tick,originX,originY,centerX,centerY,vx,vy,angle,angularVelocity,mass,localCenterX,localCenterY` |
 | `PolygonMassReference.csv` | Four invented convex shapes at densities 0, 0.5 and 3.25. `scenario,density,mass,centerX,centerY,originInertia,centerInertia` |
 | `PolygonOverlapReference.csv` | The same four shapes with seven transformed circle queries each, including face skin/tangency and vertex misses. `scenario,circleIndex,centerX,centerY,radius,originX,originY,angle,overlaps` |
 | `ContinuousReference.csv` | Thin floor, restitution, slope, rounded vertex and repeated floor/ceiling impacts. `scenario,tick,x,y,vx,vy,angle,angularVelocity` |
@@ -204,7 +234,7 @@ Polygon fixtures contain only invented geometry, not Om Nom game vertices.
 
 ## Remaining acceptance work
 
-There is no general Box2D continuous solver, sleeping, circle/circle collision,
+There is no general Box2D continuous solver, polygon CCD, sleeping, dynamic-body solid collision,
 dynamic terrain, noncenter anchors, candy consumption, moving stars, Om Nom
 collection, hazards, intro or completion logic. Complex contact
 persistence/order, native triangle ordering and original recorded-input parity

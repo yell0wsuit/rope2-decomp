@@ -15,6 +15,7 @@ namespace Ctr2.Engine.Physics
     /// <param name="Origin">Initial body origin in world meters.</param>
     /// <param name="Angle">Initial clockwise radians.</param>
     /// <param name="Mass">Fixture mass data relative to the local origin.</param>
+    /// <param name="Density">Positive authored fixture density.</param>
     /// <param name="GravityScale">World gravity multiplier.</param>
     /// <param name="LinearDamping">Nonnegative linear damping coefficient.</param>
     /// <param name="AngularDamping">Nonnegative angular damping coefficient.</param>
@@ -22,7 +23,7 @@ namespace Ctr2.Engine.Physics
     /// <param name="Restitution">Nonnegative fixture restitution.</param>
     /// <param name="FixedRotation">Whether angular motion should be disabled when a body is instantiated.</param>
     public sealed record PolygonBodyDefinition(string Name, ConvexPolygon Shape, Vector2 Origin, float Angle,
-        PolygonMass Mass, float GravityScale, float LinearDamping, float AngularDamping, float Friction, float Restitution, bool FixedRotation)
+        PolygonMass Mass, float Density, float GravityScale, float LinearDamping, float AngularDamping, float Friction, float Restitution, bool FixedRotation)
     {
         /// <summary>Gets the initial world-space center of mass, distinct from the authored origin.</summary>
         /// <value>The rotated local centroid translated by the body origin.</value>
@@ -48,7 +49,7 @@ namespace Ctr2.Engine.Physics
                 {
                     fields[key] = value;
                 }
-                if (fields.GetValueOrDefault("body_type") != "dynamic" || Flag(fields, "isSensor") || Flag(fields, "bullet") || Flag(fields, "normalizeShape") ||
+                if (fields.GetValueOrDefault("body_type") != "dynamic" || Flag(fields, "isSensor") || Flag(fields, "bullet") ||
                     Number(fields, "linearVelocityX") != 0 || Number(fields, "linearVelocityY") != 0 || Number(fields, "angularVelocity") != 0 ||
                     Number(fields, "smoothFactor", 1) != 1 || fields.GetValueOrDefault("filter.collideWith", "all") != "all" ||
                     Number(fields, "filter.category") != 0 || !string.IsNullOrEmpty(fields.GetValueOrDefault("path")) ||
@@ -70,14 +71,16 @@ namespace Ctr2.Engine.Physics
                     throw new InvalidDataException("Character body mass or inertia is degenerate.");
                 }
                 result.Add(new(fields.GetValueOrDefault("id", "omnom"), shape, placed.Position!.Value / 200,
-                    placed.Angle * MathF.PI / 180, mass, Number(fields, "gravityScale", 1), linear, angular, friction, restitution, Flag(fields, "fixedRotation")));
+                    placed.Angle * MathF.PI / 180, mass, density, Number(fields, "gravityScale", 1), linear, angular, friction, restitution, Flag(fields, "fixedRotation")));
             }
             return result.AsReadOnly();
         }
 
-        /// <summary>Parses editor vertices with the implicit local zero and normalizes winding.</summary>
+        /// <summary>Parses editor vertices with the implicit local zero, centers them and normalizes winding.</summary>
         /// <param name="text">Comma-separated editor coordinates with an optional trailing comma.</param>
         /// <returns>The bounded local convex polygon in meters.</returns>
+        /// <remarks>The original Om Nom initializer always sets <c>normalizeShape</c>, overriding authored values. Its path
+        /// subtracts the mean of every logical-unit point, including the implicit and any closing zero, without moving the body origin.</remarks>
         /// <exception cref="InvalidDataException">The path cannot form a supported convex polygon.</exception>
         private static ConvexPolygon ParseShape(string text)
         {
@@ -91,11 +94,20 @@ namespace Ctr2.Engine.Physics
                 throw new InvalidDataException("Invalid character polygon coordinate count.");
             }
             List<Vector2> points = [Vector2.Zero];
+            Vector2 center = Vector2.Zero;
             for (int i = 0; i < values.Length; i += 2)
             {
-                points.Add(new Vector2(Parse(values[i]), Parse(values[i + 1])) / 100);
+                Vector2 point = new Vector2(Parse(values[i]), Parse(values[i + 1])) * 2;
+                points.Add(point);
+                center += point;
             }
-            if (points[^1] == Vector2.Zero)
+            bool closed = points[^1] == Vector2.Zero;
+            center *= (float)(1.0 / points.Count);
+            for (int i = 0; i < points.Count; i++)
+            {
+                points[i] = (points[i] - center) / 200;
+            }
+            if (closed)
             {
                 points.RemoveAt(points.Count - 1);
             }
