@@ -20,11 +20,19 @@ namespace Ctr2.Desktop
         private AnimationPreview? omnom;
         /// <summary>Optional classic candy atlas for the simulation preview.</summary>
         private CandySprite? candy;
+        private int sceneRevision = -1;
+        private CandySimulation? animatedSimulation;
+        /// <summary>Gets the optional playable session with pause and restart ownership.</summary>
+        public ForestSession? Session
+        {
+            get; private set;
+        }
         /// <summary>Gets the optional candy, rope and static terrain simulation attached to this scene.</summary>
         /// <value>Null for static previews; otherwise mutable fixed-tick diagnostic state.</value>
         public CandySimulation? Simulation
         {
-            get; private set;
+            get => Session?.Simulation ?? field;
+            private set;
         }
 
         /// <summary>Whether native resources have been released.</summary>
@@ -43,10 +51,11 @@ namespace Ctr2.Desktop
         /// <param name="level">One-based desktop level entry.</param>
         /// <param name="resolution">Known image density enum, independent of map coordinates.</param>
         /// <param name="simulate">Whether to load master-design candy/rope physics and classic candy artwork.</param>
+        /// <param name="play">Whether to enable ordinary forest gameplay and session controls.</param>
         /// <returns>The parsed level and a preview owning its decoded character assets.</returns>
         /// <exception cref="System.IO.InvalidDataException">The level, resource or animation is invalid.</exception>
         /// <exception cref="System.IO.IOException">A cache file cannot be read.</exception>
-        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution, bool simulate = false)
+        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution, bool simulate = false, bool play = false)
         {
             LevelDefinition definition = LevelReader.LoadWindows(cache, pack, level);
             LevelPreview preview = new(LevelLayout.Create(definition));
@@ -56,9 +65,22 @@ namespace Ctr2.Desktop
                 {
                     preview.omnom = AnimationPreview.Load(cache, 85, "IDLE", resolution);
                 }
-                if (simulate)
+                if (play)
                 {
-                    preview.Simulation = new CandySimulation(definition, LevelReader.LoadWindowsDesign(cache));
+                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache));
+                    foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL" })
+                    {
+                        preview.omnom!.SelectScene(scene);
+                    }
+                    preview.omnom!.SelectScene("IDLE");
+                    preview.Session.Stepped += preview.UpdateGameAnimation;
+                }
+                if (simulate || play)
+                {
+                    if (!play)
+                    {
+                        preview.Simulation = new CandySimulation(definition, LevelReader.LoadWindowsDesign(cache));
+                    }
                     preview.candy = new CandySprite(cache, resolution);
                 }
                 return (definition, preview);
@@ -145,7 +167,11 @@ namespace Ctr2.Desktop
                     if (placed.Source.Kind == "candy" && Simulation != null)
                     {
                         PhysicsBody body = Simulation.Candies[candyIndex++];
-                        candy!.Draw(canvas, body.Position * 200, body.Angle);
+                        float opacity = Simulation.Gameplay?.CandyOpacity ?? 1;
+                        if (opacity > 0)
+                        {
+                            candy!.Draw(canvas, body.Position * 200, body.Angle, opacity);
+                        }
                     }
                     else if (placed.Source.Kind == "star" && Simulation != null)
                     {
@@ -169,7 +195,13 @@ namespace Ctr2.Desktop
                         Vector2 origin = (-omnom.CanvasSize / 2) + new Vector2(-8, -11);
                         Matrix4x4 character = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
                             Matrix4x4.CreateRotationZ(angle) * Matrix4x4.CreateTranslation(position.X, position.Y, 0);
-                        omnom.DrawTransformed(canvas, character, seconds);
+                        double poseTime = seconds;
+                        if (Simulation?.Gameplay is ForestGameplay game)
+                        {
+                            SyncGameAnimation();
+                            poseTime = (Simulation.Tick - game.SceneStartedAt) * (double)PhysicsWorld.TimeStep;
+                        }
+                        omnom.DrawTransformed(canvas, character, poseTime);
                     }
                     else
                     {
@@ -191,11 +223,38 @@ namespace Ctr2.Desktop
             }
         }
 
+        private void SyncGameAnimation()
+        {
+            ForestGameplay game = Simulation!.Gameplay!;
+            if (animatedSimulation != Simulation || sceneRevision != game.SceneRevision)
+            {
+                omnom!.SelectScene(game.Scene);
+                sceneRevision = game.SceneRevision;
+                animatedSimulation = Simulation;
+            }
+        }
+
+        private void UpdateGameAnimation()
+        {
+            SyncGameAnimation();
+            ForestGameplay game = Simulation!.Gameplay!;
+            if ((Simulation.Tick - game.SceneStartedAt) * (double)PhysicsWorld.TimeStep >= omnom!.Duration)
+            {
+                game.SceneFinished(game.Scene, game.SceneRevision);
+                SyncGameAnimation();
+            }
+        }
+
         /// <summary>Releases owned character textures; repeated calls are safe.</summary>
         public void Dispose()
         {
             if (!disposed)
             {
+                if (Session != null)
+                {
+                    Session.Stepped -= UpdateGameAnimation;
+                    Session.Input.Cancel();
+                }
                 omnom?.Dispose();
                 candy?.Dispose();
                 disposed = true;

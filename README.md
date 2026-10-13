@@ -2,7 +2,7 @@
 
 An early C# port using selected framework code from [CutTheRopeDX](https://github.com/yell0wsuit/cuttherope-dx). PC comes first; a web host is planned later.
 
-**Current build: local asset import, Windows resource metadata extraction, desktop previews and a candy/rope/character physics diagnostic. A playable game is still in progress.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
+**Current build: local asset import, Windows resource metadata extraction, desktop previews and an early playable ordinary forest slice. Full game behavior and presentation are still in progress.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
 
 ## Your game assets
 
@@ -36,6 +36,42 @@ dotnet run --project src/Ctr2.Desktop -- preview cache/windows/assets/omnom_640_
 ```
 
 For offscreen verification, add `--width 640 --height 960 --snapshot local/atlas.png`. Create the `local/` directory first; snapshots do not overwrite existing files. `--frames 3` runs a bounded desktop presentation smoke test.
+
+## Play an ordinary forest level
+
+After importing a full Windows package, start with pack 1, entry 2:
+
+```sh
+dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2
+```
+
+Drag the primary mouse button across ropes. **R** restarts, **Space** pauses or
+resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
+input; press Space to resume. The display reports collected stars and the result.
+Restart restores the initial physics, stars, animation, input and replay clock.
+
+This first slice supports one candy and one Om Nom, stationary stars, basic grabs
+and static terrain in an ordinary dry forest level. Physical candy contact starts
+eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
+loss plays FAIL before the result; character loss ends the level immediately.
+Other mechanics and the first level's special negative-spawn arrival report an
+unsupported-scope error. Falling/landing/standing animations, selected costumes,
+native scenery/rope/star artwork, particles, sound, saves and original-game parity
+remain pending. Scenery and stars still use the diagnostic drawing.
+
+`--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]`,
+`--width`, `--height`, `--resolution`, `--snapshot` and `--frames` support
+deterministic checks. Animation completion uses fixed ticks rather than render
+cadence. A terminal result freezes session ticks. Restart replays scheduled cuts
+from tick zero. As with previews, snapshot output must be a new file.
+
+The supported Windows pack 1/entry 2 replay below collected 3/3 stars and completed
+at tick 312 (feeding at tick 182). This verifies the port's current slice, not
+original-game physics or visual parity:
+
+```sh
+dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2 --ticks 600 --cut 0:0:0:519.25:343.5 --cut 0:1:0:138.66667:156.33333 --snapshot local/forest-win.png
+```
 
 ## Static level layout preview
 
@@ -144,7 +180,8 @@ Om Nom now uses a dynamic compound polygon body with authored density, gravity,
 damping and fixed rotation. Triangle fixtures collide with static terrain; artwork
 follows the simulated body origin and angle, independently of its offset center of
 mass. Polygon contacts are discrete and can tunnel at high speed. The original
-intro, standing/gameplay adjustments and character/candy collision remain pending.
+intro, standing/gameplay adjustments and general dynamic-body collision remain pending.
 
-Next: character/candy contacts, the first-level intro, candy consumption and
-completion, plus broader collision verification. Web work follows the PC slice.
+The opt-in `play-level` slice adds character/candy contact, consumption and completion.
+Next: falling/landing presentation, the first-level intro, native scenery and
+broader collision verification. Web work follows the PC slice.

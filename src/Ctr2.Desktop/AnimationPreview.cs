@@ -17,7 +17,7 @@ namespace Ctr2.Desktop
         /// <summary>Decoded scene tree.</summary>
         private readonly AnimationElement root;
         /// <summary>Selected original scene ID.</summary>
-        private readonly int scene;
+        private int scene;
         /// <summary>Selected image resolution.</summary>
         private readonly int resolution;
         /// <summary>Cache root.</summary>
@@ -41,7 +41,7 @@ namespace Ctr2.Desktop
         /// <value>The duration in seconds; zero indicates a static pose.</value>
         public double Duration
         {
-            get;
+            get; private set;
         }
 
         /// <summary>Initializes a preview with a decoded scene and cache catalog.</summary>
@@ -106,6 +106,27 @@ namespace Ctr2.Desktop
                 preview.Dispose();
                 throw;
             }
+        }
+
+        /// <summary>Selects and validates a named scene while retaining decoded textures.</summary>
+        /// <param name="name">Exact authored scene name.</param>
+        public void SelectScene(string name)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            AnimationTimeline[] matches = [.. root.Timelines.Where(t => t.Name == name && !t.IsEmpty)];
+            if (matches.Length != 1)
+            {
+                throw new InvalidDataException("Expected one named scene: " + name);
+            }
+            int previous = scene;
+            scene = matches[0].Id;
+            try
+            {
+                Preload(root);
+                _ = AnimationPose.Sample(root, scene, 0, Size);
+                Duration = AnimationPose.Duration(root, scene);
+            }
+            catch { scene = previous; throw; }
         }
 
         /// <summary>Draws an assembled pose on the uniformly fitted authored canvas.</summary>

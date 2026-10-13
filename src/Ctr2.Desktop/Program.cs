@@ -19,6 +19,10 @@ using SkiaSharp;
 
 try
 {
+    if (args.Length > 0 && args[0] == "play-level")
+    {
+        return ForestPlayCommand.Run(args);
+    }
     AtlasFrame? selectedFrame = null;
 
     if (args.Length >= 5 && args[0] == "preview-resource")
@@ -264,12 +268,13 @@ try
 
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
+        "  play-level <cache> <one-based pack> <one-based level> [--ticks N] [--cut tick:rope:segment:x:y[:impulseX:impulseY]] [preview options]\n" +
         "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [--cut tick:rope:segment:x:y] [preview options]\n" +
         "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
         "  preview <cached PNG> [--width N] [--height N] [--snapshot new.png] [--frames N] [--frame metadata.json]\n" +
-        "Supply a dump from your own Windows game. This build previews assets, level layouts and candy/rope physics; complete gameplay remains pending.");
+        "Supply a dump from your own Windows game. Ordinary forest play is available; full game mechanics and presentation remain pending.");
     return args.Length == 0 || args is ["--help"] ? 0 : 1;
 }
 
@@ -300,7 +305,8 @@ internal static class DesktopPreview
     /// </exception>
     /// <exception cref="ArgumentOutOfRangeException">The drawing dimensions are invalid.</exception>
     /// <param name="input">Optional event callback receiving window and pixel dimensions.</param>
-    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw, Action<SDL.Event, int, int, int, int>? input = null)
+    /// <param name="title">Desktop window title.</param>
+    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw, Action<SDL.Event, int, int, int, int>? input = null, string title = "Cut the Rope 2 — asset preview")
     {
         if (!SDL.Init(SDL.InitFlags.Video))
         {
@@ -312,7 +318,7 @@ internal static class DesktopPreview
         SKCanvas? canvas = null;
         try
         {
-            window = SDL.CreateWindow("Cut the Rope 2 — asset preview", width, height, SDL.WindowFlags.Resizable | SDL.WindowFlags.HighPixelDensity);
+            window = SDL.CreateWindow(title, width, height, SDL.WindowFlags.Resizable | SDL.WindowFlags.HighPixelDensity);
             if (window == 0)
             {
                 throw new InvalidOperationException(SDL.GetError());
@@ -337,7 +343,7 @@ internal static class DesktopPreview
                         Check(SDL.GetWindowSizeInPixels(window, out int pixelWidth, out int pixelHeight));
                         input(evt, windowWidth, windowHeight, pixelWidth, pixelHeight);
                     }
-                    if (evt.Type == (uint)SDL.EventType.Quit)
+                    if (evt.Type == (uint)SDL.EventType.Quit || (evt.Type == (uint)SDL.EventType.KeyDown && evt.Key.Key == SDL.Keycode.Escape))
                     {
                         quit = true;
                     }

@@ -1,0 +1,105 @@
+using System;
+
+using Ctr2.Assets;
+
+namespace Ctr2.Engine.Physics
+{
+    /// <summary>Owns one ordinary forest simulation and its pause/restart/input clock.</summary>
+    public sealed class ForestSession
+    {
+        private readonly LevelDefinition level;
+        private readonly LevelDefinition design;
+        private SimulationClock clock = new();
+        private double hostTime;
+        private double activeTime;
+        private bool rebase;
+        private bool paused;
+        /// <summary>Creates a supported session from immutable authored level and design definitions.</summary>
+        public ForestSession(LevelDefinition level, LevelDefinition design)
+        {
+            this.level = level;
+            this.design = design;
+            Simulation = new(level, design, play: true);
+            Input = new(Simulation, LevelLayout.Create(level).Size);
+        }
+        /// <summary>Gets the current simulation, replaced on restart.</summary>
+        public CandySimulation Simulation
+        {
+            get; private set;
+        }
+        /// <summary>Gets current pointer input ownership, replaced on restart.</summary>
+        public RopeInput Input
+        {
+            get; private set;
+        }
+        /// <summary>Gets or sets whether simulation ticks are paused.</summary>
+        public bool Paused
+        {
+            get => paused;
+            set
+            {
+                if (paused == value)
+                {
+                    return;
+                }
+                paused = value;
+                rebase = true;
+                Input.Cancel();
+            }
+        }
+        /// <summary>Raised after each fixed step so playback callbacks use simulation time.</summary>
+        public event Action? Stepped;
+        /// <summary>Raised before each active fixed step for deterministic scheduled input.</summary>
+        public event Action? Stepping;
+        /// <summary>Restores the initial level and cancels held and queued input.</summary>
+        public void Restart()
+        {
+            CandySimulation replacement = new(level, design, play: true);
+            Input.Cancel();
+            Simulation = replacement;
+            Input = new(Simulation, LevelLayout.Create(level).Size);
+            paused = false;
+            rebase = true;
+            activeTime = 0;
+            clock = new();
+        }
+        /// <summary>Advances one tick when active.</summary>
+        public void Step()
+        {
+            if (Paused || Simulation.Gameplay!.Result != ForestResult.Running)
+            {
+                Input.Cancel();
+                return;
+            }
+            Stepping?.Invoke();
+            Input.ApplyPending();
+            Simulation.Step();
+            Stepped?.Invoke();
+            if (Simulation.Gameplay.Result != ForestResult.Running)
+            {
+                Input.Cancel();
+            }
+        }
+        /// <summary>Advances toward monotonic host elapsed time, excluding paused intervals.</summary>
+        public void AdvanceTo(double seconds)
+        {
+            if (!double.IsFinite(seconds) || seconds < hostTime || seconds > int.MaxValue * (double)PhysicsWorld.TimeStep)
+            {
+                throw new ArgumentOutOfRangeException(nameof(seconds));
+            }
+            double delta = seconds - hostTime;
+            hostTime = seconds;
+            if (rebase)
+            {
+                rebase = false;
+                return;
+            }
+            if (Paused || Simulation.Gameplay!.Result != ForestResult.Running)
+            {
+                return;
+            }
+            activeTime += delta;
+            _ = clock.AdvanceTo(activeTime, Step);
+        }
+    }
+}

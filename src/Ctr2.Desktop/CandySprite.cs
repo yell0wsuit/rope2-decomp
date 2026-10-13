@@ -45,8 +45,13 @@ namespace Ctr2.Desktop
         /// <param name="canvas">Scene-transformed caller-owned canvas.</param>
         /// <param name="position">Logical body center.</param>
         /// <param name="angle">Clockwise body rotation in radians.</param>
-        public void Draw(SKCanvas canvas, Vector2 position, float angle = 0)
+        /// <param name="opacity">Fade opacity in the range zero to one.</param>
+        public void Draw(SKCanvas canvas, Vector2 position, float angle = 0, float opacity = 1)
         {
+            using SKPaint paint = new()
+            {
+                Color = SKColors.White.WithAlpha((byte)(255 * Math.Clamp(opacity, 0, 1)))
+            };
             int saved = canvas.Save();
             try
             {
@@ -60,7 +65,7 @@ namespace Ctr2.Desktop
                     SKRect source = new(frame.PixelX, frame.PixelY, frame.PixelX + frame.PixelWidth, frame.PixelY + frame.PixelHeight);
                     SKRect destination = new(position.X + offset.X, position.Y + offset.Y,
                         position.X + offset.X + (frame.LogicalWidth * scale), position.Y + offset.Y + (frame.LogicalHeight * scale));
-                    canvas.DrawBitmap(bitmap, source, destination, new SKSamplingOptions(SKFilterMode.Linear));
+                    canvas.DrawBitmap(bitmap, source, destination, new SKSamplingOptions(SKFilterMode.Linear), paint);
                 }
             }
             finally

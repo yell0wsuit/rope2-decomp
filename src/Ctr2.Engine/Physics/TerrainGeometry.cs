@@ -267,7 +267,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The world vertex.</returns>
         private static Vector2 Place(Vector2 local, Vector2 origin, float cos, float sin)
         {
-            return new(((cos * local.X) - (sin * local.Y)) + origin.X, ((sin * local.X) + (cos * local.Y)) + origin.Y);
+            return new((cos * local.X) - (sin * local.Y) + origin.X, (sin * local.X) + (cos * local.Y) + origin.Y);
         }
 
         /// <summary>Orients the path counterclockwise while retaining its first authored vertex.</summary>
