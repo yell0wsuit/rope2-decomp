@@ -143,6 +143,29 @@ namespace Ctr2.Tests
             }
         }
 
+        /// <summary>Loads master designs from package filenames and older encoded cache filenames.</summary>
+        /// <param name="name">Filename preserved by the local package import.</param>
+        [Theory]
+        [InlineData("!_MasterGameDesignDocument.xml")]
+        [InlineData("%21_MasterGameDesignDocument.xml")]
+        public void WindowsDesignSupportsLiteralAndEncodedFilenames(string name)
+        {
+            string root = Path.Combine(Path.GetTempPath(), "ctr2-design-" + Guid.NewGuid());
+            string maps = Path.Combine(root, "assets", "maps");
+            _ = Directory.CreateDirectory(maps);
+            try
+            {
+                File.WriteAllText(Path.Combine(maps, name), Map);
+                LevelDefinition design = LevelReader.LoadWindowsDesign(root);
+                Assert.Equal(name, design.FileName);
+                Assert.Equal(5, design.Objects.Count);
+            }
+            finally
+            {
+                Directory.Delete(root, true);
+            }
+        }
+
         /// <summary>Checks optional hash-prefix handling and the document character budget.</summary>
         [Fact]
         public void ReaderBoundsDocumentsAndRecognizesHashPrefix()

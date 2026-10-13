@@ -125,7 +125,9 @@ namespace Ctr2.Assets
             {
                 RejectLink(directory);
             }
-            const string name = "%21_MasterGameDesignDocument.xml";
+            string name = File.Exists(Path.Combine(maps, "!_MasterGameDesignDocument.xml"))
+                ? "!_MasterGameDesignDocument.xml"
+                : "%21_MasterGameDesignDocument.xml";
             return Read(ReadFile(Path.Combine(maps, name))) with
             {
                 FileName = name
