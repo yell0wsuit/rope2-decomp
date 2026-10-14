@@ -8,7 +8,7 @@ namespace Ctr2.Engine.Physics
 
     internal enum ForestProcedure
     {
-        None, Bottom, Top, Left, Right
+        None, Bottom, Top, Left, Right, StandLeft, StandRight
     }
 
     public sealed partial class PhysicsWorld
@@ -36,18 +36,24 @@ namespace Ctr2.Engine.Physics
         {
             get
             {
+                if (procedure is ForestProcedure.StandLeft or ForestProcedure.StandRight)
+                {
+                    return Vector2.Lerp(Vector2.One, new(.85f, 1.3f), ProcedureWeight);
+                }
                 float squash = ProcedureWeight * procedureImpulse * .75f;
                 return procedure is ForestProcedure.Top or ForestProcedure.Bottom ? new(1 + squash, 1 - squash) : new(1 - squash, 1 + squash);
             }
         }
 
         /// <summary>Gets the procedural root displacement in logical art units.</summary>
-        public Vector2 CharacterOffset => ProcedureWeight * procedureImpulse * 60 * (procedure switch
+        public Vector2 CharacterOffset => ProcedureWeight * (procedure switch
         {
-            ForestProcedure.Bottom => Vector2.UnitY,
-            ForestProcedure.Top => -Vector2.UnitY,
-            ForestProcedure.Left => -Vector2.UnitX,
-            ForestProcedure.Right => Vector2.UnitX,
+            ForestProcedure.Bottom => procedureImpulse * 60 * Vector2.UnitY,
+            ForestProcedure.Top => -procedureImpulse * 60 * Vector2.UnitY,
+            ForestProcedure.Left => -procedureImpulse * 60 * Vector2.UnitX,
+            ForestProcedure.Right => procedureImpulse * 60 * Vector2.UnitX,
+            ForestProcedure.StandLeft => new Vector2(-10, 0),
+            ForestProcedure.StandRight => new Vector2(10, 0),
             ForestProcedure.None => Vector2.Zero,
             _ => Vector2.Zero
         });
@@ -62,7 +68,10 @@ namespace Ctr2.Engine.Physics
                 }
 
                 float time = (simulation.Tick - procedureStartedAt) * PhysicsWorld.TimeStep;
-                return Math.Clamp(time <= .03f ? time / .03f : 1 - ((time - .03f) / .06f), 0, 1);
+                bool standing = procedure is ForestProcedure.StandLeft or ForestProcedure.StandRight;
+                float peak = standing ? .1f : .03f;
+                float recovery = standing ? .05f : .06f;
+                return Math.Clamp(time <= peak ? time / peak : 1 - ((time - peak) / recovery), 0, 1);
             }
         }
 
@@ -121,13 +130,47 @@ namespace Ctr2.Engine.Physics
             SceneRevision++;
         }
 
-        private void AdvanceProcedure()
+        private void UpdateStandingState()
         {
-            if (!ProcedureActive || (simulation.Tick - procedureStartedAt) * PhysicsWorld.TimeStep < .09f)
+            if (Result != ForestResult.Running || CharacterState is not (ForestCharacterState.Idle or ForestCharacterState.Chewing))
             {
                 return;
             }
 
+            PhysicsBody body = simulation.Characters[0];
+            int angle = BodyDegrees(body);
+            if (body.Velocity.Length() >= .01f || (angle >= -60 && angle <= 60))
+            {
+                return;
+            }
+
+            CharacterState = CharacterState == ForestCharacterState.Chewing ? ForestCharacterState.StandUpChewing : ForestCharacterState.StandUp;
+            StartProcedure(angle < -60 ? ForestProcedure.StandLeft : ForestProcedure.StandRight, 0);
+        }
+
+        private void AdvanceProcedure()
+        {
+            bool standing = procedure is ForestProcedure.StandLeft or ForestProcedure.StandRight;
+            if (!ProcedureActive || (simulation.Tick - procedureStartedAt) * PhysicsWorld.TimeStep < (standing ? .15f : .09f))
+            {
+                return;
+            }
+
+            if (standing)
+            {
+                PhysicsBody body = simulation.Characters[0];
+                int angle = BodyDegrees(body);
+                float angularImpulse = procedure == ForestProcedure.StandLeft ? angle >= -110 ? .008f : .014f : angle <= 110 ? -.008f : -.014f;
+                body.Velocity += new Vector2(0, -.19f * body.InverseMass);
+                body.AngularVelocity += angularImpulse * body.InverseInertia;
+                procedure = ForestProcedure.None;
+                if (CharacterState == ForestCharacterState.StandUp)
+                {
+                    SetScene("STAND_UP");
+                }
+
+                return;
+            }
             bool rolling = MathF.Abs(motion.ShortAngular) > 1 && motion.Short.Length() > .5f;
             CharacterState = rolling ? ForestCharacterState.Rolling : ForestCharacterState.Idle;
             SetScene(rolling ? "ROLLING" : "IDLE");

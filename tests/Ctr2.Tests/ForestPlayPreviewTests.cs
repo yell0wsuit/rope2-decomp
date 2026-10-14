@@ -56,7 +56,7 @@ namespace Ctr2.Tests
                     new(163, "green.png", 0, 2, 1, 8, 8, [.. Enumerable.Range(0, 12).Select(_ => new ResourceQuad(0, 0, 8, 8, 0, 0))], Hash("green")),
                     new(104, "character.pb", 7, 2, null, 0, 0, [])]);
                 File.WriteAllText(Path.Combine(root, "resources.json"), JsonSerializer.Serialize(catalog));
-                string[] names = ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING", "SWIPE_LOOP"];
+                string[] names = ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING", "STAND_UP", "SWIPE_LOOP"];
                 byte[] track = AnimationPreviewTests.Message((1, 0), (2, AnimationPreviewTests.Message((1, 0f), (2, 0f), (3, 0f))),
                     (2, AnimationPreviewTests.Message((1, .1f), (2, 0f), (3, 0f))));
                 byte[] part = AnimationPreviewTests.Message([(1, 1), (3, 7), .. names.Select((_, i) => (10, (object)AnimationPreviewTests.Message((1, i), (5, track))))]);
@@ -116,6 +116,21 @@ namespace Ctr2.Tests
                 Assert.Equal(SKColors.Red, bitmap.GetPixel(200, 200));
                 Assert.NotEqual(SKColors.Lime, bitmap.GetPixel(190, 300));
                 Assert.Equal(ForestResult.Running, session.Simulation.Gameplay!.Result);
+                File.WriteAllText(Path.Combine(maps, "test.xml"), "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90'/></layer></map>");
+                using LevelPreview standing = LevelPreview.Load(root, 2, 1, 2, play: true).Preview;
+                for (int i = 0; i < 7; i++)
+                {
+                    standing.Session!.Step();
+                }
+
+                Assert.Equal(ForestCharacterState.StandUp, standing.Session!.Simulation.Gameplay!.CharacterState);
+                standing.Draw(canvas, 640, 960, 0);
+                // Native fixed art translation lies inside scale; procedural root position lies outside.
+                Assert.Equal(SKColors.Lime, bitmap.GetPixel(218, 203));
+                Assert.NotEqual(SKColors.Lime, bitmap.GetPixel(206, 203));
+                standing.Session.Paused = true;
+                standing.Draw(canvas, 640, 960, 1000);
+                Assert.Equal(SKColors.Lime, bitmap.GetPixel(218, 203));
             }
             finally { Directory.Delete(root, true); }
         }

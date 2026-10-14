@@ -53,7 +53,11 @@ namespace Ctr2.Engine.Physics
         /// <summary>Procedural root deformation after a terrain impact.</summary>
         Bumping,
         /// <summary>Rolling after an impact until angular history settles.</summary>
-        Rolling
+        Rolling,
+        /// <summary>Preparing or playing the authored stand-up response.</summary>
+        StandUp,
+        /// <summary>Standing while chewing, with the original fallback timer retained.</summary>
+        StandUpChewing
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -203,7 +207,7 @@ namespace Ctr2.Engine.Physics
                     CandyState = ForestCandyState.Removed;
                 }
             }
-            if (CharacterState is ForestCharacterState.Chewing or ForestCharacterState.FallingChewing)
+            if (consumptions.Count > 0)
             {
                 chewingTime += PhysicsWorld.TimeStep;
                 if (chewingTime >= 2.8f)
@@ -211,6 +215,7 @@ namespace Ctr2.Engine.Physics
                     Finish(ForestResult.Won);
                 }
                 UpdateAirborneState();
+                UpdateStandingState();
                 return;
             }
             if (CharacterState == ForestCharacterState.Fail)
@@ -248,6 +253,7 @@ namespace Ctr2.Engine.Physics
                     SetScene("FALLING_MOUTH_CLOSE");
                 }
                 UpdateAirborneState();
+                UpdateStandingState();
             }
         }
 
@@ -256,13 +262,18 @@ namespace Ctr2.Engine.Physics
         /// <param name="revision">Scene revision captured when playback began.</param>
         public void SceneFinished(string scene, int revision)
         {
-            if (Result != ForestResult.Running || Scene != scene || SceneRevision != revision || ProcedureActive)
+            if (Result != ForestResult.Running || Scene != scene || SceneRevision != revision || ProcedureActive || CharacterState == ForestCharacterState.StandUpChewing)
             {
                 return;
             }
             if (CharacterState == ForestCharacterState.Fail)
             {
                 Finish(ForestResult.Lost);
+            }
+            else if (CharacterState == ForestCharacterState.StandUp && scene == "STAND_UP")
+            {
+                CharacterState = ForestCharacterState.Idle;
+                SetScene("IDLE");
             }
             else if (CharacterState == ForestCharacterState.FallingChewing)
             {

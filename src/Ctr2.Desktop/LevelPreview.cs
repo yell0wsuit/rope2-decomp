@@ -78,7 +78,7 @@ namespace Ctr2.Desktop
                     {
                         preview.swipeTutorial = AnimationPreview.Load(cache, 104, "SWIPE_LOOP", resolution);
                     }
-                    foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING" })
+                    foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING", "STAND_UP" })
                     {
                         preview.omnom!.SelectScene(scene);
                     }
@@ -210,9 +210,9 @@ namespace Ctr2.Desktop
                             position = body.Origin * 200;
                             angle = body.Angle;
                         }
-                        Vector2 origin = -omnom.CanvasSize / 2;
+                        Vector2 origin = (-omnom.CanvasSize / 2) + new Vector2(-8, -11);
                         Vector2 scale = Simulation?.Gameplay?.CharacterScale ?? Vector2.One;
-                        Vector2 offset = (Simulation?.Gameplay?.CharacterOffset ?? Vector2.Zero) + new Vector2(-8, -11);
+                        Vector2 offset = Simulation?.Gameplay?.CharacterOffset ?? Vector2.Zero;
                         Matrix4x4 character = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
                             Matrix4x4.CreateScale(scale.X, scale.Y, 1) * Matrix4x4.CreateTranslation(offset.X, offset.Y, 0) *
                             Matrix4x4.CreateRotationZ(angle) * Matrix4x4.CreateTranslation(position.X, position.Y, 0);

@@ -60,8 +60,9 @@ press dismisses it, while an active hint fades after a press. No invented input
 lock or camera movement is applied. Other mechanics report an unsupported-scope
 error. Falling/landing and airborne eating use source velocity
 history and terrain contacts. Static terrain impacts add procedural squash and rolling.
-Standing animations, selected costumes,
-native scenery/rope/star artwork, particles, sound, saves and original-game parity
+Stand-up preparation applies the source center and angular impulses after its
+short squash/stretch animation. Selected costumes, native scenery/rope/star artwork,
+remaining particles, sound, saves and original-game parity
 remain pending. Scenery and stars still use the diagnostic drawing.
 
 `--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]`,
@@ -188,9 +189,9 @@ pending.
 Om Nom now uses a dynamic compound polygon body with authored density, gravity,
 damping and fixed rotation. Triangle fixtures collide with static terrain; artwork
 follows the simulated body origin and angle, independently of its offset center of
-mass. Polygon contacts are discrete and can tunnel at high speed. The original
-intro, standing/gameplay adjustments and general dynamic-body collision remain pending.
+mass. Polygon contacts are discrete and can tunnel at high speed. Broader intro
+sequences, remaining gameplay adjustments and general dynamic-body collision remain pending.
 
 The opt-in `play-level` slice adds character/candy contact, consumption and completion.
-Next: procedural landing/standing effects, native scenery and
+Next: native scenery, rope/star artwork, sound and
 broader collision verification. Web work follows the PC slice.

@@ -196,7 +196,7 @@ terrain and two independent bodies sharing a floor. These do not
 prove native broadphase/contact-order parity or original Om Nom movement.
 
 Character polygons use discrete contacts even when circle CCD is enabled. Polygon
-CCD, general dynamic-body collision, standing/gameplay adjustments and character
+CCD, general dynamic-body collision, remaining gameplay adjustments and character
 star collection remain pending. The opt-in gameplay layer below adds feeding,
 first-entry arrival and completion without a general dynamic-contact solver.
 
@@ -263,7 +263,7 @@ retain distinct completion callbacks and stale-revision guards. Restart discards
 the motion history and contact latch. This does not change any body velocity,
 collision constant or solver iteration count.
 
-This is not the full Om Nom state machine: standing, sliding, turning,
+This is not the full Om Nom state machine: sliding, turning,
 costume substitutions, particles/audio, native contact ordering and general CCD
 remain pending. Physical overlap is a discrete compound fixture test, not the
 complete native dynamic-contact graph. The original fade completion queues
@@ -324,3 +324,24 @@ selects rolling or idle; rolling settles using the source angular windows (newes
 five samples, and older samples 29 through 58 divided by 59). These source windows
 are intentionally asymmetric. Native dynamic-tree contact ordering, dynamic WOOD
 reactions, sliding and original runtime visual comparison remain pending.
+
+## Standing after settling
+
+Idle and chewing bodies moving slower than .01 m/s prepare to stand when their
+normalized, truncated integer angle lies strictly outside [-60,60] degrees.
+The root stretches to (.85,1.3) and shifts -10 logical units on the left or +10 on
+the right over .1 seconds, then returns over .05 seconds. The art offset (-8,-11)
+is inside this scale, as in BaseElement::preDraw; root position is outside it.
+Completion applies (0,-.19) at the center of mass and a signed angular impulse:
++.008 on the left at angles >= -110, otherwise +.014; -.008 on the right at
+angles <= 110, otherwise -.014. Fixed rotation suppresses angular response through
+zero inverse inertia. No position or orientation teleport is applied.
+
+Ordinary preparation then selects Windows STAND_UP, whose current-revision
+completion returns to IDLE. Chewing preparation retains its child scene instead,
+as the source does, and the independent 2.8-second consumption timer remains active.
+Replacing the scene cancels preparation; paused/restarted sessions cannot apply
+an old preparation impulse. Tick durations remain .0167 seconds, so sampled poses
+and completion quantize to the first fixed tick at or beyond each duration.
+Authored inter-scene transitions, sliding/turning and original runtime visual and
+trajectory parity remain pending.
