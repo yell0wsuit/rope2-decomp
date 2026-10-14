@@ -442,6 +442,17 @@ namespace Ctr2.Engine.Physics
             {
                 SolveContinuous(starts);
             }
+            polygonImpacts.Clear();
+            foreach (List<PhysicsContact> island in contactIslands)
+            {
+                foreach (PhysicsContact contact in island)
+                {
+                    if (contact is PolygonContact polygon)
+                    {
+                        polygonImpacts.Add(polygon.CaptureImpact());
+                    }
+                }
+            }
             stepped = true;
         }
 

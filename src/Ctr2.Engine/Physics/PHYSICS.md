@@ -263,7 +263,7 @@ retain distinct completion callbacks and stale-revision guards. Restart discards
 the motion history and contact latch. This does not change any body velocity,
 collision constant or solver iteration count.
 
-This is not the full Om Nom state machine: procedural bump/rolling/standing, turning,
+This is not the full Om Nom state machine: standing, sliding, turning,
 costume substitutions, particles/audio, native contact ordering and general CCD
 remain pending. Physical overlap is a discrete compound fixture test, not the
 complete native dynamic-contact graph. The original fade completion queues
@@ -308,3 +308,19 @@ persistence/order, native triangle ordering and original recorded-input parity
 need further verification. The rope draws physical polylines without native
 texturing; candy flare/skins/masks and cut presentation remain pending. Web work
 follows a playable PC vertical slice.
+
+## Static terrain impact presentation
+
+The supported polygon solver reports each manifold's first normal impulse and
+first world point after position solving, in the current solver contact order.
+Om Nom follows static LAND thresholds from `Omnom::postSolve`; XML material names
+do not select the source dynamic WOOD branch. Upright idle impacts above .1 use
+1.4 times the capped impulse. Falling/rolling/falling-mouth-close impacts above
+.2 classify bottom/top/left/right from the first point relative to the body center.
+The impulse cap is .5. The root deforms and shifts over .03 + .06 seconds without
+changing physics or resetting authored child scene time. Procedural completion
+owns its fixed clock and rejects authored scene callbacks. Motion at completion
+selects rolling or idle; rolling settles using the source angular windows (newest
+five samples, and older samples 29 through 58 divided by 59). These source windows
+are intentionally asymmetric. Native dynamic-tree contact ordering, dynamic WOOD
+reactions, sliding and original runtime visual comparison remain pending.

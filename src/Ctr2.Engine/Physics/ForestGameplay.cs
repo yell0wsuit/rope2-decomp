@@ -49,7 +49,11 @@ namespace Ctr2.Engine.Physics
         /// <summary>Eating and chewing after physical contact.</summary>
         Chewing,
         /// <summary>A required object left the scene.</summary>
-        Fail
+        Fail,
+        /// <summary>Procedural root deformation after a terrain impact.</summary>
+        Bumping,
+        /// <summary>Rolling after an impact until angular history settles.</summary>
+        Rolling
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -179,7 +183,9 @@ namespace Ctr2.Engine.Physics
             ArrivalLeaves?.Step();
             SwipeTutorial?.Step();
             PhysicsBody candy = simulation.Candies[0], character = simulation.Characters[0];
-            motion.Sample(character.Velocity);
+            ProcessImpacts();
+            AdvanceProcedure();
+            motion.Sample(character.Velocity, character.AngularVelocity);
             collidedWithTerrain |= simulation.CharacterTouchesTerrain();
             if (Outside(character.Origin, 70))
             {
@@ -250,7 +256,7 @@ namespace Ctr2.Engine.Physics
         /// <param name="revision">Scene revision captured when playback began.</param>
         public void SceneFinished(string scene, int revision)
         {
-            if (Result != ForestResult.Running || Scene != scene || SceneRevision != revision)
+            if (Result != ForestResult.Running || Scene != scene || SceneRevision != revision || ProcedureActive)
             {
                 return;
             }
@@ -298,6 +304,7 @@ namespace Ctr2.Engine.Physics
 
         private void SetScene(string scene)
         {
+            procedure = ForestProcedure.None;
             Scene = scene;
             SceneRevision++;
             SceneStartedAt = simulation.Tick;

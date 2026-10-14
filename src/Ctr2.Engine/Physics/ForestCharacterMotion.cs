@@ -14,6 +14,11 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
+            if (CharacterState == ForestCharacterState.Rolling && MathF.Abs(motion.ShortAngular) < .1f && MathF.Abs(motion.LongAngular) < .1f)
+            {
+                CharacterState = ForestCharacterState.Idle;
+                SetScene("IDLE");
+            }
             if (CharacterState == ForestCharacterState.Idle && motion.IsFalling)
             {
                 CharacterState = ForestCharacterState.Falling;

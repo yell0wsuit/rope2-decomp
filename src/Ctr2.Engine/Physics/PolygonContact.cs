@@ -44,6 +44,13 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
+        /// <summary>Captures the first solved impulse and current world manifold point.</summary>
+        internal PolygonImpact CaptureImpact()
+        {
+            (Vector2 clip, Vector2 n, float distance) = Geometry(points[0]);
+            return new(Body, clip - (.5f * distance * n), points[0].NormalImpulse);
+        }
+
         /// <summary>Creates a clipped manifold with local reference data.</summary>
         /// <param name="body">Dynamic polygon body.</param>
         /// <param name="terrain">Static contact material.</param>

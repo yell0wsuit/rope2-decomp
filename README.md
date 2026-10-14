@@ -59,7 +59,8 @@ leaf burst. The authored swipe hint appears after its delay; an early pointer
 press dismisses it, while an active hint fades after a press. No invented input
 lock or camera movement is applied. Other mechanics report an unsupported-scope
 error. Falling/landing and airborne eating use source velocity
-history and terrain contacts. Procedural bump/standing animations, selected costumes,
+history and terrain contacts. Static terrain impacts add procedural squash and rolling.
+Standing animations, selected costumes,
 native scenery/rope/star artwork, particles, sound, saves and original-game parity
 remain pending. Scenery and stars still use the diagnostic drawing.
 

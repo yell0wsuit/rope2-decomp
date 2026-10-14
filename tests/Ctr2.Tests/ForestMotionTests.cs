@@ -11,10 +11,15 @@ namespace Ctr2.Tests
     public sealed class ForestMotionTests
     {
         /// <summary>Builds invented motion scenarios with a stationary candy and ordinary floor material.</summary>
-        internal static CandySimulation Create(string objects)
+        internal static CandySimulation Create(string objects, bool sensorTerrain = false)
         {
             string design = CandySimulationTests.Design.Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"")
                 .Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "<polygon id='wood' body_type='static' friction='0.4' restitution='0' isSensor='false'/></layer></map>");
+            if (sensorTerrain)
+            {
+                design = design.Replace("isSensor='false'", "isSensor='true'");
+            }
+
             return new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" + objects + "</layer></map>"), LevelReader.Read(design), true);
         }
 
@@ -87,11 +92,98 @@ namespace Ctr2.Tests
             Assert.Equal(ForestResult.Running, scene.Gameplay.Result);
         }
 
+        /// <summary>Hard landings react to the actual solved static-terrain impulse.</summary>
+        [Fact]
+        public void HardLandingStartsProceduralBump()
+        {
+            CandySimulation scene = Create("<candy id='c' x='300' y='0'/><omnom x='100' y='30' gravityScale='1'/><polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/>");
+            bool bumped = false;
+            for (int i = 0; i < 180; i++)
+            {
+                scene.Step();
+                bumped |= scene.Gameplay!.CharacterState.ToString() == "Bumping";
+            }
+            Assert.True(bumped);
+        }
+
+        /// <summary>Two-point normal impulses are not summed for the source landing threshold.</summary>
+        [Fact]
+        public void WeakFirstManifoldImpulseDoesNotBump()
+        {
+            CandySimulation scene = Create("<candy id='c' x='300' y='0'/><omnom x='100' y='30' gravityScale='1' density='0.5'/><polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/>");
+            bool bumped = false;
+            for (int i = 0; i < 180; i++)
+            {
+                scene.Step();
+                bumped |= scene.Gameplay!.ProcedureActive;
+            }
+            Assert.False(bumped);
+        }
+
+        /// <summary>Impact deformation uses a fixed clock and cannot be completed by a child scene callback.</summary>
+        [Fact]
+        public void BumpPreservesChildClockAndRejectsCallbacks()
+        {
+            CandySimulation scene = Create("<candy id='c' x='300' y='0'/><omnom x='100' y='30' gravityScale='1'/><polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/>");
+            while (!scene.Gameplay!.ProcedureActive && scene.Tick < 100)
+            {
+                scene.Step();
+            }
+
+            ForestGameplay game = scene.Gameplay!;
+            Assert.True(game.ProcedureActive);
+            int started = game.SceneStartedAt;
+            int revision = game.SceneRevision;
+            string child = game.Scene;
+            Assert.Equal(Vector2.One, game.CharacterScale);
+            game.SceneFinished(child, revision);
+            Assert.True(game.ProcedureActive);
+            scene.Step();
+            Assert.Equal(started, game.SceneStartedAt);
+            Assert.Equal(child, game.Scene);
+            Assert.True(game.CharacterScale.X > 1);
+            Assert.True(game.CharacterScale.Y < 1);
+            Assert.True(game.CharacterOffset.Y > 0);
+            for (int i = 0; i < 5; i++)
+            {
+                scene.Step();
+            }
+
+            Assert.False(game.ProcedureActive);
+            Assert.Equal(Vector2.One, game.CharacterScale);
+            Assert.Equal(Vector2.Zero, game.CharacterOffset);
+            game.SceneFinished(child, revision);
+            Assert.Equal(ForestResult.Running, game.Result);
+        }
+
+        /// <summary>The source long angular window deliberately excludes the newest 29 samples.</summary>
+        [Fact]
+        public void RollingAngularWindowsRetainSourceRanges()
+        {
+            CharacterMotionHistory history = new();
+            history.Sample(Vector2.Zero, 59);
+            Assert.Equal(11.8f, history.ShortAngular, 5);
+            Assert.Equal(0, history.LongAngular);
+            for (int i = 0; i < 29; i++)
+            {
+                history.Sample(Vector2.Zero);
+            }
+
+            Assert.Equal(0, history.ShortAngular);
+            Assert.Equal(1, history.LongAngular);
+            for (int i = 0; i < 30; i++)
+            {
+                history.Sample(Vector2.Zero);
+            }
+
+            Assert.Equal(0, history.LongAngular);
+        }
+
         /// <summary>Sensor polygons cannot satisfy the landing-contact latch.</summary>
         [Fact]
         public void SensorTerrainDoesNotLandCharacter()
         {
-            CandySimulation scene = Create("<candy id='c' x='300' y='0'/><omnom x='100' y='30' gravityScale='1'/><polygon_materialized x='0' y='100' material='wood' isSensor='true' polygon='320,0,320,30,0,30,' smoothFactor='1'/>");
+            CandySimulation scene = Create("<candy id='c' x='300' y='0'/><omnom x='100' y='30' gravityScale='1'/><polygon_materialized x='0' y='100' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/>", sensorTerrain: true);
             for (int i = 0; i < 35; i++)
             {
                 scene.Step();

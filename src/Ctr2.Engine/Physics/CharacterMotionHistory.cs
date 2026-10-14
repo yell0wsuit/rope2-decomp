@@ -7,7 +7,18 @@ namespace Ctr2.Engine.Physics
     public sealed class CharacterMotionHistory
     {
         private readonly Vector2[] samples = new Vector2[59];
+        private readonly float[] angular = new float[59];
         private int next;
+        /// <summary>Gets the newest five angular samples averaged.</summary>
+        public float ShortAngular
+        {
+            get; private set;
+        }
+        /// <summary>Gets older angular samples 29 through 58 divided by 59, matching the source.</summary>
+        public float LongAngular
+        {
+            get; private set;
+        }
         /// <summary>Gets the newest five-sample velocity average.</summary>
         public Vector2 Short
         {
@@ -27,17 +38,31 @@ namespace Ctr2.Engine.Physics
         public bool IsFalling => (Short.Y > 2 || Short.Y < -3) && Vector2.Dot(Short, Medium) > 0;
         /// <summary>Samples one completed fixed tick's velocity.</summary>
         /// <param name="velocity">Velocity in meters per second.</param>
-        public void Sample(Vector2 velocity)
+        /// <param name="angularVelocity">Clockwise radians per second.</param>
+        public void Sample(Vector2 velocity, float angularVelocity = 0)
         {
-            if (!float.IsFinite(velocity.X) || !float.IsFinite(velocity.Y))
+            if (!float.IsFinite(velocity.X) || !float.IsFinite(velocity.Y) || !float.IsFinite(angularVelocity))
             {
                 throw new ArgumentOutOfRangeException(nameof(velocity));
             }
             samples[next] = velocity;
+            angular[next] = angularVelocity;
+            ShortAngular = LongAngular = 0;
             next = (next + 1) % samples.Length;
             Vector2 sum = Vector2.Zero;
             for (int i = 0; i < samples.Length; i++)
             {
+                float angularSample = angular[(next + samples.Length - 1 - i) % samples.Length];
+                if (i < 5)
+                {
+                    ShortAngular += angularSample;
+                }
+
+                if (i >= 29)
+                {
+                    LongAngular += angularSample;
+                }
+
                 sum += samples[(next + samples.Length - 1 - i) % samples.Length];
                 if (i == 4)
                 {
@@ -49,6 +74,8 @@ namespace Ctr2.Engine.Physics
                 }
             }
             Long = sum / 59;
+            ShortAngular /= 5;
+            LongAngular /= 59;
         }
     }
 }
