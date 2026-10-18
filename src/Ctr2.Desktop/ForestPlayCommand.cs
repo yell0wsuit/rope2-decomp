@@ -82,7 +82,7 @@ namespace Ctr2.Desktop
                     }
                 }
             };
-            Console.WriteLine("Forest play: swipe to cut; R restart; Space pause/resume; Escape exit. Scenery is diagnostic; broader mechanics are pending.");
+            Console.WriteLine("Forest play: swipe to cut; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
             for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == ForestResult.Running; i++)
             {
                 session.Step();

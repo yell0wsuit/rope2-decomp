@@ -11,8 +11,8 @@ using SkiaSharp;
 
 namespace Ctr2.Desktop
 {
-    /// <summary>Draws authored level geometry, an optional assembled Om Nom pose, and supported candy physics.</summary>
-    /// <remarks>Creates a geometry-only diagnostic preview, without loading original assets.</remarks>
+    /// <summary>Draws diagnostic geometry or supported forest gameplay with imported Windows artwork.</summary>
+    /// <remarks>Static and simulation previews retain diagnostic scenery; playable sessions own native background and star resources.</remarks>
     /// <param name="layout">Initial logical scene geometry.</param>
     public sealed class LevelPreview(LevelLayout layout) : IDisposable
     {
@@ -22,6 +22,8 @@ namespace Ctr2.Desktop
         private CandySprite? candy;
         private ForestLeafSprites? forestLeaves;
         private AnimationPreview? swipeTutorial;
+        private ForestBackground? background;
+        private StarSprites? stars;
         private int sceneRevision = -1;
         private CandySimulation? animatedSimulation;
         /// <summary>Gets the optional playable session with pause and restart ownership.</summary>
@@ -92,6 +94,14 @@ namespace Ctr2.Desktop
                         preview.Simulation = new CandySimulation(definition, LevelReader.LoadWindowsDesign(cache));
                     }
                     preview.candy = new CandySprite(cache, resolution);
+                    if (play && definition.Objects.Any(o => o.Kind == "star"))
+                    {
+                        preview.stars = new StarSprites(cache, resolution);
+                    }
+                    if (play && definition.Settings.Any(s => s.Kind == "gameDesign" && s.Attributes.GetValueOrDefault("location") == "forest"))
+                    {
+                        preview.background = new ForestBackground(cache);
+                    }
                 }
                 return (definition, preview);
             }
@@ -130,6 +140,7 @@ namespace Ctr2.Desktop
                     IsAntialias = true
                 };
                 canvas.DrawRect(0, 0, Layout.Size.X, Layout.Size.Y, paint);
+                background?.Draw(canvas, Layout.Size);
                 if (Simulation?.Gameplay?.ArrivalLeaves is ForestLeafBurst leaves)
                 {
                     forestLeaves!.Draw(canvas, leaves.Particles);
@@ -193,12 +204,17 @@ namespace Ctr2.Desktop
                     }
                     else if (placed.Source.Kind == "star" && Simulation != null)
                     {
-                        SimulationStar star = Simulation.Stars[starIndex++];
-                        if (!star.CollectedAt.HasValue)
+                        SimulationStar star = Simulation.Stars[starIndex];
+                        if (stars != null)
+                        {
+                            stars.Draw(canvas, star, starIndex, Simulation.Tick);
+                        }
+                        else if (!star.CollectedAt.HasValue)
                         {
                             paint.Color = SKColors.Gold;
                             canvas.DrawCircle(star.Position.X * 200, star.Position.Y * 200, star.Radius * 200, paint);
                         }
+                        starIndex++;
                     }
                     else if (placed.Source.Kind == "omnom" && omnom != null)
                     {
@@ -288,6 +304,8 @@ namespace Ctr2.Desktop
                 candy?.Dispose();
                 forestLeaves?.Dispose();
                 swipeTutorial?.Dispose();
+                stars?.Dispose();
+                background?.Dispose();
                 disposed = true;
             }
         }
