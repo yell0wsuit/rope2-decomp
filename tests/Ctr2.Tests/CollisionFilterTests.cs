@@ -50,24 +50,39 @@ namespace Ctr2.Tests
                 bodies.Add(2, world.AddCircle(new(.5f, 0), .3f, 1, 0));
             }
             foreach (PhysicsBody body in bodies.Values)
+            {
                 body.Friction = scenario == "compound" ? .4f : .3f;
+            }
+
             int[] fixtures = [.. world.CaptureProxies().Select(p => p.Fixture)];
-            void Set(int label, ushort category, ushort mask, short group) => world.SetFixtureFilter(label, new(category, mask, group));
+            void Set(int label, ushort category, ushort mask, short group)
+            {
+                world.SetFixtureFilter(label, new(category, mask, group));
+            }
+
             void All(ushort mask, short group = 0)
             {
                 foreach (int fixture in fixtures)
+                {
                     Set(fixture, 1, mask, group);
+                }
             }
             All(0);
             if (scenario is "positive" or "negative")
+            {
                 All(scenario == "negative" ? ushort.MaxValue : (ushort)0, scenario == "negative" ? (short)-7 : (short)7);
+            }
+
             if (scenario == "asymmetric")
             {
                 Set(1, 2, 4, 0);
                 Set(2, 4, 0, 0);
             }
             if (scenario == "joint")
+            {
                 joint = world.AddRope(bodies[1], bodies[2], 10);
+            }
+
             using JsonDocument reference = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "CollisionFilterReference.json")));
             int tick = 0;
             foreach (JsonElement row in reference.RootElement.EnumerateArray().Where(r => r.GetProperty("Scenario").GetString() == scenario))
@@ -81,9 +96,14 @@ namespace Ctr2.Tests
                         Set(3, 1, ushort.MaxValue, 0);
                     }
                     else if (scenario == "asymmetric")
+                    {
                         Set(2, 4, 2, 0);
+                    }
                     else
+                    {
                         All(ushort.MaxValue);
+                    }
+
                     if (scenario == "early")
                     {
                         PhysicsBody extra = world.AddCircle(new(10, 0), .1f, 0, 0);
@@ -93,18 +113,38 @@ namespace Ctr2.Tests
                     }
                 }
                 if (tick == 20)
+                {
                     foreach (int fixture in fixtures)
+                    {
                         world.SetFixtureFilter(fixture, world.GetFixtureFilter(fixture));
+                    }
+                }
+
                 if (tick == 25 && joint != null)
+                {
                     Assert.True(world.Remove(joint));
+                }
+
                 if (tick == 30)
+                {
                     All(0);
+                }
+
                 if (tick == 40)
+                {
                     All(ushort.MaxValue);
+                }
+
                 if (tick == 60)
+                {
                     All(ushort.MaxValue, -5);
+                }
+
                 if (tick == 70)
+                {
                     All(0, 5);
+                }
+
                 world.Step();
                 PhysicsBodyContactState[] pairs = [.. row.GetProperty("BodyContacts").EnumerateArray().Select(c =>
                     new PhysicsBodyContactState(c[0].GetInt32(), c[1].GetInt32(), c[2].GetInt64(), c[3].GetBoolean()))];
@@ -119,9 +159,11 @@ namespace Ctr2.Tests
                     PhysicsBody body = bodies[label];
                     float[] actual = [body.Position.X, body.Position.Y, body.Velocity.X, body.Velocity.Y, body.Angle, body.AngularVelocity];
                     for (int i = 0; i < actual.Length; i++)
+                    {
                         Near(state[i + 1].GetSingle(), actual[i], .00002f, $"{scenario}, tick {tick}, body {label}, component {i}");
+                    }
                 }
-                var proxies = world.CaptureProxies();
+                IReadOnlyList<PhysicsProxyState> proxies = world.CaptureProxies();
                 Assert.Equal(proxies.Count, row.GetProperty("Proxies").GetArrayLength());
                 int proxyIndex = 0;
                 foreach (JsonElement expected in row.GetProperty("Proxies").EnumerateArray())
@@ -131,7 +173,9 @@ namespace Ctr2.Tests
                     Assert.Equal(expected[1].GetInt32(), proxy.ProxyId);
                     float[] bounds = [proxy.Bounds.Lower.X, proxy.Bounds.Lower.Y, proxy.Bounds.Upper.X, proxy.Bounds.Upper.Y];
                     for (int i = 0; i < 4; i++)
+                    {
                         Near(expected[i + 2].GetSingle(), bounds[i], .000001f, $"{scenario}, tick {tick}, proxy {proxy.Fixture}, bound {i}");
+                    }
                 }
             }
             Assert.Equal(90, tick);
@@ -164,8 +208,8 @@ namespace Ctr2.Tests
             {
                 ContinuousPhysics = false
             };
-            world.AddCircle(Vector2.Zero, .3f, 1, 0);
-            world.AddCircle(new(.5f, 0), .3f, 1, 0);
+            _ = world.AddCircle(Vector2.Zero, .3f, 1, 0);
+            _ = world.AddCircle(new(.5f, 0), .3f, 1, 0);
             world.SetFixtureFilter(1, new((ushort)categoryA, (ushort)maskA, (short)groupA));
             world.SetFixtureFilter(2, new((ushort)categoryB, (ushort)maskB, (short)groupB));
             world.Step();
@@ -183,7 +227,10 @@ namespace Ctr2.Tests
             PhysicsBody a = world.AddCircle(Vector2.Zero, .3f, staticBodies ? 0 : 1, 0);
             PhysicsBody b = world.AddCircle(new(.5f, 0), .3f, staticBodies ? 0 : 1, 0);
             if (!staticBodies)
-                world.AddRope(a, b, 10);
+            {
+                _ = world.AddRope(a, b, 10);
+            }
+
             world.SetFixtureFilter(1, new(1, 0, 7));
             world.SetFixtureFilter(2, new(1, 0, 7));
             world.Step();
@@ -201,15 +248,18 @@ namespace Ctr2.Tests
             {
                 ContinuousPhysics = false
             };
-            world.AddCircle(Vector2.Zero, .3f, 1, 0);
-            world.AddCircle(new(.5f, 0), .3f, 1, 0);
+            _ = world.AddCircle(Vector2.Zero, .3f, 1, 0);
+            _ = world.AddCircle(new(.5f, 0), .3f, 1, 0);
             world.SetFixtureFilter(1, new(1, 0, 0));
             world.Step();
             Assert.Empty(world.CaptureBodyContacts());
             world.SetFixtureFilter(1, PhysicsCollisionFilter.Default);
             Assert.Empty(world.CaptureBodyContacts());
             if (newFixture)
-                world.AddCircle(new(10, 0), .1f, 0, 0);
+            {
+                _ = world.AddCircle(new(10, 0), .1f, 0, 0);
+            }
+
             world.Step();
             Assert.Equal(newFixture, Assert.Single(world.CaptureBodyContacts()).Touching);
             world.Step();
@@ -228,10 +278,13 @@ namespace Ctr2.Tests
             PhysicsBody body = world.AddCircle(Vector2.Zero, .3f, 1, 0);
             Assert.Equal(new PhysicsCollisionFilter(1, ushort.MaxValue, 0), world.GetFixtureFilter(1));
             for (int i = 0; i < 100; i++)
+            {
                 world.SetFixtureFilter(1, PhysicsCollisionFilter.Default);
+            }
+
             Assert.True(world.RemoveBody(body));
-            Assert.Throws<KeyNotFoundException>(() => world.GetFixtureFilter(1));
-            Assert.Throws<KeyNotFoundException>(() => world.SetFixtureFilter(1, PhysicsCollisionFilter.Default));
+            _ = Assert.Throws<KeyNotFoundException>(() => world.GetFixtureFilter(1));
+            _ = Assert.Throws<KeyNotFoundException>(() => world.SetFixtureFilter(1, PhysicsCollisionFilter.Default));
             world.Step();
             PhysicsBody replacement = world.AddCircle(Vector2.Zero, .3f, 1, 0);
             Assert.Equal(PhysicsCollisionFilter.Default, world.GetFixtureFilter(2));
@@ -259,7 +312,9 @@ namespace Ctr2.Tests
             world.SetFixtureFilter(filterBody ? 3 : 1, new(1, 0, 0));
             world.Step();
             if (filterBody)
+            {
                 Assert.True(body.Position.Y > 1.5f);
+            }
             else
             {
                 Assert.InRange(body.Position.Y, .83f, .85f);
@@ -267,8 +322,10 @@ namespace Ctr2.Tests
             }
         }
 
-        private static void Near(float expected, float actual, float tolerance, string location) =>
+        private static void Near(float expected, float actual, float tolerance, string location)
+        {
             Assert.True(float.IsFinite(expected) && float.IsFinite(actual) && MathF.Abs(expected - actual) <= tolerance,
                 $"{location}: expected {expected}, actual {actual}");
+        }
     }
 }

@@ -105,10 +105,10 @@ namespace Ctr2.Tests
             PhysicsBody a = world.AddCircle(Vector2.Zero, .1f, 0, 0);
             PhysicsBody b = world.AddCircle(Vector2.One, .1f, 1, 1);
             Vector2 bad = new(invalid, 0);
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRope(a, b, 1, bad, Vector2.Zero));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRope(a, b, 1, Vector2.Zero, bad));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddSpring(a, b, 1, 5, .3f, bad, Vector2.Zero));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddSpring(a, b, 1, 5, .3f, Vector2.Zero, bad));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRope(a, b, 1, bad, Vector2.Zero));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRope(a, b, 1, Vector2.Zero, bad));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddSpring(a, b, 1, 5, .3f, bad, Vector2.Zero));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddSpring(a, b, 1, 5, .3f, Vector2.Zero, bad));
             Assert.NotNull(world.AddRope(a, b, 1, Vector2.Zero, Vector2.Zero));
             world.Step();
             Assert.True(float.IsFinite(b.Position.Y));

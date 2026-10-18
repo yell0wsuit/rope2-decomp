@@ -27,7 +27,10 @@ namespace Ctr2.Engine.Physics
             {
                 float distance = Vector2.Dot(shape.Normals[i], center - shape.Vertices[i]);
                 if (distance > radius)
+                {
                     return null;
+                }
+
                 if (distance > separation)
                 {
                     separation = distance;
@@ -36,16 +39,23 @@ namespace Ctr2.Engine.Physics
             }
             Vector2 first = shape.Vertices[face], second = shape.Vertices[(face + 1) % shape.Vertices.Count];
             if (separation < Epsilon)
+            {
                 return new(polygon, circle, .5f * (first + second), shape.Normals[face], friction, restitution);
+            }
 
             float u1 = Vector2.Dot(center - first, second - first);
             float u2 = Vector2.Dot(center - second, first - second);
             if (u1 <= 0)
+            {
                 return Vector2.DistanceSquared(center, first) > radius * radius ? null :
                     new(polygon, circle, first, Normalize(center - first), friction, restitution);
+            }
+
             if (u2 <= 0)
+            {
                 return Vector2.DistanceSquared(center, second) > radius * radius ? null :
                     new(polygon, circle, second, Normalize(center - second), friction, restitution);
+            }
 
             Vector2 midpoint = .5f * (first + second);
             return Vector2.Dot(center - midpoint, shape.Normals[face]) > radius ? null :

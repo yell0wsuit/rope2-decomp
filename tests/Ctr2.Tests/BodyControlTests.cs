@@ -348,15 +348,17 @@ namespace Ctr2.Tests
             int exact = 0;
             for (int i = 0; i < 64; i++)
             {
-                Vector2 origin = new(.37f * i - 5.3f, 1.1f - .29f * i);
-                float angle = .61f * i - 9;
+                Vector2 origin = new((.37f * i) - 5.3f, 1.1f - (.29f * i));
+                float angle = (.61f * i) - 9;
                 world.SetTransform(body, origin, angle);
                 Assert.Equal(origin, body.Origin);
                 Assert.Equal(angle, body.Angle);
                 Vector2 center = origin + Rotate(body.LocalCenter, angle);
                 Assert.Equal(center, body.Position);
                 if (body.Position - Rotate(body.LocalCenter, angle) == origin)
+                {
                     exact++;
+                }
             }
             // Recomputing the origin from the center does not round-trip for every transform.
             Assert.True(exact < 64);

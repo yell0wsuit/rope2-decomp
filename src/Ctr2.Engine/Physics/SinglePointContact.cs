@@ -5,13 +5,13 @@ using System.Numerics;
 namespace Ctr2.Engine.Physics
 {
     /// <summary>Shared native sequential impulses for one-point circle and polygon-circle manifolds.</summary>
-    internal abstract class SinglePointContact : PhysicsContact
+    internal abstract class SinglePointContact(PhysicsBody first, PhysicsBody second, float mixedFriction, float mixedRestitution) : PhysicsContact
     {
         protected const float Epsilon = 1.1920929e-7f;
-        protected readonly PhysicsBody a;
-        protected readonly PhysicsBody b;
-        private readonly float friction;
-        private readonly float restitution;
+        protected readonly PhysicsBody a = first;
+        protected readonly PhysicsBody b = second;
+        private readonly float friction = mixedFriction;
+        private readonly float restitution = mixedRestitution;
         private Vector2 normal;
         private Vector2 tangent;
         private Vector2 armA;
@@ -24,14 +24,9 @@ namespace Ctr2.Engine.Physics
 
         internal override PhysicsBody Body => a;
         internal override PhysicsBody? OtherBody => b;
-        internal override int[] CaptureFeatures() => [0];
-
-        protected SinglePointContact(PhysicsBody first, PhysicsBody second, float mixedFriction, float mixedRestitution)
+        internal override int[] CaptureFeatures()
         {
-            a = first;
-            b = second;
-            friction = mixedFriction;
-            restitution = mixedRestitution;
+            return [0];
         }
 
         internal override void Restore(PhysicsContact previous)
@@ -45,10 +40,10 @@ namespace Ctr2.Engine.Physics
 
         internal override void Initialize()
         {
-            var geometry = VelocityGeometry();
-            normal = geometry.Normal;
+            (Vector2 Normal, Vector2 Point) = VelocityGeometry();
+            normal = Normal;
             tangent = new(normal.Y, -normal.X);
-            Vector2 point = geometry.Point;
+            Vector2 point = Point;
             armA = point - a.Position;
             armB = point - b.Position;
             float rnA = Cross(armA, normal), rnB = Cross(armB, normal);
@@ -61,7 +56,10 @@ namespace Ctr2.Engine.Physics
             bias = speed < -1 ? -restitution * speed : 0;
         }
 
-        internal override void WarmStart() => Apply((normalImpulse * normal) + (tangentImpulse * tangent));
+        internal override void WarmStart()
+        {
+            Apply((normalImpulse * normal) + (tangentImpulse * tangent));
+        }
 
         internal override void SolveVelocity()
         {
@@ -83,9 +81,9 @@ namespace Ctr2.Engine.Physics
 
         internal override bool SolvePosition(bool continuous = false)
         {
-            var geometry = PositionGeometry();
-            Vector2 n = geometry.Normal, point = geometry.Point;
-            float separation = geometry.Separation;
+            (Vector2 Normal, Vector2 Point, float Separation) = PositionGeometry();
+            Vector2 n = Normal, point = Point;
+            float separation = Separation;
             Vector2 rA = point - a.Position, rB = point - b.Position;
             float rnA = Cross(rA, n), rnB = Cross(rB, n);
             float correction = Math.Clamp((continuous ? .75f : .2f) * (separation + PhysicsWorld.LinearSlop), -.2f, 0);
@@ -102,7 +100,10 @@ namespace Ctr2.Engine.Physics
         protected abstract (Vector2 Normal, Vector2 Point) VelocityGeometry();
         protected abstract (Vector2 Normal, Vector2 Point, float Separation) PositionGeometry();
 
-        private Vector2 RelativeVelocity() => b.Velocity + Cross(b.AngularVelocity, armB) - a.Velocity - Cross(a.AngularVelocity, armA);
+        private Vector2 RelativeVelocity()
+        {
+            return b.Velocity + Cross(b.AngularVelocity, armB) - a.Velocity - Cross(a.AngularVelocity, armA);
+        }
 
         private void Apply(Vector2 impulse)
         {
@@ -115,10 +116,17 @@ namespace Ctr2.Engine.Physics
         protected static Vector2 Normalize(Vector2 value)
         {
             float length = value.Length();
-            return length < Epsilon ? value : (1 / length) * value;
+            return length < Epsilon ? value : 1 / length * value;
         }
 
-        private static float Cross(Vector2 a, Vector2 b) => (a.X * b.Y) - (a.Y * b.X);
-        private static Vector2 Cross(float value, Vector2 point) => new(-value * point.Y, value * point.X);
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return (a.X * b.Y) - (a.Y * b.X);
+        }
+
+        private static Vector2 Cross(float value, Vector2 point)
+        {
+            return new(-value * point.Y, value * point.X);
+        }
     }
 }

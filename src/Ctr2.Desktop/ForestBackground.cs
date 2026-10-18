@@ -38,6 +38,9 @@ namespace Ctr2.Desktop
             canvas.DrawBitmap(bitmap, source, new SKRect(left, 0, left + width, size.Y), new SKSamplingOptions(SKFilterMode.Linear));
         }
 
-        public void Dispose() => bitmap.Dispose();
+        public void Dispose()
+        {
+            bitmap.Dispose();
+        }
     }
 }

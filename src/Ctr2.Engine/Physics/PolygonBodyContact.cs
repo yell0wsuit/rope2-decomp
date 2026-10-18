@@ -27,7 +27,10 @@ namespace Ctr2.Engine.Physics
 
         internal override PhysicsBody Body => a;
         internal override PhysicsBody? OtherBody => b;
-        internal override int[] CaptureFeatures() => [.. points.Select(p => p.Feature)];
+        internal override int[] CaptureFeatures()
+        {
+            return [.. points.Select(p => p.Feature)];
+        }
 
         private PolygonBodyContact(PhysicsBody a, PhysicsBody b, bool flip, Vector2 normal, Vector2 plane,
             List<Point> points, float friction, float restitution)
@@ -45,16 +48,22 @@ namespace Ctr2.Engine.Physics
         internal static PolygonBodyContact? Create(PhysicsBody a, ConvexPolygon shapeA, PhysicsBody b, ConvexPolygon shapeB, float friction, float restitution)
         {
             Shape first = new(shapeA), second = new(shapeB);
-            var sa = FindSeparation(first, a, second, b);
-            if (sa.Separation > TotalRadius)
+            (float Separation, int Edge) = FindSeparation(first, a, second, b);
+            if (Separation > TotalRadius)
+            {
                 return null;
-            var sb = FindSeparation(second, b, first, a);
+            }
+
+            (float Separation, int Edge) sb = FindSeparation(second, b, first, a);
             if (sb.Separation > TotalRadius)
+            {
                 return null;
-            bool flip = sb.Separation > (.98f * sa.Separation) + .001f;
+            }
+
+            bool flip = sb.Separation > (.98f * Separation) + .001f;
             Shape reference = flip ? second : first, incident = flip ? first : second;
             PhysicsBody referenceBody = flip ? b : a, incidentBody = flip ? a : b;
-            int edge = flip ? sb.Edge : sa.Edge;
+            int edge = flip ? sb.Edge : Edge;
             Vector2 incidentNormal = PhysicsMath.InverseRotate(PhysicsMath.Rotate(reference.Normals[edge], referenceBody.Angle), incidentBody.Angle);
             int incidentEdge = 0;
             float minimum = float.MaxValue;
@@ -82,15 +91,23 @@ namespace Ctr2.Engine.Physics
             float front = Vector2.Dot(normal, v1);
             clipped = Clip(clipped, -tangent, -Vector2.Dot(tangent, v1) + TotalRadius, edge);
             if (clipped.Count < 2)
+            {
                 return null;
+            }
+
             clipped = Clip(clipped, tangent, Vector2.Dot(tangent, v2) + TotalRadius, next);
             if (clipped.Count < 2)
+            {
                 return null;
+            }
+
             List<Point> points = [];
             foreach (ClipVertex vertex in clipped)
             {
                 if (Vector2.Dot(normal, vertex.Position) - front <= TotalRadius)
+                {
                     points.Add(new(ToLocal(incidentBody, vertex.Position), flip ? FlipFeature(vertex.Feature) : vertex.Feature));
+                }
             }
             return points.Count == 0 ? null : new(a, b, flip, localNormal, plane, points, friction, restitution);
         }
@@ -98,12 +115,18 @@ namespace Ctr2.Engine.Physics
         internal override void Restore(PhysicsContact previous)
         {
             if (previous is not PolygonBodyContact old)
+            {
                 return;
+            }
+
             foreach (Point point in points)
             {
                 Point? match = old.points.Find(p => p.Feature == point.Feature);
                 if (match == null)
+                {
                     continue;
+                }
+
                 point.NormalImpulse = match.NormalImpulse;
                 point.TangentImpulse = match.TangentImpulse;
             }
@@ -113,7 +136,7 @@ namespace Ctr2.Engine.Physics
         {
             foreach (Point point in points)
             {
-                var geometry = Geometry(point);
+                (Vector2 Clip, Vector2 Normal, float Distance) geometry = Geometry(point);
                 normal = faceB ? -geometry.Normal : geometry.Normal;
                 tangent = new(normal.Y, -normal.X);
                 Vector2 reference = geometry.Clip + ((Radius - geometry.Distance) * geometry.Normal);
@@ -132,7 +155,10 @@ namespace Ctr2.Engine.Physics
             }
             velocityCount = points.Count;
             if (velocityCount != 2)
+            {
                 return;
+            }
+
             float a1 = Cross(points[0].ArmA, normal), a2 = Cross(points[1].ArmA, normal);
             float b1 = Cross(points[0].ArmB, normal), b2 = Cross(points[1].ArmB, normal);
             k11 = a.InverseMass + b.InverseMass + (a.InverseInertia * a1 * a1) + (b.InverseInertia * b1 * b1);
@@ -147,7 +173,9 @@ namespace Ctr2.Engine.Physics
                 m22 = inverse * k11;
             }
             else
+            {
                 velocityCount = 1;
+            }
         }
 
         internal override void WarmStart()
@@ -199,7 +227,9 @@ namespace Ctr2.Engine.Physics
                     {
                         x1 = x2 = 0;
                         if (!(b1 >= 0 && b2 >= 0))
+                        {
                             return;
+                        }
                     }
                 }
             }
@@ -217,7 +247,7 @@ namespace Ctr2.Engine.Physics
             float minimum = 0;
             foreach (Point point in points)
             {
-                var geometry = Geometry(point);
+                (Vector2 Clip, Vector2 Normal, float Distance) geometry = Geometry(point);
                 Vector2 n = faceB ? -geometry.Normal : geometry.Normal;
                 float separation = geometry.Distance - Radius - Radius;
                 minimum = MathF.Min(minimum, separation);
@@ -243,7 +273,11 @@ namespace Ctr2.Engine.Physics
             return (clip, normal, Vector2.Dot(clip - plane, normal));
         }
 
-        private Vector2 RelativeVelocity(Point point) => b.Velocity + Cross(b.AngularVelocity, point.ArmB) - a.Velocity - Cross(a.AngularVelocity, point.ArmA);
+        private Vector2 RelativeVelocity(Point point)
+        {
+            return b.Velocity + Cross(b.AngularVelocity, point.ArmB) - a.Velocity - Cross(a.AngularVelocity, point.ArmA);
+        }
+
         private void Apply(Point point, Vector2 impulse)
         {
             a.Velocity -= a.InverseMass * impulse;
@@ -283,13 +317,19 @@ namespace Ctr2.Engine.Physics
                 current = after;
             }
             else
+            {
                 return (current, edge);
+            }
+
             for (int count = 0; count < a.Vertices.Count; count++)
             {
                 next = (edge + increment + a.Vertices.Count) % a.Vertices.Count;
                 float separation = EdgeSeparation(a, bodyA, next, b, bodyB);
                 if (separation <= current)
+                {
                     break;
+                }
+
                 edge = next;
                 current = separation;
             }
@@ -319,9 +359,15 @@ namespace Ctr2.Engine.Physics
             List<ClipVertex> output = [];
             float first = Vector2.Dot(normal, input[0].Position) - offset, second = Vector2.Dot(normal, input[1].Position) - offset;
             if (first <= 0)
+            {
                 output.Add(input[0]);
+            }
+
             if (second <= 0)
+            {
                 output.Add(input[1]);
+            }
+
             if (first * second < 0)
             {
                 float fraction = first / (first - second);
@@ -330,12 +376,36 @@ namespace Ctr2.Engine.Physics
             return output;
         }
 
-        private static int FlipFeature(int value) => ((value & 255) << 8) | ((value >> 8) & 255) | ((value & 0xff0000) << 8) | ((value >> 8) & 0xff0000);
-        private static Vector2 ToWorld(PhysicsBody body, Vector2 local) => body.Origin + PhysicsMath.Rotate(local, body.Angle);
-        private static Vector2 ToLocal(PhysicsBody body, Vector2 world) => PhysicsMath.InverseRotate(world - body.Origin, body.Angle);
-        private static Vector2 Normalize(Vector2 value) => (1 / value.Length()) * value;
-        private static float Cross(Vector2 a, Vector2 b) => (a.X * b.Y) - (a.Y * b.X);
-        private static Vector2 Cross(float value, Vector2 point) => new(-value * point.Y, value * point.X);
+        private static int FlipFeature(int value)
+        {
+            return ((value & 255) << 8) | ((value >> 8) & 255) | ((value & 0xff0000) << 8) | ((value >> 8) & 0xff0000);
+        }
+
+        private static Vector2 ToWorld(PhysicsBody body, Vector2 local)
+        {
+            return body.Origin + PhysicsMath.Rotate(local, body.Angle);
+        }
+
+        private static Vector2 ToLocal(PhysicsBody body, Vector2 world)
+        {
+            return PhysicsMath.InverseRotate(world - body.Origin, body.Angle);
+        }
+
+        private static Vector2 Normalize(Vector2 value)
+        {
+            return 1 / value.Length() * value;
+        }
+
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return (a.X * b.Y) - (a.Y * b.X);
+        }
+
+        private static Vector2 Cross(float value, Vector2 point)
+        {
+            return new(-value * point.Y, value * point.X);
+        }
+
         private sealed record ClipVertex(Vector2 Position, int Feature);
         private sealed class Point(Vector2 local, int feature)
         {
@@ -365,7 +435,7 @@ namespace Ctr2.Engine.Physics
                     area += triangle;
                     center += triangle * (1f / 3) * (Vector2.Zero + first + second);
                 }
-                Center = (1 / area) * center;
+                Center = 1 / area * center;
             }
         }
     }

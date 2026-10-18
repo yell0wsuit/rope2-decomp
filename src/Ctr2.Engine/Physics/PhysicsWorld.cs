@@ -35,7 +35,9 @@ namespace Ctr2.Engine.Physics
                 foreach (bool sensor in SensorFlags)
                 {
                     if (!sensor)
+                    {
                         return false;
+                    }
                 }
                 return true;
             }
@@ -93,7 +95,7 @@ namespace Ctr2.Engine.Physics
 
         /// <summary>Gets the inverse centroid moment of inertia of the owned fixtures.</summary>
         /// <value>Zero for static bodies.</value>
-        internal float InverseInertia => Mass <= 0 || FixedRotation ? 0 : PolygonFixtures.Count > 0 ? polygonInverseInertia * (polygonInitialMass / Mass) : 2 / (Mass * Radius * Radius);
+        internal float InverseInertia => Mass <= 0 || FixedRotation ? 0 : PolygonFixtures.Count > 0 ? field * (polygonInitialMass / Mass) : 2 / (Mass * Radius * Radius);
         /// <summary>Gets the circular fixture mass in kilograms; zero denotes a static body.</summary>
         /// <value>Density times circle area for a dynamic body.</value>
         public float Mass
@@ -248,7 +250,10 @@ namespace Ctr2.Engine.Physics
                 return false;
             }
             if (!joint.CollideConnected)
+            {
                 ChangeCollisionBlock(joint.A, joint.B, -1);
+            }
+
             return true;
         }
 
@@ -420,8 +425,11 @@ namespace Ctr2.Engine.Physics
             return joint;
         }
 
-        private static bool ValidAnchor(Vector2 value) => float.IsFinite(value.X) && float.IsFinite(value.Y) &&
+        private static bool ValidAnchor(Vector2 value)
+        {
+            return float.IsFinite(value.X) && float.IsFinite(value.Y) &&
             MathF.Abs(value.X) <= 10000 && MathF.Abs(value.Y) <= 10000;
+        }
 
         /// <summary>Traverses solid contacts before joints, preserving native body-edge and LIFO order.</summary>
         private List<List<PhysicsJoint>> SolverOrder(IReadOnlyList<PhysicsContact> active, out List<List<PhysicsContact>> contactIslands)
@@ -442,7 +450,9 @@ namespace Ctr2.Engine.Physics
             {
                 contactEdges[contact.Body].Add(contact);
                 if (contact.OtherBody != null)
+                {
                     contactEdges[contact.OtherBody].Add(contact);
+                }
             }
             foreach (List<PhysicsContact> edges in contactEdges.Values)
             {
@@ -457,7 +467,10 @@ namespace Ctr2.Engine.Physics
             {
                 PhysicsBody seed = bodies[i];
                 if (seed.Mass == 0 || !visited.Add(seed))
+                {
                     continue;
+                }
+
                 List<PhysicsJoint> ordered = [];
                 List<PhysicsContact> islandContacts = [];
                 islands.Add(ordered);
@@ -469,22 +482,32 @@ namespace Ctr2.Engine.Physics
                     foreach (PhysicsContact contact in contactEdges[body])
                     {
                         if (!seenContacts.Add(contact))
+                        {
                             continue;
+                        }
+
                         islandContacts.Add(contact);
                         PhysicsBody? other = contact.Body == body ? contact.OtherBody : contact.Body;
                         if (other != null && other.Mass > 0 && visited.Add(other))
+                        {
                             stack.Push(other);
+                        }
                     }
                     List<PhysicsJoint> connected = jointEdges[body];
                     for (int j = connected.Count - 1; j >= 0; j--)
                     {
                         PhysicsJoint joint = connected[j];
                         if (!seenJoints.Add(joint))
+                        {
                             continue;
+                        }
+
                         ordered.Add(joint);
                         PhysicsBody other = joint.A == body ? joint.B : joint.A;
                         if (other.Mass > 0 && visited.Add(other))
+                        {
                             stack.Push(other);
+                        }
                     }
                 }
             }

@@ -39,14 +39,14 @@ namespace Ctr2.Engine.Physics
         private List<PhysicsContact> UpdateTerrainContacts()
         {
             List<PhysicsContact> active = [];
-            foreach (var entry in contacts.ToArray())
+            foreach (KeyValuePair<(PhysicsBody, TerrainFixture, int), TerrainCandidate> entry in contacts.ToArray())
             {
                 TerrainCandidate candidate = entry.Value;
                 if (!ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter) ||
                     !broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
                 {
                     RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, false, true);
-                    contacts.Remove(entry.Key);
+                    _ = contacts.Remove(entry.Key);
                     continue;
                 }
                 PhysicsBody body = candidate.Body;

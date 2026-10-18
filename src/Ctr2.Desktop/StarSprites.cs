@@ -27,8 +27,8 @@ namespace Ctr2.Desktop
         {
             double time = tick * (double)PhysicsWorld.TimeStep;
             // Star::initWith and Windows x86 use three phases, plus a separate looping scale track.
-            double phase = idle.Duration > 0 ? (time + ((index % 3) * idle.Duration / 3)) % idle.Duration : 0;
-            float scale = idle.Duration > 0 ? .8f + .2f * (1 - MathF.Abs((float)(phase / idle.Duration * 2) - 1)) : .8f;
+            double phase = idle.Duration > 0 ? (time + (index % 3 * idle.Duration / 3)) % idle.Duration : 0;
+            float scale = idle.Duration > 0 ? .8f + (.2f * (1 - MathF.Abs((float)(phase / idle.Duration * 2) - 1))) : .8f;
             AnimationPreview animation = idle;
             double sceneTime = phase;
             if (star.CollectedAt is int contactTick)

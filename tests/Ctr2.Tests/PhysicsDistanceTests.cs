@@ -31,9 +31,16 @@ namespace Ctr2.Tests
             {
                 int currentSeries = row.GetProperty("Series").GetInt32();
                 if ((group != "warm" && group != "cache-jumps") || currentSeries != series)
+                {
                     cache.Reset();
+                }
+
                 series = currentSeries;
-                Vector2[] Vertices(string name) => [.. row.GetProperty(name).EnumerateArray().Select(v => new Vector2(v[0].GetSingle(), v[1].GetSingle()))];
+                Vector2[] Vertices(string name)
+                {
+                    return [.. row.GetProperty(name).EnumerateArray().Select(v => new Vector2(v[0].GetSingle(), v[1].GetSingle()))];
+                }
+
                 PhysicsDistanceTransform Transform(string name)
                 {
                     JsonElement t = row.GetProperty(name);
@@ -47,7 +54,10 @@ namespace Ctr2.Tests
                 JsonElement expected = row.GetProperty("Output");
                 float[] components = [actual.PointA.X, actual.PointA.Y, actual.PointB.X, actual.PointB.Y, actual.Distance];
                 for (int i = 0; i < components.Length; i++)
+                {
                     Near(expected[i].GetSingle(), components[i], $"{context}, component {i}");
+                }
+
                 Assert.Equal(expected[5].GetInt32(), actual.Iterations);
                 PhysicsSimplexState state = cache.Capture();
                 Near(row.GetProperty("Metric").GetSingle(), state.Metric, $"{context}, cache metric");
@@ -67,18 +77,18 @@ namespace Ctr2.Tests
             PhysicsDistanceProxy polygon = new(vertices, .002f);
             vertices[0] = new(99, 99);
             Assert.Equal(new(-1, -1), polygon.Vertices[0]);
-            Assert.Throws<NotSupportedException>(() => ((System.Collections.Generic.IList<Vector2>)polygon.Vertices)[0] = Vector2.Zero);
+            _ = Assert.Throws<NotSupportedException>(() => ((System.Collections.Generic.IList<Vector2>)polygon.Vertices)[0] = Vector2.Zero);
             PhysicsDistanceProxy point = new([Vector2.Zero], .2f);
             PhysicsSimplexCache cache = new();
-            PhysicsDistance.Measure(polygon, default, point, new(new(3, 0), 0), cache: cache);
+            _ = PhysicsDistance.Measure(polygon, default, point, new(new(3, 0), 0), cache: cache);
             PhysicsSimplexState snapshot = cache.Capture();
             PhysicsSupportPair[] indices = [.. snapshot.Vertices];
             Assert.NotEmpty(indices);
-            Assert.Throws<NotSupportedException>(() => ((System.Collections.Generic.IList<PhysicsSupportPair>)snapshot.Vertices)[0] = default);
+            _ = Assert.Throws<NotSupportedException>(() => ((System.Collections.Generic.IList<PhysicsSupportPair>)snapshot.Vertices)[0] = default);
             cache.Reset();
             Assert.Empty(cache.Capture().Vertices);
             Assert.Equal(0, cache.Capture().Metric);
-            PhysicsDistance.Measure(polygon, default, point, new(new(-3, 2), .5f), cache: cache);
+            _ = PhysicsDistance.Measure(polygon, default, point, new(new(-3, 2), .5f), cache: cache);
             Assert.True(indices.SequenceEqual(snapshot.Vertices));
         }
 
@@ -96,7 +106,7 @@ namespace Ctr2.Tests
         {
             PhysicsDistanceProxy point = new([Vector2.Zero], .1f);
             PhysicsSimplexCache cache = new();
-            PhysicsDistance.Measure(point, default, point, new(new(1, 0), 0), cache: cache);
+            _ = PhysicsDistance.Measure(point, default, point, new(new(1, 0), 0), cache: cache);
             PhysicsSimplexState before = cache.Capture();
             PhysicsDistanceTransform invalid = kind switch
             {
@@ -104,7 +114,7 @@ namespace Ctr2.Tests
                 1 => new(Vector2.Zero, float.PositiveInfinity),
                 _ => new(new(1000001, 0), 0)
             };
-            Assert.Throws<ArgumentOutOfRangeException>(() => PhysicsDistance.Measure(point, first ? invalid : default,
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => PhysicsDistance.Measure(point, first ? invalid : default,
                 point, first ? default : invalid, cache: cache));
             Assert.Equal(before.Metric, cache.Capture().Metric);
             Assert.True(before.Vertices.SequenceEqual(cache.Capture().Vertices));
@@ -117,12 +127,12 @@ namespace Ctr2.Tests
             PhysicsDistanceProxy polygon = new([new(-1, -1), new(1, -1), new(1, 1), new(-1, 1)], .002f);
             PhysicsDistanceProxy point = new([Vector2.Zero], .1f);
             PhysicsSimplexCache cache = new();
-            PhysicsDistance.Measure(polygon, default, point, new(new(3, 0), 0), cache: cache);
+            _ = PhysicsDistance.Measure(polygon, default, point, new(new(3, 0), 0), cache: cache);
             PhysicsSimplexState before = cache.Capture();
             Assert.Contains(before.Vertices, p => p.A > 0);
-            Assert.Throws<ArgumentException>(() => PhysicsDistance.Measure(point, default, point, default, cache: cache));
-            Assert.Throws<ArgumentNullException>(() => PhysicsDistance.Measure(null!, default, point, default, cache: cache));
-            Assert.Throws<ArgumentNullException>(() => PhysicsDistance.Measure(point, default, null!, default, cache: cache));
+            _ = Assert.Throws<ArgumentException>(() => PhysicsDistance.Measure(point, default, point, default, cache: cache));
+            _ = Assert.Throws<ArgumentNullException>(() => PhysicsDistance.Measure(null!, default, point, default, cache: cache));
+            _ = Assert.Throws<ArgumentNullException>(() => PhysicsDistance.Measure(point, default, null!, default, cache: cache));
             Assert.Equal(before.Metric, cache.Capture().Metric);
             Assert.True(before.Vertices.SequenceEqual(cache.Capture().Vertices));
             cache.Reset();
@@ -149,17 +159,21 @@ namespace Ctr2.Tests
         [Fact]
         public void InvalidProxiesAreRejected()
         {
-            Assert.Throws<ArgumentNullException>(() => new PhysicsDistanceProxy(null!, 0));
-            Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([], 0));
-            Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy(new Vector2[9], 0));
-            Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([new(float.NaN, 0)], 0));
-            Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([new(0, 1000001)], 0));
+            _ = Assert.Throws<ArgumentNullException>(() => new PhysicsDistanceProxy(null!, 0));
+            _ = Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([], 0));
+            _ = Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy(new Vector2[9], 0));
+            _ = Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([new(float.NaN, 0)], 0));
+            _ = Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([new(0, 1000001)], 0));
             foreach (float radius in new[] { -1, float.NaN, float.PositiveInfinity, 1000001 })
-                Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([Vector2.Zero], radius));
+            {
+                _ = Assert.Throws<ArgumentException>(() => new PhysicsDistanceProxy([Vector2.Zero], radius));
+            }
         }
 
-        private static void Near(float expected, float actual, string location) =>
+        private static void Near(float expected, float actual, string location)
+        {
             Assert.True(float.IsFinite(expected) && float.IsFinite(actual) && MathF.Abs(expected - actual) <= .000002f,
                 $"{location}: expected {expected}, actual {actual}");
+        }
     }
 }

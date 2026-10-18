@@ -19,7 +19,7 @@ namespace Ctr2.Tests
         {
             string root = Path.Combine(Path.GetTempPath(), "ctr2-audit-" + Guid.NewGuid());
             string maps = Path.Combine(root, "assets", "maps");
-            Directory.CreateDirectory(maps);
+            _ = Directory.CreateDirectory(maps);
             try
             {
                 File.WriteAllText(Path.Combine(maps, "sortedlist_desktop.xml"), "<filelist><pack id='1'><file short='b.xml'/><file short='missing.xml'/><file short='a.xml'/><file short='bad.xml'/><file short='a.xml'/></pack></filelist>");

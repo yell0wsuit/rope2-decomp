@@ -40,27 +40,37 @@ namespace Ctr2.Tests
                 body.Friction = friction;
                 int tag = label + 1;
                 int count = Math.Max(1, body.PolygonFixtures.Count);
-                fixtures.Add(body, Enumerable.Range(tag, count).ToArray());
+                fixtures.Add(body, [.. Enumerable.Range(tag, count)]);
                 label += count;
                 bodies.Add(tag, body);
                 return body;
             }
-            PhysicsBody Circle(float x, float y, float radius, float density, float gravity) =>
-                Register(world.AddCircle(new(x, y), radius, density, gravity), .3f);
-            PhysicsBody Box(float x, float y, float gravity, bool compound = true) =>
-                Register(world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), new(x, y), 1, gravity, compound: compound), .4f);
+            PhysicsBody Circle(float x, float y, float radius, float density, float gravity)
+            {
+                return Register(world.AddCircle(new(x, y), radius, density, gravity), .3f);
+            }
+
+            PhysicsBody Box(float x, float y, float gravity, bool compound = true)
+            {
+                return Register(world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), new(x, y), 1, gravity, compound: compound), .4f);
+            }
+
             int Floor(float y, float bottom, bool sensor)
             {
                 world.AddTerrain([new(-2, y), new(2, y), new(2, bottom), new(-2, bottom)], .3f, 0, sensor);
                 return ++label;
             }
-            void Mask(int fixture, ushort mask) => world.SetFixtureFilter(fixture, new(1, mask, 0));
+            void Mask(int fixture, ushort mask)
+            {
+                world.SetFixtureFilter(fixture, new(1, mask, 0));
+            }
+
             void Remove(PhysicsBody body)
             {
                 int tag = bodies.Single(b => b.Value == body).Key;
                 Assert.True(world.RemoveBody(body));
-                bodies.Remove(tag);
-                fixtures.Remove(body);
+                _ = bodies.Remove(tag);
+                _ = fixtures.Remove(body);
             }
             PhysicsBody first, second = null!;
             int ground = 0;
@@ -73,7 +83,7 @@ namespace Ctr2.Tests
             else if (scenario == "two-terrains")
             {
                 ground = Floor(.4f, .42f, true);
-                Floor(1, 1.02f, false);
+                _ = Floor(1, 1.02f, false);
                 first = Circle(0, 0, .15f, 1, 1);
             }
             else if (scenario == "circle-static")
@@ -94,7 +104,10 @@ namespace Ctr2.Tests
             }
             int firstLabel = fixtures[first][0];
             if (scenario is "compound-circle" or "compound-polygon" or "terrain-compound" or "terrain-after")
+            {
                 world.SetFixtureSensor(firstLabel, true);
+            }
+
             using JsonDocument reference = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "FixtureSensorReference.json")));
             int tick = 0;
             foreach (JsonElement row in reference.RootElement.EnumerateArray().Where(r => r.GetProperty("Scenario").GetString() == scenario))
@@ -108,15 +121,30 @@ namespace Ctr2.Tests
                         world.SetFixtureSensor(firstLabel + 1, true);
                     }
                     if (tick == 20)
+                    {
                         joint = world.AddRope(first, second, 10);
+                    }
+
                     if (tick == 30)
+                    {
                         Assert.True(world.Remove(joint!));
+                    }
+
                     if (tick == 35)
+                    {
                         world.SetFixtureFilter(firstLabel, world.GetFixtureFilter(firstLabel));
+                    }
+
                     if (tick == 45)
+                    {
                         first.IsSensor = true;
+                    }
+
                     if (tick == 55)
+                    {
                         first.IsSensor = false;
+                    }
+
                     if (tick == 65)
                     {
                         Remove(first);
@@ -128,13 +156,25 @@ namespace Ctr2.Tests
                 if (scenario == "terrain-toggle")
                 {
                     if (tick is 10 or 30)
+                    {
                         world.SetFixtureSensor(ground, true);
+                    }
+
                     if (tick is 20 or 40)
+                    {
                         world.SetFixtureSensor(ground, false);
+                    }
+
                     if (tick == 50)
+                    {
                         Mask(ground, 0);
+                    }
+
                     if (tick == 60)
+                    {
                         Mask(ground, ushort.MaxValue);
+                    }
+
                     if (tick == 65)
                     {
                         world.SetFixtureSensor(ground, true);
@@ -143,18 +183,32 @@ namespace Ctr2.Tests
                         firstLabel = fixtures[first][0];
                     }
                     if (tick == 75)
+                    {
                         world.SetFixtureSensor(ground, false);
+                    }
                 }
                 if (scenario == "terrain-compound")
                 {
                     if (tick == 10)
+                    {
                         world.SetFixtureSensor(firstLabel + 1, true);
+                    }
+
                     if (tick == 20)
+                    {
                         world.SetFixtureSensor(ground, true);
+                    }
+
                     if (tick == 30)
+                    {
                         first.IsSensor = false;
+                    }
+
                     if (tick == 40)
+                    {
                         world.SetFixtureSensor(ground, false);
+                    }
+
                     if (tick == 65)
                     {
                         Remove(first);
@@ -166,33 +220,64 @@ namespace Ctr2.Tests
                 if (scenario == "terrain-after")
                 {
                     if (tick is 10 or 60)
+                    {
                         world.SetFixtureSensor(ground, false);
+                    }
+
                     if (tick == 20)
+                    {
                         world.SetFixtureSensor(firstLabel, false);
+                    }
+
                     if (tick == 30)
+                    {
                         world.SetFixtureSensor(ground, true);
+                    }
+
                     if (tick == 40)
+                    {
                         first.IsSensor = true;
+                    }
+
                     if (tick == 50)
+                    {
                         world.SetFixtureSensor(firstLabel, false);
+                    }
                 }
                 if (scenario == "two-terrains")
                 {
                     if (tick == 30)
+                    {
                         world.SetFixtureSensor(1, false);
+                    }
+
                     if (tick == 70)
+                    {
                         first.IsSensor = true;
+                    }
                 }
                 if (scenario == "circle-static")
                 {
                     if (tick is 10 or 40)
+                    {
                         second.IsSensor = false;
+                    }
+
                     if (tick == 20)
+                    {
                         second.IsSensor = true;
+                    }
+
                     if (tick == 30)
+                    {
                         first.IsSensor = true;
+                    }
+
                     if (tick == 50)
+                    {
                         first.IsSensor = false;
+                    }
+
                     if (tick == 60)
                     {
                         second.IsSensor = true;
@@ -212,14 +297,20 @@ namespace Ctr2.Tests
                     PhysicsBody body = bodies[state[0].GetInt32()];
                     float[] actual = [body.Position.X, body.Position.Y, body.Velocity.X, body.Velocity.Y, body.Angle, body.AngularVelocity];
                     for (int i = 0; i < actual.Length; i++)
+                    {
                         Near(state[i + 1].GetSingle(), actual[i], .00002f, $"{scenario}, tick {tick}, body {state[0]}, component {i}");
+                    }
+
                     Assert.Equal(state[7].GetBoolean(), body.IsSensor);
                     Near(state[8].GetSingle(), body.Mass, .00002f, $"{scenario}, tick {tick}, mass");
                 }
-                var proxies = world.CaptureProxies();
+                IReadOnlyList<PhysicsProxyState> proxies = world.CaptureProxies();
                 Assert.Equal(proxies.Count, row.GetProperty("Flags").GetArrayLength());
                 foreach (JsonElement flag in row.GetProperty("Flags").EnumerateArray())
+                {
                     Assert.Equal(flag[1].GetBoolean(), world.GetFixtureSensor(flag[0].GetInt32()));
+                }
+
                 Assert.Equal(proxies.Count, row.GetProperty("Proxies").GetArrayLength());
                 int proxyIndex = 0;
                 foreach (JsonElement expected in row.GetProperty("Proxies").EnumerateArray())
@@ -229,7 +320,9 @@ namespace Ctr2.Tests
                     Assert.Equal(expected[1].GetInt32(), proxy.ProxyId);
                     float[] bounds = [proxy.Bounds.Lower.X, proxy.Bounds.Lower.Y, proxy.Bounds.Upper.X, proxy.Bounds.Upper.Y];
                     for (int i = 0; i < 4; i++)
+                    {
                         Near(expected[i + 2].GetSingle(), bounds[i], .000002f, $"{scenario}, tick {tick}, proxy {proxy.Fixture}, bound {i}");
+                    }
                 }
             }
             Assert.Equal(90, tick);
@@ -241,7 +334,7 @@ namespace Ctr2.Tests
             PhysicsWorld world = new();
             PhysicsBody body = world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), Vector2.Zero, 1, 0);
             float mass = body.Mass;
-            var proxies = world.CaptureProxies();
+            IReadOnlyList<PhysicsProxyState> proxies = world.CaptureProxies();
             world.SetFixtureSensor(1, true);
             Assert.False(body.IsSensor);
             Assert.True(world.GetFixtureSensor(1));
@@ -256,13 +349,16 @@ namespace Ctr2.Tests
             body.IsSensor = true;
             Assert.True(world.GetFixtureSensor(1) && world.GetFixtureSensor(2));
             for (int i = 0; i < 100; i++)
+            {
                 world.SetFixtureSensor(1, true);
+            }
+
             Assert.Equal(mass, body.Mass);
             Assert.True(proxies.SequenceEqual(world.CaptureProxies()));
-            Assert.Throws<KeyNotFoundException>(() => world.SetFixtureSensor(0, true));
+            _ = Assert.Throws<KeyNotFoundException>(() => world.SetFixtureSensor(0, true));
             Assert.True(world.RemoveBody(body));
-            Assert.Throws<KeyNotFoundException>(() => world.GetFixtureSensor(1));
-            Assert.Throws<KeyNotFoundException>(() => world.SetFixtureSensor(2, false));
+            _ = Assert.Throws<KeyNotFoundException>(() => world.GetFixtureSensor(1));
+            _ = Assert.Throws<KeyNotFoundException>(() => world.SetFixtureSensor(2, false));
             body.IsSensor = false;
             Assert.False(body.IsSensor);
             body.IsSensor = true;
@@ -283,11 +379,11 @@ namespace Ctr2.Tests
                 RecordContactEvents = true
             };
             world.AddTerrain([new(-2, 0), new(2, 0), new(2, 1), new(-2, 1)], .3f, 0);
-            world.AddCircle(new(0, -.1f), .15f, 1, 0);
+            _ = world.AddCircle(new(0, -.1f), .15f, 1, 0);
             world.Step();
-            var begin = world.DrainContactEvents();
-            var before = world.CaptureFixtureContacts();
-            var proxies = world.CaptureProxies();
+            IReadOnlyList<PhysicsContactEvent> begin = world.DrainContactEvents();
+            IReadOnlyList<PhysicsFixtureContactState> before = world.CaptureFixtureContacts();
+            IReadOnlyList<PhysicsProxyState> proxies = world.CaptureProxies();
             Assert.False(Assert.Single(before).IsSensor);
             Assert.Equal(1, Assert.Single(before).ManifoldPoints);
             world.SetFixtureSensor(1, true);
@@ -353,7 +449,10 @@ namespace Ctr2.Tests
             world.AddTerrain([new(-2, height), new(2, height), new(2, height + .02f), new(-2, height + .02f)], 0, .9f, initial);
             world.AddTerrain([new(-2, 1), new(2, 1), new(2, 1.02f), new(-2, 1.02f)], 0, 0);
             if (!initial)
+            {
                 world.SetFixtureSensor(1, true);
+            }
+
             PhysicsBody body = world.AddCircle(Vector2.Zero, .16f, .5f, 800);
             world.Step();
             Assert.InRange(body.Position.Y, .83f, .85f);
@@ -389,19 +488,21 @@ namespace Ctr2.Tests
             {
                 world.AddTerrain([new(-2, 0), new(2, 0), new(2, 1), new(-2, 1)], .3f, 0, true);
                 world.AddTerrain([new(-2, 0), new(2, 0), new(2, 1), new(-2, 1)], .3f, 0);
-                world.AddCircle(new(0, -.1f), .15f, 1, 0);
+                _ = world.AddCircle(new(0, -.1f), .15f, 1, 0);
             }
             else
             {
-                world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), Vector2.Zero, 1, 0);
-                world.AddCircle(new(.1f, .05f), .25f, 0, 0);
+                _ = world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), Vector2.Zero, 1, 0);
+                _ = world.AddCircle(new(.1f, .05f), .25f, 0, 0);
                 world.SetFixtureSensor(1, true);
             }
             world.Step();
             Assert.Equal(2, world.CaptureFixtureContacts().Count);
             Assert.Equal(1, world.CaptureFixtureContacts().Count(c => c.IsSensor));
             if (terrain)
+            {
                 Assert.Equal(2, Assert.Single(world.CaptureTerrainContacts()).TerrainFixture);
+            }
             else
             {
                 Assert.Equal(2, Assert.Single(world.CaptureBodyContacts()).FirstFixture);
@@ -409,8 +510,10 @@ namespace Ctr2.Tests
             }
         }
 
-        private static void Near(float expected, float actual, float tolerance, string location) =>
+        private static void Near(float expected, float actual, float tolerance, string location)
+        {
             Assert.True(float.IsFinite(expected) && float.IsFinite(actual) && MathF.Abs(expected - actual) <= tolerance,
                 $"{location}: expected {expected}, actual {actual}");
+        }
     }
 }

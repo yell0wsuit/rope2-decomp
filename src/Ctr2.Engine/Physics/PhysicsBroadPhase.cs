@@ -28,12 +28,24 @@ namespace Ctr2.Engine.Physics
     /// <param name="Upper">Maximum coordinates.</param>
     public readonly record struct PhysicsAabb(Vector2 Lower, Vector2 Upper)
     {
-        internal float Perimeter => 2 * ((Upper.X - Lower.X) + (Upper.Y - Lower.Y));
-        internal bool Contains(PhysicsAabb other) => Lower.X <= other.Lower.X && Lower.Y <= other.Lower.Y &&
+        internal float Perimeter => 2 * (Upper.X - Lower.X + (Upper.Y - Lower.Y));
+        internal bool Contains(PhysicsAabb other)
+        {
+            return Lower.X <= other.Lower.X && Lower.Y <= other.Lower.Y &&
             other.Upper.X <= Upper.X && other.Upper.Y <= Upper.Y;
-        internal bool Overlaps(PhysicsAabb other) => !(other.Lower.X - Upper.X > 0 || other.Lower.Y - Upper.Y > 0 ||
-            Lower.X - other.Upper.X > 0 || Lower.Y - other.Upper.Y > 0);
-        internal static PhysicsAabb Combine(PhysicsAabb a, PhysicsAabb b) => new(Vector2.Min(a.Lower, b.Lower), Vector2.Max(a.Upper, b.Upper));
+        }
+
+        internal bool Overlaps(PhysicsAabb other)
+        {
+            return !(other.Lower.X - Upper.X > 0 || other.Lower.Y - Upper.Y > 0 ||
+                    Lower.X - other.Upper.X > 0 || Lower.Y - other.Upper.Y > 0);
+        }
+
+        internal static PhysicsAabb Combine(PhysicsAabb a, PhysicsAabb b)
+        {
+            return new(Vector2.Min(a.Lower, b.Lower), Vector2.Max(a.Upper, b.Upper));
+        }
+
         internal void Validate()
         {
             if (!ValidVector(Lower) || !ValidVector(Upper) || Lower.X > Upper.X || Lower.Y > Upper.Y)
@@ -41,8 +53,11 @@ namespace Ctr2.Engine.Physics
                 throw new ArgumentOutOfRangeException(nameof(Lower), "Invalid finite broadphase bounds.");
             }
         }
-        internal static bool ValidVector(Vector2 point) => float.IsFinite(point.X) && float.IsFinite(point.Y) &&
+        internal static bool ValidVector(Vector2 point)
+        {
+            return float.IsFinite(point.X) && float.IsFinite(point.Y) &&
             MathF.Abs(point.X) <= 1000000 && MathF.Abs(point.Y) <= 1000000;
+        }
     }
 
     /// <summary>A candidate's user-data values, ordered by canonical proxy IDs rather than data values.</summary>
@@ -88,7 +103,7 @@ namespace Ctr2.Engine.Physics
         public void DestroyProxy(int proxyId)
         {
             CheckMutation();
-            tree.Leaf(proxyId);
+            _ = tree.Leaf(proxyId);
             int pending = moves.IndexOf(proxyId);
             if (pending >= 0)
             {
@@ -102,7 +117,7 @@ namespace Ctr2.Engine.Physics
         public bool MoveProxy(int proxyId, PhysicsAabb bounds, Vector2 displacement)
         {
             CheckMutation();
-            tree.Leaf(proxyId);
+            _ = tree.Leaf(proxyId);
             bounds.Validate();
             if (!PhysicsAabb.ValidVector(displacement))
             {
@@ -125,7 +140,7 @@ namespace Ctr2.Engine.Physics
         public void TouchProxy(int proxyId)
         {
             CheckMutation();
-            tree.Leaf(proxyId);
+            _ = tree.Leaf(proxyId);
             CheckMoveCapacity();
             moves.Add(proxyId);
         }
@@ -134,7 +149,7 @@ namespace Ctr2.Engine.Physics
         internal void TouchProxyOnce(int proxyId)
         {
             CheckMutation();
-            tree.Leaf(proxyId);
+            _ = tree.Leaf(proxyId);
             if (!moves.Contains(proxyId))
             {
                 TouchProxy(proxyId);
@@ -142,9 +157,16 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Gets the stored predicted box of a live proxy.</summary>
-        public PhysicsAabb GetBounds(int proxyId) => tree.Leaf(proxyId).Bounds;
+        public PhysicsAabb GetBounds(int proxyId)
+        {
+            return tree.Leaf(proxyId).Bounds;
+        }
+
         /// <summary>Gets the integer user data of a live proxy.</summary>
-        public int GetUserData(int proxyId) => tree.Leaf(proxyId).Data;
+        public int GetUserData(int proxyId)
+        {
+            return tree.Leaf(proxyId).Data;
+        }
 
         /// <summary>Snapshots overlapping proxy IDs in native LIFO tree traversal order.</summary>
         public IReadOnlyList<int> Query(PhysicsAabb bounds)
@@ -179,7 +201,7 @@ namespace Ctr2.Engine.Physics
             {
                 if (id != -1)
                 {
-                    tree.Leaf(id);
+                    _ = tree.Leaf(id);
                 }
             }
             updating = true;
@@ -254,7 +276,10 @@ namespace Ctr2.Engine.Physics
             private int root = -1;
             private int free;
             internal int Height => root == -1 ? 0 : nodes[root].Height;
-            internal Tree() => InitializeFree(0);
+            internal Tree()
+            {
+                InitializeFree(0);
+            }
 
             private void InitializeFree(int start)
             {
@@ -295,11 +320,9 @@ namespace Ctr2.Engine.Physics
 
             internal Node Leaf(int id)
             {
-                if ((uint)id >= nodes.Length || nodes[id].Height < 0 || nodes[id].Child1 != -1)
-                {
-                    throw new ArgumentOutOfRangeException(nameof(id), "Expected a live broadphase leaf.");
-                }
-                return nodes[id];
+                return (uint)id >= nodes.Length || nodes[id].Height < 0 || nodes[id].Child1 != -1
+                    ? throw new ArgumentOutOfRangeException(nameof(id), "Expected a live broadphase leaf.")
+                    : nodes[id];
             }
 
             internal int Create(PhysicsAabb bounds, int data)

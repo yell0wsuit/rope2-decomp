@@ -27,7 +27,7 @@ namespace Ctr2.Tests
         {
             string root = Path.Combine(Path.GetTempPath(), "ctr2-art-" + Guid.NewGuid());
             string assets = Path.Combine(root, "assets"), maps = Path.Combine(assets, "maps");
-            Directory.CreateDirectory(maps);
+            _ = Directory.CreateDirectory(maps);
             try
             {
                 File.WriteAllText(Path.Combine(maps, "sortedlist_desktop.xml"), "<filelist><pack id='1'><file short='a.xml'/><file short='a.xml'/></pack></filelist>");
@@ -66,10 +66,17 @@ namespace Ctr2.Tests
                     using SKData png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
                     File.WriteAllBytes(Path.Combine(assets, name + ".png"), png.ToArray());
                 }
-                string Hash(string name) => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(assets, name + ".png"))));
-                ResourceEntry Image(int id, string name, int selected, float density, int quads = 1) =>
-                    new(id, name + ".png", 0, selected, density, name == "back" ? 24 : 8, 8,
-                        [.. Enumerable.Range(0, quads).Select(_ => new ResourceQuad(0, 0, name == "back" ? 24 : 8, 8, 0, 0))], Hash(name));
+                string Hash(string name)
+                {
+                    return Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(Path.Combine(assets, name + ".png"))));
+                }
+
+                ResourceEntry Image(int id, string name, int selected, float density, int quads = 1)
+                {
+                    return new(id, name + ".png", 0, selected, density, name == "back" ? 24 : 8, 8,
+                                        [.. Enumerable.Range(0, quads).Select(_ => new ResourceQuad(0, 0, name == "back" ? 24 : 8, 8, 0, 0))], Hash(name));
+                }
+
                 ResourceCatalog catalog = new(1, "synthetic", "", [
                     new(85, "character.pb", 7, 2, null, 0, 0, []), new(95, "star.pb", 7, 2, null, 0, 0, []),
                     new(7, "star.png", 0, 2, 1, 8, 8, [new(0, 0, 8, 8, 0, 0), new(8, 0, 8, 8, 0, 0)], Hash("star")),
@@ -121,7 +128,7 @@ namespace Ctr2.Tests
                 {
                     preview.Session.Step();
                 }
-                Assert.Single(preview.Simulation.StarCollections);
+                _ = Assert.Single(preview.Simulation.StarCollections);
                 preview.Draw(destination, width, height, 1000.043);
                 Assert.Equal(SKColors.Magenta, Pixel(400, 200));
                 for (int i = 0; i < 30; i++)

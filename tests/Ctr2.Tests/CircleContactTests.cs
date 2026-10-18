@@ -45,18 +45,18 @@ namespace Ctr2.Tests
             PhysicsJoint? joint = null;
             if (scenario is "static" or "bounce" or "glancing" or "material")
             {
-                Add(0, 1, .6f, 0, 0, .6f, scenario == "bounce" ? .8f : 0);
-                Add(scenario is "glancing" or "material" ? .3f : 0, -.4f, .25f, .5f, 1, .6f);
+                _ = Add(0, 1, .6f, 0, 0, .6f, scenario == "bounce" ? .8f : 0);
+                _ = Add(scenario is "glancing" or "material" ? .3f : 0, -.4f, .25f, .5f, 1, .6f);
             }
             if (scenario == "dynamic")
             {
-                Add(0, .6f, .3f, 2, 0);
-                Add(.1f, -.3f, .25f, .5f, 1);
+                _ = Add(0, .6f, .3f, 2, 0);
+                _ = Add(.1f, -.3f, .25f, .5f, 1);
             }
             if (scenario is "coincident" or "tangent" or "refilter")
             {
-                Add(0, 0, .3f, 1, 0);
-                Add(scenario == "coincident" ? 0 : scenario == "tangent" ? .6f : .4f, 0, .3f, 2, 0);
+                _ = Add(0, 0, .3f, 1, 0);
+                _ = Add(scenario == "coincident" ? 0 : scenario == "tangent" ? .6f : .4f, 0, .3f, 2, 0);
             }
             if (scenario is "stack" or "joint")
             {
@@ -64,15 +64,15 @@ namespace Ctr2.Tests
                 label++;
                 if (scenario == "stack")
                 {
-                    Add(0, 1, .25f, 1, .3f);
-                    Add(0, .5f, .25f, 1, .6f);
-                    Add(0, 0, .25f, 1, 1);
+                    _ = Add(0, 1, .25f, 1, .3f);
+                    _ = Add(0, .5f, .25f, 1, .6f);
+                    _ = Add(0, 0, .25f, 1, 1);
                 }
                 else
                 {
                     PhysicsBody a = Add(-.2f, .8f, .3f, 1, .3f);
                     PhysicsBody b = Add(.2f, .8f, .3f, 1, .3f);
-                    Add(0, 0, .25f, .5f, 1);
+                    _ = Add(0, 0, .25f, .5f, 1);
                     joint = world.AddRope(a, b, .5f);
                 }
             }
@@ -89,14 +89,20 @@ namespace Ctr2.Tests
                 if (scenario == "refilter")
                 {
                     if (tick == 21)
+                    {
                         joint = world.AddRope(bodies[1], bodies[2], 10);
+                    }
+
                     if (tick == 41)
+                    {
                         Assert.True(world.Remove(joint!));
+                    }
+
                     if (tick == 61)
                     {
                         Assert.True(world.RemoveBody(bodies[2]));
-                        bodies.Remove(2);
-                        Add(.4f, 0, .3f, 2, 0);
+                        _ = bodies.Remove(2);
+                        _ = Add(.4f, 0, .3f, 2, 0);
                     }
                 }
                 world.Step();
@@ -132,8 +138,8 @@ namespace Ctr2.Tests
             {
                 ContinuousPhysics = false
             };
-            statics.AddCircle(Vector2.Zero, .6f, 0, 0);
-            statics.AddCircle(new(.7f, 0), .25f, 0, 0);
+            _ = statics.AddCircle(Vector2.Zero, .6f, 0, 0);
+            _ = statics.AddCircle(new(.7f, 0), .25f, 0, 0);
             statics.Step();
             Assert.Empty(statics.CaptureBodyContacts());
 
@@ -141,7 +147,7 @@ namespace Ctr2.Tests
             {
                 ContinuousPhysics = false
             };
-            world.AddCircle(Vector2.Zero, .6f, 0, 0);
+            _ = world.AddCircle(Vector2.Zero, .6f, 0, 0);
             PhysicsBody body = world.AddCircle(new(.7f, 0), .25f, 1, 0);
             body.IsSensor = true;
             world.Step();
@@ -149,12 +155,12 @@ namespace Ctr2.Tests
             Assert.Equal(new Vector2(.7f, 0), body.Position);
             body.IsSensor = false;
             world.Step();
-            var snapshot = world.CaptureBodyContacts();
+            IReadOnlyList<PhysicsBodyContactState> snapshot = world.CaptureBodyContacts();
             Assert.True(Assert.Single(snapshot).Touching);
             Assert.True(body.Position.X > .7f);
             Assert.True(world.RemoveBody(body));
             Assert.Empty(world.CaptureBodyContacts());
-            Assert.Single(snapshot);
+            _ = Assert.Single(snapshot);
         }
 
         /// <summary>A shared static circle must not force independent moving bodies to share convergence.</summary>
@@ -167,22 +173,25 @@ namespace Ctr2.Tests
                 {
                     ContinuousPhysics = false
                 };
-                world.AddCircle(new(0, 1), .6f, 0, 0);
+                _ = world.AddCircle(new(0, 1), .6f, 0, 0);
                 PhysicsBody measured = world.AddCircle(new(.4f, .3f), .25f, 1, .7f);
                 if (difficult)
-                    world.AddCircle(new(0, 1), .25f, 1, 0);
+                {
+                    _ = world.AddCircle(new(0, 1), .25f, 1, 0);
+                }
+
                 return (world, measured);
             }
-            var isolated = Create(false);
-            var together = Create(true);
+            (PhysicsWorld World, PhysicsBody Measured) = Create(false);
+            (PhysicsWorld World, PhysicsBody Measured) together = Create(true);
             for (int tick = 0; tick < 180; tick++)
             {
-                isolated.World.Step();
+                World.Step();
                 together.World.Step();
-                Assert.Equal(isolated.Measured.Position, together.Measured.Position);
-                Assert.Equal(isolated.Measured.Velocity, together.Measured.Velocity);
-                Assert.Equal(isolated.Measured.Angle, together.Measured.Angle);
-                Assert.Equal(isolated.Measured.AngularVelocity, together.Measured.AngularVelocity);
+                Assert.Equal(Measured.Position, together.Measured.Position);
+                Assert.Equal(Measured.Velocity, together.Measured.Velocity);
+                Assert.Equal(Measured.Angle, together.Measured.Angle);
+                Assert.Equal(Measured.AngularVelocity, together.Measured.AngularVelocity);
             }
         }
 
@@ -203,11 +212,16 @@ namespace Ctr2.Tests
             Assert.True(world.Remove(first));
             Assert.False(world.Remove(first));
             if (removals == 2)
+            {
                 Assert.True(world.Remove(second));
+            }
+
             world.Step();
             Assert.Equal(touching, world.CaptureBodyContacts().Any(c => c.Touching));
             if (!touching)
+            {
                 Assert.Equal(new Vector2(.4f, 0), b.Position);
+            }
         }
     }
 }

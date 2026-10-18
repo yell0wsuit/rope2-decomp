@@ -54,22 +54,30 @@ namespace Ctr2.Tests
             }
             if (scenario == "topology")
             {
-                Box(0, 0, .3f, .2f, 1, 0);
-                Box(.5f, 0, .3f, .2f, 1, 0);
+                _ = Box(0, 0, .3f, .2f, 1, 0);
+                _ = Box(.5f, 0, .3f, .2f, 1, 0);
             }
             else if (scenario == "stack")
             {
-                Box(0, 1.4f, .3f, .2f, 1, .3f);
-                Box(0, .95f, .3f, .2f, 1, .6f);
-                Box(0, .5f, .3f, .2f, 1, 1);
+                _ = Box(0, 1.4f, .3f, .2f, 1, .3f);
+                _ = Box(0, .95f, .3f, .2f, 1, .6f);
+                _ = Box(0, .5f, .3f, .2f, 1, 1);
             }
             else
             {
-                void Bottom() => Box(0, 1, .6f, .2f, 2, 0, scenario == "tilted" ? -.1f : 0,
-                    fixedRotation: scenario == "fixed", compound: scenario == "compound", restitution: scenario == "bounce" ? .8f : 0);
-                void Top() => Box(scenario == "tilted" ? .15f : 0, 0, scenario == "narrow" ? .001f : .25f, .2f, .5f, 1,
-                    scenario is "tilted" or "offset" or "fixed" ? .3f : 0,
-                    compound: scenario is "compound" or "offset", offset: scenario == "offset");
+                void Bottom()
+                {
+                    _ = Box(0, 1, .6f, .2f, 2, 0, scenario == "tilted" ? -.1f : 0,
+                        fixedRotation: scenario == "fixed", compound: scenario == "compound", restitution: scenario == "bounce" ? .8f : 0);
+                }
+
+                void Top()
+                {
+                    _ = Box(scenario == "tilted" ? .15f : 0, 0, scenario == "narrow" ? .001f : .25f, .2f, .5f, 1,
+                        scenario is "tilted" or "offset" or "fixed" ? .3f : 0,
+                        compound: scenario is "compound" or "offset", offset: scenario == "offset");
+                }
+
                 if (scenario == "reverse")
                 {
                     Top();
@@ -89,8 +97,8 @@ namespace Ctr2.Tests
                 if (scenario == "topology" && tick == 31)
                 {
                     Assert.True(world.RemoveBody(bodies[1]));
-                    bodies.Remove(1);
-                    Box(0, 0, .3f, .2f, 1, 0);
+                    _ = bodies.Remove(1);
+                    _ = Box(0, 0, .3f, .2f, 1, 0);
                 }
                 world.Step();
                 PhysicsBodyContactState[] pairs = [.. row.GetProperty("BodyContacts").EnumerateArray().Select(c =>
@@ -132,8 +140,8 @@ namespace Ctr2.Tests
                 ContinuousPhysics = false
             };
             ConvexPolygon shape = new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]);
-            world.AddPolygon(shape, Vector2.Zero, 1, 0, compound: false);
-            world.AddPolygon(shape, new(0, centerY), 1, 0, compound: false);
+            _ = world.AddPolygon(shape, Vector2.Zero, 1, 0, compound: false);
+            _ = world.AddPolygon(shape, new(0, centerY), 1, 0, compound: false);
             world.Step();
             Assert.Equal(touching, world.CaptureBodyContacts().Any(c => c.Touching));
             Assert.Equal(touching ? 2 : 0, world.CaptureBodyContactFeatures().Count);
@@ -147,7 +155,7 @@ namespace Ctr2.Tests
             {
                 ContinuousPhysics = false
             };
-            world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), Vector2.Zero, 1, 0);
+            _ = world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]), Vector2.Zero, 1, 0);
             world.Step();
             Assert.Empty(world.CaptureBodyContacts());
             Assert.Empty(world.CaptureBodyContactFeatures());
@@ -180,10 +188,10 @@ namespace Ctr2.Tests
             world.Step();
             Assert.Empty(world.CaptureBodyContacts());
             Assert.True(world.RemoveBody(first));
-            world.AddPolygon(shape, Vector2.Zero, 1, 0, compound: false);
+            _ = world.AddPolygon(shape, Vector2.Zero, 1, 0, compound: false);
             world.Step();
             Assert.Equal(new PhysicsBodyContactState(3, 2, 2, true), Assert.Single(world.CaptureBodyContacts()));
-            var features = world.CaptureBodyContactFeatures();
+            IReadOnlyList<PhysicsContactFeatureState> features = world.CaptureBodyContactFeatures();
             Assert.Equal(2, features.Count);
             Assert.True(world.RemoveBody(second));
             Assert.Empty(world.CaptureBodyContactFeatures());

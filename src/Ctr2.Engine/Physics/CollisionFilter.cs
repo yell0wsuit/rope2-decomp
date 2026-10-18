@@ -19,7 +19,10 @@ namespace Ctr2.Engine.Physics
         /// <param name="fixture">An active fixture label from CaptureProxies.</param>
         /// <returns>The fixture's current filter value.</returns>
         /// <exception cref="KeyNotFoundException">The fixture label is unknown or retired.</exception>
-        public PhysicsCollisionFilter GetFixtureFilter(int fixture) => proxies[fixture].Filter;
+        public PhysicsCollisionFilter GetFixtureFilter(int fixture)
+        {
+            return proxies[fixture].Filter;
+        }
 
         /// <summary>Changes one fixture's filter; contact changes take effect during later world updates.</summary>
         /// <param name="fixture">An active fixture label from CaptureProxies.</param>
@@ -34,8 +37,10 @@ namespace Ctr2.Engine.Physics
             proxy.Filter = filter;
         }
 
-        private static bool ShouldCollide(PhysicsCollisionFilter a, PhysicsCollisionFilter b) =>
-            a.GroupIndex != 0 && a.GroupIndex == b.GroupIndex ? a.GroupIndex > 0 :
+        private static bool ShouldCollide(PhysicsCollisionFilter a, PhysicsCollisionFilter b)
+        {
+            return a.GroupIndex != 0 && a.GroupIndex == b.GroupIndex ? a.GroupIndex > 0 :
             (a.MaskBits & b.CategoryBits) != 0 && (b.MaskBits & a.CategoryBits) != 0;
+        }
     }
 }

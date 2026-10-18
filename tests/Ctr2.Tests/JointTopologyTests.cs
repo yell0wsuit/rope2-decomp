@@ -54,9 +54,13 @@ namespace Ctr2.Tests
                 bodies.Add(body);
                 return body;
             }
-            PhysicsJoint Connect(PhysicsBody first, PhysicsBody second, float length, Vector2 a, Vector2 b) => spring
+            PhysicsJoint Connect(PhysicsBody first, PhysicsBody second, float length, Vector2 a, Vector2 b)
+            {
+                return spring
                 ? world.AddSpring(first, second, length, 5, .3f, a, b)
                 : world.AddRope(first, second, length, a, b);
+            }
+
             PhysicsBody a = Make(Vector2.Zero, false, false);
             PhysicsBody b = Make(singular ? Vector2.Zero : tiny ? new(0, .0005f) : new(.7f, .5f), true, polygon);
             Vector2 localA = polygon ? new(.12f, .04f) : Vector2.Zero;

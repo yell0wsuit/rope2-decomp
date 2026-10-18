@@ -8,7 +8,7 @@ namespace Ctr2.Engine.Physics
     public sealed partial class PhysicsBody
     {
         private readonly float polygonInitialMass;
-        private readonly float polygonInverseInertia;
+
         /// <summary>Gets immutable local convex fixtures, in creation order.</summary>
         /// <value>Empty for circles; otherwise the compound triangle or single convex fixture geometry.</value>
         public IReadOnlyList<ConvexPolygon> PolygonFixtures
@@ -86,7 +86,7 @@ namespace Ctr2.Engine.Physics
                 throw new ArgumentException("Invalid compound polygon mass or inertia.");
             }
             polygonInitialMass = Mass;
-            polygonInverseInertia = 1 / inertia;
+            InverseInertia = 1 / inertia;
             FixedRotation = fixedRotation;
             Angle = angle;
             Position = origin + PhysicsMath.Rotate(LocalCenter, angle);

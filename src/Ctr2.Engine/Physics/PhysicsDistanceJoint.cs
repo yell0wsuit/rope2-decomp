@@ -155,7 +155,10 @@ namespace Ctr2.Engine.Physics
             B.AngularVelocity += B.InverseInertia * Cross(armB, value);
         }
 
-        private static float Cross(Vector2 a, Vector2 b) => (a.X * b.Y) - (a.Y * b.X);
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return (a.X * b.Y) - (a.Y * b.X);
+        }
 
         private static Vector2 Rotate(Vector2 value, float angle)
         {

@@ -73,17 +73,17 @@ namespace Ctr2.Engine.Physics
         /// <summary>Whether angular limits are enabled.</summary>
         public bool LimitEnabled
         {
-            get => limitEnabled;
+            get;
             set
             {
-                if (value != limitEnabled)
+                if (value != field)
                 {
-                    limitEnabled = value;
+                    field = value;
                     impulse.Z = 0;
                 }
             }
         }
-        private bool limitEnabled;
+
         /// <summary>Lower angle in radians.</summary>
         public float LowerAngle
         {
@@ -102,24 +102,27 @@ namespace Ctr2.Engine.Physics
         /// <summary>Desired relative angular speed in radians per second.</summary>
         public float MotorSpeed
         {
-            get => motorSpeed; set => motorSpeed = Parameter(value);
+            get; set => field = Parameter(value);
         }
-        private float motorSpeed;
+
         /// <summary>Nonnegative torque bound in newton meters.</summary>
         public float MaxMotorTorque
         {
-            get => maxMotorTorque;
+            get;
             set
             {
-                Parameter(value);
+                _ = Parameter(value);
                 if (value < 0)
+                {
                     throw new ArgumentOutOfRangeException(nameof(value));
-                maxMotorTorque = value;
+                }
+
+                field = value;
             }
         }
-        private float maxMotorTorque;
+
         /// <summary>Motor torque at the fixed timestep.</summary>
-        public float MotorTorque => (1 / PhysicsWorld.TimeStep) * motorImpulse;
+        public float MotorTorque => 1 / PhysicsWorld.TimeStep * motorImpulse;
         /// <summary>Limit state from the last initialization.</summary>
         public PhysicsJointLimitState LimitState
         {
@@ -130,18 +133,21 @@ namespace Ctr2.Engine.Physics
         /// <inheritdoc/>
         public override Vector2 AnchorB => B.Origin + PhysicsMath.Rotate(LocalAnchorB, B.Angle);
         /// <inheritdoc/>
-        public override Vector2 ReactionForce => (1 / PhysicsWorld.TimeStep) * new Vector2(impulse.X, impulse.Y);
+        public override Vector2 ReactionForce => 1 / PhysicsWorld.TimeStep * new Vector2(impulse.X, impulse.Y);
         /// <inheritdoc/>
-        public override float ReactionTorque => (1 / PhysicsWorld.TimeStep) * impulse.Z;
+        public override float ReactionTorque => 1 / PhysicsWorld.TimeStep * impulse.Z;
         /// <summary>Changes ordered lower and upper angles.</summary>
         /// <param name="lower">Lower angle in radians.</param>
         /// <param name="upper">Upper angle in radians.</param>
         public void SetLimits(float lower, float upper)
         {
-            Parameter(lower);
-            Parameter(upper);
+            _ = Parameter(lower);
+            _ = Parameter(upper);
             if (lower > upper)
+            {
                 throw new ArgumentOutOfRangeException(nameof(lower));
+            }
+
             if (lower != LowerAngle || upper != UpperAngle)
             {
                 LowerAngle = lower;
@@ -149,8 +155,12 @@ namespace Ctr2.Engine.Physics
                 impulse.Z = 0;
             }
         }
-        private static float Parameter(float value) => float.IsFinite(value) && MathF.Abs(value) <= 1000000 ? value :
+        private static float Parameter(float value)
+        {
+            return float.IsFinite(value) && MathF.Abs(value) <= 1000000 ? value :
             throw new ArgumentOutOfRangeException(nameof(value));
+        }
+
         internal PhysicsRevoluteJoint(PhysicsBody a, PhysicsBody b, PhysicsRevoluteDefinition definition) : base(a, b, definition.CollideConnected)
         {
             LocalAnchorA = definition.LocalAnchorA;
@@ -167,8 +177,8 @@ namespace Ctr2.Engine.Physics
         private Vector2 armA, armB;
         private float inverseMassA, inverseMassB, inverseInertiaA, inverseInertiaB, motorMass;
         private Matrix33 mass;
-        private const float AngularSlop = (1f / 180) * MathF.PI;
-        private const float MaxAngularCorrection = (8f / 180) * MathF.PI;
+        private const float AngularSlop = 1f / 180 * MathF.PI;
+        private const float MaxAngularCorrection = 8f / 180 * MathF.PI;
 
         internal override void Initialize(bool firstStep)
         {
@@ -180,31 +190,45 @@ namespace Ctr2.Engine.Physics
             armB = PhysicsMath.Rotate(LocalAnchorB - B.LocalCenter, B.Angle);
             float mA = inverseMassA, mB = inverseMassB, iA = inverseInertiaA, iB = inverseInertiaB;
             bool fixedRotation = iA + iB == 0;
-            mass.Ex = new(mA + mB + armA.Y * armA.Y * iA + armB.Y * armB.Y * iB,
-                -armA.Y * armA.X * iA - armB.Y * armB.X * iB, -armA.Y * iA - armB.Y * iB);
-            mass.Ey = new(mass.Ex.Y, mA + mB + armA.X * armA.X * iA + armB.X * armB.X * iB,
-                armA.X * iA + armB.X * iB);
+            mass.Ex = new(mA + mB + (armA.Y * armA.Y * iA) + (armB.Y * armB.Y * iB),
+                (-armA.Y * armA.X * iA) - (armB.Y * armB.X * iB), (-armA.Y * iA) - (armB.Y * iB));
+            mass.Ey = new(mass.Ex.Y, mA + mB + (armA.X * armA.X * iA) + (armB.X * armB.X * iB),
+                (armA.X * iA) + (armB.X * iB));
             mass.Ez = new(mass.Ex.Z, mass.Ey.Z, iA + iB);
             motorMass = iA + iB;
             if (motorMass > 0)
+            {
                 motorMass = 1 / motorMass;
+            }
+
             if (!MotorEnabled || fixedRotation)
+            {
                 motorImpulse = 0;
+            }
+
             if (LimitEnabled && !fixedRotation)
             {
                 float angle = B.Angle - A.Angle - ReferenceAngle;
                 if (MathF.Abs(UpperAngle - LowerAngle) < 2 * AngularSlop)
+                {
                     LimitState = PhysicsJointLimitState.Equal;
+                }
                 else if (angle <= LowerAngle)
                 {
                     if (LimitState != PhysicsJointLimitState.AtLower)
+                    {
                         impulse.Z = 0;
+                    }
+
                     LimitState = PhysicsJointLimitState.AtLower;
                 }
                 else if (angle >= UpperAngle)
                 {
                     if (LimitState != PhysicsJointLimitState.AtUpper)
+                    {
                         impulse.Z = 0;
+                    }
+
                     LimitState = PhysicsJointLimitState.AtUpper;
                 }
                 else
@@ -214,7 +238,10 @@ namespace Ctr2.Engine.Physics
                 }
             }
             else
+            {
                 LimitState = PhysicsJointLimitState.Inactive;
+            }
+
             if (firstStep)
             {
                 impulse = Vector3.Zero;
@@ -249,14 +276,16 @@ namespace Ctr2.Engine.Physics
                 Vector2 speed = vB + Cross(wB, armB) - vA - Cross(wA, armA);
                 Vector3 change = -mass.Solve33(new(speed.X, speed.Y, wB - wA));
                 if (LimitState == PhysicsJointLimitState.Equal)
+                {
                     impulse += change;
+                }
                 else
                 {
                     float next = impulse.Z + change.Z;
                     if ((LimitState == PhysicsJointLimitState.AtLower && next < 0) ||
                         (LimitState == PhysicsJointLimitState.AtUpper && next > 0))
                     {
-                        Vector2 rhs = -speed + impulse.Z * new Vector2(mass.Ez.X, mass.Ez.Y);
+                        Vector2 rhs = -speed + (impulse.Z * new Vector2(mass.Ez.X, mass.Ez.Y));
                         Vector2 reduced = mass.Solve22(rhs);
                         change.X = reduced.X;
                         change.Y = reduced.Y;
@@ -266,7 +295,9 @@ namespace Ctr2.Engine.Physics
                         impulse.Z = 0;
                     }
                     else
+                    {
                         impulse += change;
+                    }
                 }
                 Vector2 p = new(change.X, change.Y);
                 vA -= mA * p;
@@ -327,11 +358,11 @@ namespace Ctr2.Engine.Physics
             Vector2 rA = PhysicsMath.Rotate(LocalAnchorA - A.LocalCenter, aA);
             Vector2 rB = PhysicsMath.Rotate(LocalAnchorB - B.LocalCenter, aB);
             Vector2 error = cB + rB - cA - rA;
-            float positionError = MathF.Sqrt(error.X * error.X + error.Y * error.Y);
+            float positionError = MathF.Sqrt((error.X * error.X) + (error.Y * error.Y));
             // Preserve native position-matrix multiplication order, which differs from initialization.
-            float k11 = mA + mB + iA * rA.Y * rA.Y + iB * rB.Y * rB.Y;
-            float k12 = -iA * rA.X * rA.Y - iB * rB.X * rB.Y;
-            float k22 = mA + mB + iA * rA.X * rA.X + iB * rB.X * rB.X;
+            float k11 = mA + mB + (iA * rA.Y * rA.Y) + (iB * rB.Y * rB.Y);
+            float k12 = (-iA * rA.X * rA.Y) - (iB * rB.X * rB.Y);
+            float k22 = mA + mB + (iA * rA.X * rA.X) + (iB * rB.X * rB.X);
             Vector2 p = -Solve22(k11, k12, k12, k22, error);
             cA -= mA * p;
             aA -= iA * Cross(rA, p);
@@ -343,30 +374,55 @@ namespace Ctr2.Engine.Physics
             B.Angle = aB;
             return positionError <= PhysicsWorld.LinearSlop && angularError <= AngularSlop;
         }
-        private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
-        private static Vector2 Cross(float scalar, Vector2 value) => new(-scalar * value.Y, scalar * value.X);
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return (a.X * b.Y) - (a.Y * b.X);
+        }
+
+        private static Vector2 Cross(float scalar, Vector2 value)
+        {
+            return new(-scalar * value.Y, scalar * value.X);
+        }
+
         private static Vector2 Solve22(float a11, float a12, float a21, float a22, Vector2 b)
         {
-            float determinant = a11 * a22 - a12 * a21;
+            float determinant = (a11 * a22) - (a12 * a21);
             if (determinant != 0)
+            {
                 determinant = 1 / determinant;
-            return new(determinant * (a22 * b.X - a12 * b.Y), determinant * (a11 * b.Y - a21 * b.X));
+            }
+
+            return new(determinant * ((a22 * b.X) - (a12 * b.Y)), determinant * ((a11 * b.Y) - (a21 * b.X)));
         }
         private struct Matrix33
         {
             internal Vector3 Ex, Ey, Ez;
-            internal readonly Vector2 Solve22(Vector2 b) => PhysicsRevoluteJoint.Solve22(Ex.X, Ey.X, Ex.Y, Ey.Y, b);
+            internal readonly Vector2 Solve22(Vector2 b)
+            {
+                return PhysicsRevoluteJoint.Solve22(Ex.X, Ey.X, Ex.Y, Ey.Y, b);
+            }
+
             internal readonly Vector3 Solve33(Vector3 b)
             {
                 float determinant = Dot(Ex, Cross(Ey, Ez));
                 if (determinant != 0)
+                {
                     determinant = 1 / determinant;
+                }
+
                 return new(determinant * Dot(b, Cross(Ey, Ez)), determinant * Dot(Ex, Cross(b, Ez)),
                     determinant * Dot(Ex, Cross(Ey, b)));
             }
-            private static float Dot(Vector3 a, Vector3 b) => (a.X * b.X + a.Y * b.Y) + a.Z * b.Z;
-            private static Vector3 Cross(Vector3 a, Vector3 b) => new(a.Y * b.Z - a.Z * b.Y,
-                a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+            private static float Dot(Vector3 a, Vector3 b)
+            {
+                return (a.X * b.X) + (a.Y * b.Y) + (a.Z * b.Z);
+            }
+
+            private static Vector3 Cross(Vector3 a, Vector3 b)
+            {
+                return new((a.Y * b.Z) - (a.Z * b.Y),
+                            (a.Z * b.X) - (a.X * b.Z), (a.X * b.Y) - (a.Y * b.X));
+            }
         }
     }
 
@@ -384,14 +440,20 @@ namespace Ctr2.Engine.Physics
             ArgumentNullException.ThrowIfNull(b);
             if (a == b || !bodies.Contains(a) || !bodies.Contains(b) || joints.Count >= 8192 ||
                 !ValidAnchor(definition.LocalAnchorA) || !ValidAnchor(definition.LocalAnchorB) ||
-                (!float.IsFinite(definition.ReferenceAngle) || MathF.Abs(definition.ReferenceAngle) > 1000000) || !float.IsFinite(definition.LowerAngle) || !float.IsFinite(definition.UpperAngle) ||
+                !float.IsFinite(definition.ReferenceAngle) || MathF.Abs(definition.ReferenceAngle) > 1000000 || !float.IsFinite(definition.LowerAngle) || !float.IsFinite(definition.UpperAngle) ||
                 definition.LowerAngle > definition.UpperAngle || !float.IsFinite(definition.MotorSpeed) ||
                 !float.IsFinite(definition.MaxMotorTorque) || definition.MaxMotorTorque < 0)
+            {
                 throw new ArgumentException("Invalid revolute definition or owned bodies.", nameof(definition));
+            }
+
             PhysicsRevoluteJoint joint = new(a, b, definition);
             joints.Add(joint);
             if (!joint.CollideConnected)
+            {
                 ChangeCollisionBlock(a, b, 1);
+            }
+
             return joint;
         }
         /// <summary>Adds a free hinge using native world-anchor initialization.</summary>
@@ -403,9 +465,9 @@ namespace Ctr2.Engine.Physics
         {
             ArgumentNullException.ThrowIfNull(a);
             ArgumentNullException.ThrowIfNull(b);
-            if (!ValidAnchor(worldAnchor))
-                throw new ArgumentOutOfRangeException(nameof(worldAnchor));
-            return AddRevolute(a, b, new PhysicsRevoluteDefinition(PhysicsMath.InverseRotate(worldAnchor - a.Origin, a.Angle),
+            return !ValidAnchor(worldAnchor)
+                ? throw new ArgumentOutOfRangeException(nameof(worldAnchor))
+                : AddRevolute(a, b, new PhysicsRevoluteDefinition(PhysicsMath.InverseRotate(worldAnchor - a.Origin, a.Angle),
                 PhysicsMath.InverseRotate(worldAnchor - b.Origin, b.Angle), b.Angle - a.Angle));
         }
     }

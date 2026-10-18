@@ -46,7 +46,7 @@ namespace Ctr2.Tests
                         break;
                     case "destroy":
                         broad.DestroyProxy(ids[key]);
-                        ids.Remove(key);
+                        _ = ids.Remove(key);
                         break;
                     case "ephemeral":
                         int temporary = broad.CreateProxy(bounds, data);
@@ -94,8 +94,11 @@ namespace Ctr2.Tests
             Assert.Equal(110, step);
         }
 
-        private static PhysicsAabb Bounds(JsonElement value) => new(
+        private static PhysicsAabb Bounds(JsonElement value)
+        {
+            return new(
             new(value[0].GetSingle(), value[1].GetSingle()), new(value[2].GetSingle(), value[3].GetSingle()));
+        }
 
         /// <summary>Early callback exit and rejected mutation leave the query state reusable.</summary>
         [Fact]
@@ -110,15 +113,15 @@ namespace Ctr2.Tests
             broad.Query(box, id =>
             {
                 visited.Add(id);
-                Assert.Throws<InvalidOperationException>(() => broad.DestroyProxy(a));
+                _ = Assert.Throws<InvalidOperationException>(() => broad.DestroyProxy(a));
                 return false;
             });
             Assert.Equal(new[] { order[0] }, visited);
             Assert.Equal(2, broad.ProxyCount);
-            Assert.Equal(new[] { new BroadPhasePair(20, 10) }, broad.UpdatePairs());
+            Assert.Equal([new BroadPhasePair(20, 10)], broad.UpdatePairs());
             Assert.Empty(broad.UpdatePairs());
             broad.TouchProxy(b);
-            Assert.Single(broad.UpdatePairs());
+            _ = Assert.Single(broad.UpdatePairs());
         }
 
         /// <summary>Rejects invalid bounds and retired IDs without consuming the native free list.</summary>
@@ -127,15 +130,15 @@ namespace Ctr2.Tests
         {
             PhysicsBroadPhase broad = new();
             PhysicsAabb valid = new(Vector2.Zero, Vector2.One);
-            Assert.Throws<ArgumentOutOfRangeException>(() => broad.CreateProxy(new(Vector2.One, Vector2.Zero), 1));
-            Assert.Throws<ArgumentOutOfRangeException>(() => broad.CreateProxy(new(new(float.NaN, 0), Vector2.One), 1));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => broad.CreateProxy(new(Vector2.One, Vector2.Zero), 1));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => broad.CreateProxy(new(new(float.NaN, 0), Vector2.One), 1));
             int id = broad.CreateProxy(valid, 3);
             Assert.Equal(0, id);
-            Assert.Throws<ArgumentOutOfRangeException>(() => broad.MoveProxy(id, valid, new(float.PositiveInfinity, 0)));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => broad.MoveProxy(id, valid, new(float.PositiveInfinity, 0)));
             Assert.Equal(valid, broad.GetBounds(id));
             broad.DestroyProxy(id);
-            Assert.Throws<ArgumentOutOfRangeException>(() => broad.TouchProxy(id));
-            Assert.Throws<ArgumentOutOfRangeException>(() => broad.DestroyProxy(id));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => broad.TouchProxy(id));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => broad.DestroyProxy(id));
             Assert.Equal(0, broad.ProxyCount);
             Assert.Empty(broad.UpdatePairs());
             Assert.Equal(id, broad.CreateProxy(valid, 4));
@@ -151,9 +154,9 @@ namespace Ctr2.Tests
             int b = broad.CreateProxy(box, 2);
             broad.TouchProxy(a);
             broad.DestroyProxy(a);
-            Assert.Throws<ArgumentOutOfRangeException>(() => broad.UpdatePairs());
+            _ = Assert.Throws<ArgumentOutOfRangeException>(broad.UpdatePairs);
             Assert.Equal(a, broad.CreateProxy(box, 3));
-            Assert.Equal(new[] { new BroadPhasePair(3, 2) }, broad.UpdatePairs());
+            Assert.Equal([new BroadPhasePair(3, 2)], broad.UpdatePairs());
             Assert.Equal(2, broad.GetUserData(b));
         }
 
@@ -164,7 +167,7 @@ namespace Ctr2.Tests
             PhysicsBroadPhase broad = new();
             PhysicsAabb box = new(Vector2.Zero, Vector2.One);
             int[] ids = [.. Enumerable.Range(0, 1025).Select(i => broad.CreateProxy(box, i))];
-            Assert.Throws<InvalidOperationException>(() => broad.UpdatePairs());
+            _ = Assert.Throws<InvalidOperationException>(broad.UpdatePairs);
             foreach (int id in ids.Take(513))
             {
                 broad.DestroyProxy(id);
@@ -183,9 +186,9 @@ namespace Ctr2.Tests
             {
                 broad.TouchProxy(id);
             }
-            Assert.Throws<InvalidOperationException>(() => broad.TouchProxy(id));
-            Assert.Throws<InvalidOperationException>(() => broad.CreateProxy(new(new(3, 3), new(4, 4)), 2));
-            Assert.Throws<InvalidOperationException>(() => broad.MoveProxy(id, new(new(3, 3), new(4, 4)), Vector2.One));
+            _ = Assert.Throws<InvalidOperationException>(() => broad.TouchProxy(id));
+            _ = Assert.Throws<InvalidOperationException>(() => broad.CreateProxy(new(new(3, 3), new(4, 4)), 2));
+            _ = Assert.Throws<InvalidOperationException>(() => broad.MoveProxy(id, new(new(3, 3), new(4, 4)), Vector2.One));
             Assert.Equal(new PhysicsAabb(Vector2.Zero, Vector2.One), broad.GetBounds(id));
             Assert.False(broad.MoveProxy(id, new(Vector2.Zero, Vector2.One), Vector2.Zero));
             Assert.Empty(broad.UpdatePairs());
@@ -201,10 +204,10 @@ namespace Ctr2.Tests
             PhysicsBroadPhase broad = new();
             PhysicsAabb box = new(Vector2.Zero, Vector2.One);
             int id = broad.CreateProxy(box, 1);
-            Assert.Throws<InvalidOperationException>(() => broad.Query(box, _ =>
+            _ = Assert.Throws<InvalidOperationException>(() => broad.Query(box, visited =>
             {
-                Assert.Equal(new[] { id }, broad.Query(box));
-                Assert.Throws<InvalidOperationException>(() => broad.TouchProxy(id));
+                Assert.Equal([id], broad.Query(box));
+                _ = Assert.Throws<InvalidOperationException>(() => broad.TouchProxy(id));
                 throw new InvalidOperationException("Synthetic callback failure.");
             }));
             broad.TouchProxy(id);
@@ -224,7 +227,7 @@ namespace Ctr2.Tests
                 Vector2 lower = new(2 * (i % 128), 2 * (i / 128));
                 last = broad.CreateProxy(new(lower, lower + Vector2.One), i);
             }
-            Assert.Throws<InvalidOperationException>(() => broad.CreateProxy(new(Vector2.Zero, Vector2.One), -1));
+            _ = Assert.Throws<InvalidOperationException>(() => broad.CreateProxy(new(Vector2.Zero, Vector2.One), -1));
             Assert.Equal(16384, broad.ProxyCount);
             Assert.Equal(16384, broad.Query(new(new(-1, -1), new(300, 300))).Count);
             broad.DestroyProxy(last);

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -60,7 +61,10 @@ namespace Ctr2.Tests
                 if (scenario == "topology")
                 {
                     if (tick == 31)
+                    {
                         Ground(world, -2, 1.5f, 2, 2.5f);
+                    }
+
                     if (tick == 101)
                     {
                         Assert.True(world.RemoveBody(body!));
@@ -68,11 +72,13 @@ namespace Ctr2.Tests
                         body = null;
                     }
                     if (tick == 102)
+                    {
                         body = Circle(world, Vector2.Zero);
+                    }
                 }
                 world.Step();
                 JsonElement expectedProxies = row.GetProperty("Proxies");
-                var actualProxies = world.CaptureProxies();
+                IReadOnlyList<PhysicsProxyState> actualProxies = world.CaptureProxies();
                 Assert.Equal(expectedProxies.GetArrayLength(), actualProxies.Count);
                 for (int i = 0; i < actualProxies.Count; i++)
                 {
@@ -115,13 +121,13 @@ namespace Ctr2.Tests
             Ground(world, 0, 0, 1, 1);
             PhysicsBody body = Circle(world, new(-.15f, -.15f));
             world.Step();
-            var snapshot = world.CaptureTerrainContacts();
-            Assert.Single(snapshot);
+            IReadOnlyList<PhysicsContactState> snapshot = world.CaptureTerrainContacts();
+            _ = Assert.Single(snapshot);
             Assert.False(snapshot[0].Touching);
             Assert.False(new PhysicsWorld().RemoveBody(body));
             Assert.True(world.RemoveBody(body));
             Assert.Empty(world.CaptureTerrainContacts());
-            Assert.Single(snapshot);
+            _ = Assert.Single(snapshot);
         }
 
         /// <summary>Removing an unstepped fixture cannot leave a stale move referring to its reused node.</summary>
@@ -135,9 +141,9 @@ namespace Ctr2.Tests
             Ground(world, 0, 0, 1, 1);
             PhysicsBody removed = Circle(world, new(-.15f, -.15f));
             Assert.True(world.RemoveBody(removed));
-            Circle(world, new(-.15f, -.15f));
+            _ = Circle(world, new(-.15f, -.15f));
             world.Step();
-            Assert.Equal(new[] { new PhysicsContactState(3, 1, 1, false) }, world.CaptureTerrainContacts());
+            Assert.Equal([new PhysicsContactState(3, 1, 1, false)], world.CaptureTerrainContacts());
         }
 
         /// <summary>Sensor changes suppress solid solving without dropping a still-overlapping candidate.</summary>
@@ -176,10 +182,10 @@ namespace Ctr2.Tests
                 ContinuousPhysics = false
             };
             Ground(world, 0, 0, 1, 1);
-            Assert.Throws<ArgumentOutOfRangeException>(() => Circle(world, new(1000000, 0)));
-            Circle(world, new(-.15f, -.15f));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => Circle(world, new(1000000, 0)));
+            _ = Circle(world, new(-.15f, -.15f));
             world.Step();
-            Assert.Equal(new[] { new PhysicsContactState(2, 1, 1, false) }, world.CaptureTerrainContacts());
+            Assert.Equal([new PhysicsContactState(2, 1, 1, false)], world.CaptureTerrainContacts());
         }
 
         private static PhysicsBody Circle(PhysicsWorld world, Vector2 position)
@@ -190,7 +196,9 @@ namespace Ctr2.Tests
             return body;
         }
 
-        private static void Ground(PhysicsWorld world, float x1, float y1, float x2, float y2, float restitution = 0) =>
+        private static void Ground(PhysicsWorld world, float x1, float y1, float x2, float y2, float restitution = 0)
+        {
             world.AddTerrain([new(x1, y1), new(x2, y1), new(x2, y2), new(x1, y2)], .3f, restitution);
+        }
     }
 }

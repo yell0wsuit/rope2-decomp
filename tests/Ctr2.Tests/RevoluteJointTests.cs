@@ -47,19 +47,28 @@ namespace Ctr2.Tests
                 bodies.Add(tag, body);
                 return body;
             }
-            PhysicsBody Circle(float x, float y, float radius, float density, float gravity, float angle = 0) =>
-                Register(world.AddCircle(new(x, y), radius, density, gravity, angle), .3f);
+            PhysicsBody Circle(float x, float y, float radius, float density, float gravity, float angle = 0)
+            {
+                return Register(world.AddCircle(new(x, y), radius, density, gravity, angle), .3f);
+            }
+
             PhysicsBody Box(float x, float y, float gravity, float angle = 0, bool fixedRotation = false, bool compound = false, bool offset = false)
             {
                 ConvexPolygon shape = offset ? new([Vector2.Zero, new(.3f, .1f), new(.4f, .35f), new(.1f, .5f), new(-.2f, .2f)]) :
                     new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]);
                 return Register(world.AddPolygon(shape, new(x, y), 1, gravity, angle, fixedRotation, compound), .4f);
             }
-            float slopWidth = 2 * ((1f / 180) * MathF.PI);
+            float slopWidth = 2 * (1f / 180 * MathF.PI);
             if (scenario == "slop-below")
+            {
                 slopWidth = MathF.BitDecrement(slopWidth);
+            }
+
             if (scenario == "slop-above")
+            {
                 slopWidth = MathF.BitIncrement(slopWidth);
+            }
+
             PhysicsBody a, b;
             if (scenario == "contacts")
             {
@@ -85,7 +94,10 @@ namespace Ctr2.Tests
             bool motor = scenario is not ("pendulum" or "topology" or "offset");
             bool limit = scenario is "lower" or "upper" or "equal" or "narrow" or "fixed" or "contacts" or "slop-below" or "slop-equal" or "slop-above";
             if (scenario is "pendulum" or "topology" or "fixed")
+            {
                 anchorB = new(-.6f, -.8f);
+            }
+
             if (scenario == "offset")
             {
                 anchorA = new(.25f, -.1f);
@@ -106,7 +118,10 @@ namespace Ctr2.Tests
                 torque = .02f;
             }
             if (scenario == "equal")
+            {
                 lower = upper = .1f;
+            }
+
             if (scenario == "narrow")
             {
                 lower = -.01f;
@@ -129,38 +144,68 @@ namespace Ctr2.Tests
                 if (scenario == "motor")
                 {
                     if (tick == 60)
+                    {
                         joint!.MotorSpeed = -4;
+                    }
+
                     if (tick == 90)
+                    {
                         joint!.MaxMotorTorque = .005f;
+                    }
+
                     if (tick == 110)
+                    {
                         joint!.MotorEnabled = false;
+                    }
+
                     if (tick == 130)
                     {
                         joint!.MotorEnabled = true;
                         joint.MotorSpeed = 1;
                     }
                     if (tick == 150)
+                    {
                         joint!.MaxMotorTorque = 0;
+                    }
                 }
                 if (scenario is "lower" or "upper")
                 {
                     if (tick == 60)
+                    {
                         joint!.MotorSpeed = scenario == "lower" ? 2 : -2;
+                    }
+
                     if (tick is 80 or 100)
+                    {
                         joint!.SetLimits(-.1f, .1f);
+                    }
+
                     if (tick == 120)
+                    {
                         joint!.LimitEnabled = false;
+                    }
+
                     if (tick is 140 or 160)
+                    {
                         joint!.LimitEnabled = true;
+                    }
                 }
                 if (scenario == "equal")
                 {
                     if (tick == 60)
+                    {
                         joint!.SetLimits(-.3f, .3f);
+                    }
+
                     if (tick == 90)
+                    {
                         joint!.MotorEnabled = false;
+                    }
+
                     if (tick == 120)
+                    {
                         joint!.MotorEnabled = true;
+                    }
                 }
                 if (scenario == "topology")
                 {
@@ -170,11 +215,14 @@ namespace Ctr2.Tests
                         joint = null;
                     }
                     if (tick == 50)
+                    {
                         joint = world.AddRevolute(a, b, definition);
+                    }
+
                     if (tick == 120)
                     {
                         Assert.True(world.RemoveBody(b));
-                        bodies.Remove(bodies.Single(e => e.Value == b).Key);
+                        _ = bodies.Remove(bodies.Single(e => e.Value == b).Key);
                         joint = null;
                     }
                     if (tick == 130)
@@ -186,9 +234,14 @@ namespace Ctr2.Tests
                 if (scenario is "topology" or "contacts")
                 {
                     if (tick == 80)
+                    {
                         rope = world.AddRope(a, b, 1.3f, new(-1, 0), new(1, 0));
+                    }
+
                     if (tick == 100)
+                    {
                         Assert.True(world.Remove(rope!));
+                    }
                 }
                 world.Step();
                 string context = $"{scenario}, tick {tick}";
@@ -198,7 +251,9 @@ namespace Ctr2.Tests
                     PhysicsBody body = bodies[state[0].GetInt32()];
                     float[] actual = [body.Position.X, body.Position.Y, body.Velocity.X, body.Velocity.Y, body.Angle, body.AngularVelocity];
                     for (int i = 0; i < actual.Length; i++)
+                    {
                         Near(state[i + 1].GetSingle(), actual[i], $"{context}, body {state[0]}, component {i}");
+                    }
                 }
                 JsonElement expectedJoint = row.GetProperty("Joint");
                 Assert.Equal(expectedJoint.ValueKind == JsonValueKind.Null, joint == null);
@@ -207,7 +262,10 @@ namespace Ctr2.Tests
                     float[] actual = [joint.AnchorA.X, joint.AnchorA.Y, joint.AnchorB.X, joint.AnchorB.Y,
                         joint.ReactionForce.X, joint.ReactionForce.Y, joint.ReactionTorque, joint.MotorTorque, joint.Angle, joint.Speed];
                     for (int i = 0; i < actual.Length; i++)
+                    {
                         Near(expectedJoint[i].GetSingle(), actual[i], $"{context}, joint component {i}");
+                    }
+
                     Assert.Equal((PhysicsJointLimitState)expectedJoint[10].GetInt32(), joint.LimitState);
                     Assert.Equal(expectedJoint[11].GetSingle(), joint.LowerAngle);
                     Assert.Equal(expectedJoint[12].GetSingle(), joint.UpperAngle);
@@ -241,7 +299,7 @@ namespace Ctr2.Tests
             Assert.Equal(-.2f - .3f, joint.ReferenceAngle);
             Assert.Equal(0, joint.Angle);
             Assert.False(joint.CollideConnected);
-            Assert.Throws<NotSupportedException>(() => joint.Length);
+            _ = Assert.Throws<NotSupportedException>(() => joint.Length);
             world.Step();
             Assert.True(world.Remove(joint));
             Assert.False(world.Remove(joint));
@@ -297,32 +355,32 @@ namespace Ctr2.Tests
             PhysicsBody a = world.AddCircle(Vector2.Zero, .1f, 0, 0);
             PhysicsBody b = world.AddCircle(new(1, 0), .2f, 1, 0);
             PhysicsBody foreign = other.AddCircle(Vector2.Zero, .2f, 1, 0);
-            var proxies = world.CaptureProxies();
+            IReadOnlyList<PhysicsProxyState> proxies = world.CaptureProxies();
             PhysicsRevoluteDefinition definition = new(Vector2.Zero, Vector2.Zero, 0);
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, foreign, definition));
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, a, definition));
-            Assert.Throws<ArgumentNullException>(() => world.AddRevolute(null!, b, definition));
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { LocalAnchorA = new(float.NaN, 0) }));
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { ReferenceAngle = float.PositiveInfinity }));
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { LowerAngle = 2, UpperAngle = 1 }));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRevolute(a, b, definition with { MotorSpeed = 1000001 }));
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { MaxMotorTorque = -1 }));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRevolute(a, b, new Vector2(float.NaN, 0)));
-            Assert.Throws<ArgumentOutOfRangeException>(() => world.AddCircle(Vector2.Zero, .2f, 1, 0, float.NaN));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, foreign, definition));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, a, definition));
+            _ = Assert.Throws<ArgumentNullException>(() => world.AddRevolute(null!, b, definition));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { LocalAnchorA = new(float.NaN, 0) }));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { ReferenceAngle = float.PositiveInfinity }));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { LowerAngle = 2, UpperAngle = 1 }));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRevolute(a, b, definition with { MotorSpeed = 1000001 }));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition with { MaxMotorTorque = -1 }));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRevolute(a, b, new Vector2(float.NaN, 0)));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddCircle(Vector2.Zero, .2f, 1, 0, float.NaN));
             Assert.True(proxies.SequenceEqual(world.CaptureProxies()));
             PhysicsRevoluteJoint joint = world.AddRevolute(a, b, definition);
-            Assert.Throws<ArgumentOutOfRangeException>(() => joint.SetLimits(.5f, -.5f));
-            Assert.Throws<ArgumentOutOfRangeException>(() => joint.SetLimits(float.NaN, 1));
-            Assert.Throws<ArgumentOutOfRangeException>(() => joint.MotorSpeed = float.NaN);
-            Assert.Throws<ArgumentOutOfRangeException>(() => joint.MaxMotorTorque = -1);
-            Assert.Throws<ArgumentOutOfRangeException>(() => joint.MaxMotorTorque = float.PositiveInfinity);
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => joint.SetLimits(.5f, -.5f));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => joint.SetLimits(float.NaN, 1));
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => joint.MotorSpeed = float.NaN);
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => joint.MaxMotorTorque = -1);
+            _ = Assert.Throws<ArgumentOutOfRangeException>(() => joint.MaxMotorTorque = float.PositiveInfinity);
             Assert.Equal(0, joint.LowerAngle);
             Assert.Equal(0, joint.UpperAngle);
             Assert.Equal(0, joint.MotorSpeed);
             Assert.Equal(0, joint.MaxMotorTorque);
             Assert.True(world.Remove(joint));
             Assert.True(world.RemoveBody(b));
-            Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition));
+            _ = Assert.Throws<ArgumentException>(() => world.AddRevolute(a, b, definition));
             world.Step();
         }
 
@@ -368,8 +426,10 @@ namespace Ctr2.Tests
             Assert.Empty(world.CaptureFixtureContacts());
         }
 
-        private static void Near(float expected, float actual, string context) =>
+        private static void Near(float expected, float actual, string context)
+        {
             Assert.True(float.IsFinite(expected) && float.IsFinite(actual) && MathF.Abs(expected - actual) <= .00002f,
                 $"{context}: expected {expected}, actual {actual}");
+        }
     }
 }

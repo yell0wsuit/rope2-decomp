@@ -45,7 +45,10 @@ namespace Ctr2.Engine.Physics
             ArgumentNullException.ThrowIfNull(vertices);
             if (vertices.Count is < 1 or > 8 || vertices.Any(v => !PhysicsAabb.ValidVector(v)) ||
                 !float.IsFinite(radius) || radius < 0 || radius > 1000000)
+            {
                 throw new ArgumentException("Invalid bounded distance proxy.");
+            }
+
             Vertices = Array.AsReadOnly(vertices.ToArray());
             Radius = radius;
         }
@@ -86,7 +89,10 @@ namespace Ctr2.Engine.Physics
             Metric = 0;
         }
         /// <summary>Copies the current metric and support pairs into an immutable diagnostic.</summary>
-        public PhysicsSimplexState Capture() => new(Metric, Array.AsReadOnly(Pairs.Take(Count).ToArray()));
+        public PhysicsSimplexState Capture()
+        {
+            return new(Metric, Array.AsReadOnly(Pairs.Take(Count).ToArray()));
+        }
     }
 
     /// <summary>Bounded standalone native-style GJK queries, separate from world collision solving.</summary>
@@ -112,20 +118,31 @@ namespace Ctr2.Engine.Physics
             Validate(transformB, nameof(transformB));
             cache ??= new();
             for (int i = 0; i < cache.Count; i++)
+            {
                 if (cache.Pairs[i].A >= a.Vertices.Count || cache.Pairs[i].B >= b.Vertices.Count)
+                {
                     throw new ArgumentException("Cached support indices do not fit these proxies. Reset the cache first.", nameof(cache));
+                }
+            }
 
             Span<Vertex> storage = stackalloc Vertex[3];
             storage.Clear();
-            Simplex simplex = new(storage);
-            simplex.Count = cache.Count;
+            Simplex simplex = new(storage)
+            {
+                Count = cache.Count
+            };
             for (int i = 0; i < simplex.Count; i++)
+            {
                 storage[i] = SupportVertex(a, transformA, cache.Pairs[i].A, b, transformB, cache.Pairs[i].B);
+            }
+
             if (simplex.Count > 1)
             {
                 float oldMetric = cache.Metric, metric = simplex.Metric();
                 if (metric < .5f * oldMetric || 2 * oldMetric < metric || metric < Epsilon)
+                {
                     simplex.Count = 0;
+                }
             }
             if (simplex.Count == 0)
             {
@@ -139,18 +156,31 @@ namespace Ctr2.Engine.Physics
             {
                 int savedCount = simplex.Count;
                 for (int i = 0; i < savedCount; i++)
+                {
                     saved[i] = new(storage[i].IndexA, storage[i].IndexB);
+                }
+
                 if (simplex.Count == 2)
+                {
                     simplex.Solve2();
+                }
                 else if (simplex.Count == 3)
+                {
                     simplex.Solve3();
+                }
+
                 if (simplex.Count == 3)
+                {
                     break;
+                }
                 // The native distance-progress check is disabled. Do not terminate here
                 // merely because the closest distance stopped decreasing.
                 Vector2 direction = simplex.SearchDirection();
                 if (Dot(direction, direction) < Epsilon * Epsilon)
+                {
                     break;
+                }
+
                 int indexA = Support(a, PhysicsMath.InverseRotate(-direction, transformA.Angle));
                 int indexB = Support(b, PhysicsMath.InverseRotate(direction, transformB.Angle));
                 // Native support queries overwrite geometry and indices, retaining the
@@ -161,13 +191,19 @@ namespace Ctr2.Engine.Physics
                 iterations++;
                 bool duplicate = false;
                 for (int i = 0; i < savedCount; i++)
+                {
                     if (indexA == saved[i].A && indexB == saved[i].B)
                     {
                         duplicate = true;
                         break;
                     }
+                }
+
                 if (duplicate)
+                {
                     break;
+                }
+
                 simplex.Count++;
             }
             simplex.Witnesses(out Vector2 pointA, out Vector2 pointB);
@@ -175,7 +211,10 @@ namespace Ctr2.Engine.Physics
             cache.Metric = simplex.Metric();
             cache.Count = simplex.Count;
             for (int i = 0; i < simplex.Count; i++)
+            {
                 cache.Pairs[i] = new(storage[i].IndexA, storage[i].IndexB);
+            }
+
             if (useRadii)
             {
                 float radii = a.Radius + b.Radius;
@@ -198,13 +237,27 @@ namespace Ctr2.Engine.Physics
         }
 
         private const float Epsilon = 1.1920929e-7f;
-        private static float Dot(Vector2 a, Vector2 b) => a.X * b.X + a.Y * b.Y;
-        private static float Cross(Vector2 a, Vector2 b) => a.X * b.Y - a.Y * b.X;
-        private static float Length(Vector2 v) => MathF.Sqrt(Dot(v, v));
+        private static float Dot(Vector2 a, Vector2 b)
+        {
+            return (a.X * b.X) + (a.Y * b.Y);
+        }
+
+        private static float Cross(Vector2 a, Vector2 b)
+        {
+            return (a.X * b.Y) - (a.Y * b.X);
+        }
+
+        private static float Length(Vector2 v)
+        {
+            return MathF.Sqrt(Dot(v, v));
+        }
+
         private static void Validate(PhysicsDistanceTransform transform, string name)
         {
             if (!PhysicsAabb.ValidVector(transform.Position) || !float.IsFinite(transform.Angle))
+            {
                 throw new ArgumentOutOfRangeException(name, "Invalid bounded distance transform.");
+            }
         }
         private static int Support(PhysicsDistanceProxy proxy, Vector2 direction)
         {
@@ -245,21 +298,28 @@ namespace Ctr2.Engine.Physics
         {
             internal Span<Vertex> Vertices = vertices;
             internal int Count;
-            internal float Metric() => Count switch
+            internal readonly float Metric()
             {
-                1 => 0,
-                2 => Length(Vertices[0].W - Vertices[1].W),
-                3 => Cross(Vertices[1].W - Vertices[0].W, Vertices[2].W - Vertices[0].W),
-                _ => throw new InvalidOperationException("Invalid simplex count.")
-            };
-            internal Vector2 SearchDirection()
+                return Count switch
+                {
+                    1 => 0,
+                    2 => Length(Vertices[0].W - Vertices[1].W),
+                    3 => Cross(Vertices[1].W - Vertices[0].W, Vertices[2].W - Vertices[0].W),
+                    _ => throw new InvalidOperationException("Invalid simplex count.")
+                };
+            }
+
+            internal readonly Vector2 SearchDirection()
             {
                 if (Count == 1)
+                {
                     return -Vertices[0].W;
+                }
+
                 Vector2 edge = Vertices[1].W - Vertices[0].W;
                 return Cross(edge, -Vertices[0].W) > 0 ? new(-edge.Y, edge.X) : new(edge.Y, -edge.X);
             }
-            internal void Witnesses(out Vector2 a, out Vector2 b)
+            internal readonly void Witnesses(out Vector2 a, out Vector2 b)
             {
                 if (Count == 1)
                 {
@@ -267,14 +327,16 @@ namespace Ctr2.Engine.Physics
                     b = Vertices[0].B;
                     return;
                 }
-                a = Vertices[0].Weight * Vertices[0].A + Vertices[1].Weight * Vertices[1].A;
+                a = (Vertices[0].Weight * Vertices[0].A) + (Vertices[1].Weight * Vertices[1].A);
                 if (Count == 3)
                 {
                     a += Vertices[2].Weight * Vertices[2].A;
                     b = a;
                 }
                 else
-                    b = Vertices[0].Weight * Vertices[0].B + Vertices[1].Weight * Vertices[1].B;
+                {
+                    b = (Vertices[0].Weight * Vertices[0].B) + (Vertices[1].Weight * Vertices[1].B);
+                }
             }
             internal void Solve2()
             {
@@ -369,6 +431,9 @@ namespace Ctr2.Engine.Physics
         /// <param name="transformB">Second world transform.</param>
         /// <returns>Whether the native rounded distance is less than ten float epsilons.</returns>
         public static bool Overlaps(PhysicsDistanceProxy a, PhysicsDistanceTransform transformA,
-            PhysicsDistanceProxy b, PhysicsDistanceTransform transformB) => Measure(a, transformA, b, transformB).Distance < 10 * Epsilon;
+            PhysicsDistanceProxy b, PhysicsDistanceTransform transformB)
+        {
+            return Measure(a, transformA, b, transformB).Distance < 10 * Epsilon;
+        }
     }
 }

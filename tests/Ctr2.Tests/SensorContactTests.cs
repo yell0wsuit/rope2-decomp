@@ -44,15 +44,21 @@ namespace Ctr2.Tests
             {
                 body.Friction = friction;
                 int tag = label + 1;
-                fixtures.Add(body, Enumerable.Range(tag, Math.Max(1, body.PolygonFixtures.Count)).ToArray());
+                fixtures.Add(body, [.. Enumerable.Range(tag, Math.Max(1, body.PolygonFixtures.Count))]);
                 label += Math.Max(1, body.PolygonFixtures.Count);
                 bodies.Add(tag, body);
                 return body;
             }
-            PhysicsBody Circle(float x, float y, float radius, float density, float gravity) =>
-                Register(world.AddCircle(new(x, y), radius, density, gravity), .3f);
-            PhysicsBody Box(float x, float y, float hx, float hy, float gravity, bool compound = false) =>
-                Register(world.AddPolygon(new([new(-hx, -hy), new(hx, -hy), new(hx, hy), new(-hx, hy)]), new(x, y), 1, gravity, compound: compound), .4f);
+            PhysicsBody Circle(float x, float y, float radius, float density, float gravity)
+            {
+                return Register(world.AddCircle(new(x, y), radius, density, gravity), .3f);
+            }
+
+            PhysicsBody Box(float x, float y, float hx, float hy, float gravity, bool compound = false)
+            {
+                return Register(world.AddPolygon(new([new(-hx, -hy), new(hx, -hy), new(hx, hy), new(-hx, hy)]), new(x, y), 1, gravity, compound: compound), .4f);
+            }
+
             void Floor()
             {
                 world.AddTerrain([new(-2, 0), new(2, 0), new(2, 1), new(-2, 1)], .3f, 0);
@@ -61,28 +67,37 @@ namespace Ctr2.Tests
             void Mask(PhysicsBody body, ushort value)
             {
                 foreach (int fixture in fixtures[body])
+                {
                     world.SetFixtureFilter(fixture, new(1, value, 0));
+                }
             }
             void Remove(PhysicsBody body)
             {
                 int tag = bodies.Single(b => b.Value == body).Key;
                 Assert.True(world.RemoveBody(body));
-                bodies.Remove(tag);
-                fixtures.Remove(body);
+                _ = bodies.Remove(tag);
+                _ = fixtures.Remove(body);
             }
             PhysicsBody first, second = null!, extra = null!;
             PhysicsJoint? joint = null;
             if (scenario is "terrain" or "terrain-poly" or "interleaved")
+            {
                 Floor();
+            }
+
             if (scenario == "circle-pass")
             {
                 second = Circle(0, 0, .35f, 0, 0);
                 first = Circle(0, -.9f, .15f, 1, 1);
             }
             else if (scenario == "terrain")
+            {
                 first = Circle(0, -.9f, .15f, 1, 1);
+            }
             else if (scenario == "terrain-poly")
+            {
                 first = Box(0, -.9f, .25f, .2f, 1, true);
+            }
             else if (scenario == "terrain-after")
             {
                 first = Box(0, -.05f, .25f, .2f, 0);
@@ -107,10 +122,15 @@ namespace Ctr2.Tests
             else if (scenario is "mixed" or "reverse" or "compound")
             {
                 if (scenario == "reverse")
+                {
                     second = Circle(0, 0, .3f, 0, 0);
+                }
+
                 first = Box(0, -.9f, .25f, .2f, 1, scenario == "compound");
                 if (scenario != "reverse")
+                {
                     second = Circle(0, 0, .3f, 0, 0);
+                }
             }
             else
             {
@@ -119,7 +139,10 @@ namespace Ctr2.Tests
             }
             first.IsSensor = true;
             if (scenario == "sensor-pair")
+            {
                 second.IsSensor = true;
+            }
+
             using JsonDocument reference = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "SensorEventsReference.json")));
             int tick = 0;
             foreach (JsonElement row in reference.RootElement.EnumerateArray().Where(r => r.GetProperty("Scenario").GetString() == scenario))
@@ -128,9 +151,15 @@ namespace Ctr2.Tests
                 if (scenario == "skin-gap")
                 {
                     if (tick == 10)
+                    {
                         first.IsSensor = false;
+                    }
+
                     if (tick == 20)
+                    {
                         first.IsSensor = true;
+                    }
+
                     if (tick == 30)
                     {
                         first.IsSensor = false;
@@ -145,13 +174,25 @@ namespace Ctr2.Tests
                 if (scenario == "toggle")
                 {
                     if (tick == 10)
+                    {
                         first.IsSensor = false;
+                    }
+
                     if (tick == 20)
+                    {
                         first.IsSensor = true;
+                    }
+
                     if (tick == 30)
+                    {
                         Mask(first, 0);
+                    }
+
                     if (tick == 40)
+                    {
                         Mask(first, ushort.MaxValue);
+                    }
+
                     if (tick == 50)
                     {
                         first.IsSensor = false;
@@ -163,27 +204,47 @@ namespace Ctr2.Tests
                 if (scenario == "sensor-pair")
                 {
                     if (tick == 10)
+                    {
                         first.IsSensor = false;
+                    }
+
                     if (tick == 20)
+                    {
                         second.IsSensor = false;
+                    }
+
                     if (tick == 30)
                     {
                         first.IsSensor = true;
                         second.IsSensor = true;
                     }
                     if (tick == 40)
+                    {
                         Mask(first, 0);
+                    }
+
                     if (tick == 50)
+                    {
                         Mask(first, ushort.MaxValue);
+                    }
                 }
                 if (scenario == "joint")
                 {
                     if (tick == 10)
+                    {
                         joint = world.AddRope(first, second, 10);
+                    }
+
                     if (tick == 20)
+                    {
                         Assert.True(world.Remove(joint!));
+                    }
+
                     if (tick == 30)
+                    {
                         Mask(first, ushort.MaxValue);
+                    }
+
                     if (tick == 40)
                     {
                         Remove(first);
@@ -199,14 +260,25 @@ namespace Ctr2.Tests
                         extra.IsSensor = true;
                     }
                     if (tick == 20)
+                    {
                         Remove(first);
+                    }
+
                     if (tick == 30)
+                    {
                         Mask(extra, 0);
+                    }
                 }
                 if (scenario == "terrain-after" && tick == 20)
+                {
                     Mask(first, 0);
+                }
+
                 if (scenario == "terrain-after" && tick == 30)
+                {
                     Mask(first, ushort.MaxValue);
+                }
+
                 world.Step();
                 PhysicsContactEvent[] events = [.. row.GetProperty("Events").EnumerateArray().Select(e => new PhysicsContactEvent(
                     (PhysicsContactEventKind)e[0].GetInt32(), (PhysicsContactEventPhase)e[1].GetInt32(), e[2].GetInt32(), e[3].GetInt32(), e[4].GetInt64(), e[5].GetBoolean(), e[6].GetBoolean()))];
@@ -238,29 +310,29 @@ namespace Ctr2.Tests
                 ContinuousPhysics = false,
                 RecordContactEvents = true
             };
-            world.AddCircle(new(.5f, 0), .3f, 0, 0);
+            _ = world.AddCircle(new(.5f, 0), .3f, 0, 0);
             PhysicsBody first = world.AddCircle(Vector2.Zero, .3f, 1, 0);
             first.IsSensor = true;
             world.Step();
-            var contacts = world.CaptureFixtureContacts();
+            IReadOnlyList<PhysicsFixtureContactState> contacts = world.CaptureFixtureContacts();
             Assert.Equal(new PhysicsFixtureContactState(1, 2, 1, true, true, 0), Assert.Single(contacts));
             PhysicsBody next = world.AddCircle(new(.25f, 0), .3f, 1, 0);
             next.IsSensor = true;
             world.Step();
             Assert.True(world.RemoveBody(first));
-            var events = world.DrainContactEvents();
-            Assert.Equal(new long[] { 1, 3, 2, 3, 1 }, events.Select(e => e.CreationOrder));
-            Assert.Equal(new[] { PhysicsContactEventKind.Begin, PhysicsContactEventKind.Begin, PhysicsContactEventKind.Begin,
-                PhysicsContactEventKind.End, PhysicsContactEventKind.End }, events.Select(e => e.Kind));
+            IReadOnlyList<PhysicsContactEvent> events = world.DrainContactEvents();
+            Assert.Equal([1, 3, 2, 3, 1], events.Select(e => e.CreationOrder));
+            Assert.Equal([ PhysicsContactEventKind.Begin, PhysicsContactEventKind.Begin, PhysicsContactEventKind.Begin,
+                PhysicsContactEventKind.End, PhysicsContactEventKind.End ], events.Select(e => e.Kind));
             Assert.All(events.Take(3), e => Assert.Equal(PhysicsContactEventPhase.Update, e.Phase));
             Assert.All(events.Skip(3), e => Assert.Equal(PhysicsContactEventPhase.Destroy, e.Phase));
             Assert.All(events, e => Assert.True(e.Touching && e.IsSensor));
             Assert.Empty(world.DrainContactEvents());
-            Assert.Single(contacts);
-            Assert.Throws<NotSupportedException>(() => ((IList<PhysicsFixtureContactState>)contacts)[0] = default);
-            Assert.Throws<NotSupportedException>(() => ((IList<PhysicsContactEvent>)events)[0] = default);
+            _ = Assert.Single(contacts);
+            _ = Assert.Throws<NotSupportedException>(() => ((IList<PhysicsFixtureContactState>)contacts)[0] = default);
+            _ = Assert.Throws<NotSupportedException>(() => ((IList<PhysicsContactEvent>)events)[0] = default);
             Assert.True(world.RemoveBody(next));
-            Assert.Single(world.DrainContactEvents());
+            _ = Assert.Single(world.DrainContactEvents());
             Assert.Equal(5, events.Count);
         }
 
@@ -272,7 +344,7 @@ namespace Ctr2.Tests
             {
                 ContinuousPhysics = false
             };
-            world.AddCircle(new(.5f, 0), .3f, 0, 0);
+            _ = world.AddCircle(new(.5f, 0), .3f, 0, 0);
             PhysicsBody body = world.AddCircle(Vector2.Zero, .3f, 1, 0);
             body.IsSensor = true;
             Assert.False(world.RecordContactEvents);
@@ -301,7 +373,7 @@ namespace Ctr2.Tests
                 ContinuousPhysics = false,
                 RecordContactEvents = true
             };
-            world.AddCircle(Vector2.Zero, .3f, 0, 0);
+            _ = world.AddCircle(Vector2.Zero, .3f, 0, 0);
             PhysicsBody body = world.AddCircle(new(.5f, 0), .3f, 1, 0);
             world.Step();
             PhysicsContactEvent begin = Assert.Single(world.DrainContactEvents());
@@ -331,15 +403,18 @@ namespace Ctr2.Tests
                 ContinuousPhysics = false,
                 RecordContactEvents = true
             };
-            world.AddCircle(Vector2.Zero, .3f, 0, 0);
+            _ = world.AddCircle(Vector2.Zero, .3f, 0, 0);
             PhysicsBody body = world.AddPolygon(new([new(-.3f, -.2f), new(.3f, -.2f), new(.3f, .2f), new(-.3f, .2f)]),
                 new(.45f, 0), 1, 0, compound: false);
             body.IsSensor = true;
             world.Step();
-            Assert.Single(world.DrainContactEvents());
+            _ = Assert.Single(world.DrainContactEvents());
             Vector2 position = body.Position;
             for (int i = 0; i < 5; i++)
+            {
                 world.Step();
+            }
+
             Assert.Equal(position, body.Position);
             Assert.Equal(Vector2.Zero, body.Velocity);
             Assert.Empty(world.DrainContactEvents());
