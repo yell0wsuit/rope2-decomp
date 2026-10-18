@@ -7,6 +7,8 @@ namespace Ctr2.Engine.Physics
 {
     public sealed partial class PhysicsBody
     {
+        private readonly float polygonInitialMass;
+        private readonly float polygonInverseInertia;
         /// <summary>Gets immutable local convex fixtures, in creation order.</summary>
         /// <value>Empty for circles; otherwise the compound triangle or single convex fixture geometry.</value>
         public IReadOnlyList<ConvexPolygon> PolygonFixtures
@@ -23,7 +25,7 @@ namespace Ctr2.Engine.Physics
 
         /// <summary>Gets the authored body origin in world meters.</summary>
         /// <value>The center of mass minus its rotated local offset.</value>
-        public Vector2 Origin => Position - Vector2.Transform(LocalCenter, Matrix3x2.CreateRotation(Angle));
+        public Vector2 Origin => Position - PhysicsMath.Rotate(LocalCenter, Angle);
 
         /// <summary>Gets whether angular integration is disabled.</summary>
         /// <value>True for a fixed-rotation polygon.</value>
@@ -44,29 +46,43 @@ namespace Ctr2.Engine.Physics
         {
             PolygonFixtures = fixtures;
             Vector2 weightedCenter = Vector2.Zero;
-            foreach (ConvexPolygon fixture in fixtures)
+            // ResetMassData traverses Box2D's prepended fixture list.
+            for (int index = fixtures.Count - 1; index >= 0; index--)
             {
-                PolygonMass data = fixture.ComputeMass(density);
+                PolygonMass data = fixtures[index].ComputeMass(density);
                 Mass += data.Mass;
                 weightedCenter += data.Mass * data.Center;
             }
             LocalCenter = weightedCenter * (1 / Mass);
-            // Combine centroid moments directly to avoid subtracting large, nearly equal origin moments.
-            double inertia = 0;
-            foreach (ConvexPolygon fixture in fixtures)
+            // ResetMassData sums origin moments in fixture-list order, then shifts once.
+            float inertia = 0;
+            for (int index = fixtures.Count - 1; index >= 0; index--)
             {
-                PolygonMass data = fixture.ComputeMass(density);
-                double dx = (double)data.Center.X - LocalCenter.X, dy = (double)data.Center.Y - LocalCenter.Y;
-                inertia += data.CenterInertia + (data.Mass * ((dx * dx) + (dy * dy)));
+                inertia += fixtures[index].ComputeMass(density).OriginInertia;
             }
-            if (!float.IsFinite(Mass) || Mass < 1e-12f || !double.IsFinite(inertia) || inertia <= 0)
+            inertia -= Mass * Vector2.Dot(LocalCenter, LocalCenter);
+            if (inertia <= 0)
+            {
+                // Native asserts here when large origin moments cancel. Retain the managed
+                // valid-small-shape extension without changing ordinary native float arithmetic.
+                double centered = 0;
+                foreach (ConvexPolygon fixture in fixtures)
+                {
+                    PolygonMass data = fixture.ComputeMass(density);
+                    double dx = (double)data.Center.X - LocalCenter.X, dy = (double)data.Center.Y - LocalCenter.Y;
+                    centered += data.CenterInertia + (data.Mass * ((dx * dx) + (dy * dy)));
+                }
+                inertia = (float)centered;
+            }
+            if (!float.IsFinite(Mass) || Mass < 1e-12f || !float.IsFinite(inertia) || inertia <= 0)
             {
                 throw new ArgumentException("Invalid compound polygon mass or inertia.");
             }
-            InverseInertia = (float)(inertia / Mass);
+            polygonInitialMass = Mass;
+            polygonInverseInertia = 1 / inertia;
             FixedRotation = fixedRotation;
             Angle = angle;
-            Position = origin + Vector2.Transform(LocalCenter, Matrix3x2.CreateRotation(angle));
+            Position = origin + PhysicsMath.Rotate(LocalCenter, angle);
         }
     }
 
@@ -115,6 +131,7 @@ namespace Ctr2.Engine.Physics
                 fixtures.Add(shape);
             }
             PhysicsBody body = new(fixtures.AsReadOnly(), origin, density, gravityScale, angle, fixedRotation);
+            RegisterBodyProxies(body);
             bodies.Add(body);
             polygonFixtureCount += count;
             return body;

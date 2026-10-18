@@ -163,8 +163,11 @@ namespace Ctr2.Engine.Physics
             foreach (Point point in points)
             {
                 (Vector2 clip, Vector2 n, float distance) = Geometry(point);
-                // Equal polygon radii cancel in the world-manifold midpoint.
-                point.Arm = clip - (.5f * distance * n) - Body.Position;
+                // Preserve native world-manifold rounding; cancelling equal radii changes float bits.
+                float radius = 2 * PhysicsWorld.LinearSlop;
+                Vector2 referencePoint = clip + ((radius - distance) * n);
+                Vector2 incidentPoint = clip - (radius * n);
+                point.Arm = (.5f * (referencePoint + incidentPoint)) - Body.Position;
                 float rn = Cross(point.Arm, normal), rt = Cross(point.Arm, tangent);
                 point.NormalMass = 1 / (Body.InverseMass + (Body.InverseInertia * rn * rn));
                 point.TangentMass = 1 / (Body.InverseMass + (Body.InverseInertia * rt * rt));
@@ -220,10 +223,12 @@ namespace Ctr2.Engine.Physics
                 return;
             }
             Point first = points[0], second = points[1];
-            float b1 = Vector2.Dot(Velocity(first), normal) - first.Bias - (k11 * first.NormalImpulse) - (k12 * second.NormalImpulse);
-            float b2 = Vector2.Dot(Velocity(second), normal) - second.Bias - (k12 * first.NormalImpulse) - (k22 * second.NormalImpulse);
-            float x1 = inverseDeterminant * ((k12 * b2) - (k22 * b1));
-            float x2 = inverseDeterminant * ((k12 * b1) - (k11 * b2));
+            float b1 = Vector2.Dot(Velocity(first), normal) - first.Bias - ((k11 * first.NormalImpulse) + (k12 * second.NormalImpulse));
+            float b2 = Vector2.Dot(Velocity(second), normal) - second.Bias - ((k12 * first.NormalImpulse) + (k22 * second.NormalImpulse));
+            // Native GetInverse rounds each matrix entry before the matrix/vector product.
+            float inverse11 = inverseDeterminant * k22, inverse12 = -inverseDeterminant * k12, inverse22 = inverseDeterminant * k11;
+            float x1 = -((inverse11 * b1) + (inverse12 * b2));
+            float x2 = -((inverse12 * b1) + (inverse22 * b2));
             if (x1 < 0 || x2 < 0)
             {
                 x1 = -first.NormalMass * b1;
@@ -406,7 +411,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The rotated vector.</returns>
         private static Vector2 Rotate(Vector2 point, float angle)
         {
-            return Vector2.Transform(point, Matrix3x2.CreateRotation(angle));
+            return PhysicsMath.Rotate(point, angle);
         }
 
         /// <summary>Converts a local polygon point using its authored body origin.</summary>
@@ -424,7 +429,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The local fixture point.</returns>
         private static Vector2 ToLocal(PhysicsBody body, Vector2 point)
         {
-            return Rotate(point - body.Origin, -body.Angle);
+            return PhysicsMath.InverseRotate(point - body.Origin, body.Angle);
         }
 
         /// <summary>Computes a scalar cross product.</summary>

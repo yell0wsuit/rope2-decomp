@@ -4,7 +4,7 @@ This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
 rope/soft-distance joints with rotating body-local anchors and circle/polygon contacts against
 static convex terrain.
-A standalone native-style broadphase is verified separately; world contact generation still uses exhaustive candidates.
+A native-style dynamic-tree broadphase owns fixture proxies and supported discrete terrain contacts.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
 
 Implementation research stays private and outside tracked files. Do not commit
@@ -32,8 +32,9 @@ joint initialization. Velocity solving applies joint impulses before contact
 friction/normal impulses. Position solving corrects contacts before joints.
 Circle impulses persist across face and vertex transitions within a fixture.
 Polygon impulses persist only for matching clipped manifold feature IDs. Touching contact edges use reverse creation order within each traversed
-body. World broadphase integration is pending; contact lifetime and complex multi-fixture ordering still need
-broader original-runtime comparison.
+body. Candidates retain creation order until their proxy bounds separate, including
+empty-manifold intervals. A lost manifold clears cached impulses. Broader original-runtime
+comparison remains necessary for complex multi-fixture and callback ordering.
 
 `CandySimulation` requires zero initial velocities, centered grab anchors and
 unrotated candy/grab placements. Unsupported definitions fail explicitly. Candy
@@ -169,10 +170,13 @@ smoothing, paths, sensor/bullet modes and collision filters fail explicitly.
 
 The original polygon body loader creates compound triangle fixtures, including
 convex outlines. `PhysicsWorld.AddPolygon` triangulates the supported convex outline
-in cyclic ear order, combines fixture mass data in creation order and preserves
+in cyclic ear order, combines fixture mass data in reverse creation order and preserves
 internal fixture skin edges. Synthetic five-vertex geometry checks the triangle
-sequence. Compound inertia sums centroid moments and parallel-axis offsets directly
-to retain precision for small shapes far from their local origin. `compound: false` creates a single convex fixture for isolated solver
+sequence. Ordinary compound inertia sums float origin moments in native fixture-list
+order, then shifts once to the center of mass. If cancellation makes that result
+nonpositive, the managed small-shape extension recomputes centroid moments and
+parallel-axis offsets with double intermediates; native Box2D asserts in that case.
+This fallback is outside native parity claims. `compound: false` creates a single convex fixture for isolated solver
 verification. The world limits bodies to 4096 and dynamic polygon fixtures to 8192;
 failed additions do not mutate either budget. Rope and soft-distance joints support
 circle and polygon bodies. Explicit anchors use local meters relative to each
@@ -213,12 +217,14 @@ slop changed from `0.005f` to `0.001f`. A separate Android numerical profile add
 the audited AABB/angular settings below. Both joint fixture sets were independently
 rebuilt with that profile and matched their slop-only versions byte for byte.
 This does not validate the settings that those contact-free scenarios cannot
-exercise. Harnesses and tools stay under ignored local storage; only CSV states
+exercise. Harnesses and tools stay under ignored local storage; only synthetic CSV/JSON states
 and synthetic C# scene definitions belong in commits. Tests require neither native
 compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `ContactLifecycleReference.json` | 1,680 native per-tick snapshots: corner, bounce, centered/offset rotating compounds, late terrain and body removal/replacement. Exact contact order/identity/touching and proxy IDs; predicted bounds and six body-state components. |
+| `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `JointAnchorReference.csv` | Offset circles, shifted-centroid rotating polygons, fixed rotation and two dynamic endpoints for rope and soft-distance constraints. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY` |
 | `JointTopologyReference.csv` | Coincident anchors, zero/short ropes, short springs, multiple attachments, independent islands and joint removal/recreation. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY,jointActive` |
@@ -313,7 +319,7 @@ use Windows metadata; the behavioral evidence above is Android-only. Original-ru
 traces or Windows instruction-level analysis remain necessary before claiming
 cross-build or bitwise parity.
 
-## Standalone broadphase verification
+## Broadphase verification
 
 `PhysicsBroadPhase` ports the licensed Box2D 2.2.1 dynamic tree with the audited
 Android numerical settings: zero fixed padding and displacement multiplier one.
@@ -340,9 +346,66 @@ Managed bounds require finite coordinates within one million meters. Limits are
 including duplicates. Capacity failures preserve pending work and leave rejected
 creation/movement atomic; tests cover reducing workload and retrying.
 
-This component is not yet connected to `PhysicsWorld` fixture/contact ownership.
-Native contact lifetime, filtering, sensors, island ordering, raycasts and tree
-rebuilding remain separate work. Windows behavioral equivalence is unverified.
+`PhysicsWorld` registers every circle, polygon fixture and terrain fixture in the
+same tree. Registration validates all body fixture bounds before exposing a body.
+New fixtures discover candidates before the next discrete narrowphase update.
+After solving, body/fixture traversal runs in reverse creation order, synchronizing
+endpoint AABB unions with body-origin displacement, then discovering new candidates.
+End-step candidates start without a manifold until the following discrete update.
+Body removal destroys its proxies and retires candidate/manifold ownership.
+
+New-fixture discovery flushes the move buffer before simulation when needed;
+end-step synchronization flushes it every step. Ordinary successful world operations
+therefore never accumulate duplicate pending moves for a leaf.
+The world's body/fixture caps fit within the standalone proxy budget. A failed world
+step is not transactional: an end-step candidate-budget exception can occur after
+bodies have integrated, even though standalone pair generation retains pending work.
+
+`CaptureProxies()` and `CaptureTerrainContacts()` return immutable snapshots with
+stable, monotonically assigned world-local fixture labels, reusable tree IDs and
+reverse candidate creation order. Contact snapshots include non-touching solid
+candidates; sensors are excluded from these solid-contact diagnostics. Proxy
+snapshots include sensors and static anchors. Sensor overlap callbacks remain a
+separate game-level subset; toggling a body sensor suppresses solid manifolds
+without losing a still-overlapping candidate.
+
+`ContactLifecycleReference.json` compares 1,680 native world steps with sleeping
+and continuous physics disabled. Contact labels/order/touching and proxy IDs match
+exactly; bounds use a 0.000002-meter tolerance and six body state components use
+0.00002. All compared floats must be finite. The offset compound case also verifies
+origin displacement independently of center-of-mass displacement.
+Fixture SHA-256: `59b775b2fe081a83a2b818c763fe69c0578b42b00aa6ea021c68d646cdebb71b`.
+
+The stricter proxy trace exposed earlier arithmetic differences. Physics rotation
+now uses scalar Box2D multiply/add operations rather than potentially fused matrix
+operations. Compound mass order and ordinary inertia accumulation match native
+float arithmetic. Polygon world-manifold points retain native radius operations;
+the two-point velocity solver retains the native matrix-product grouping and
+rounds inverse-matrix entries before multiplying. Algebraic simplification can
+change a later proxy-containment decision despite tiny body-state differences.
+
+General two-body contacts, filters, sensor callbacks, contact-connected dynamic
+islands, raycasts and tree rebuilding remain separate work. The analytical CCD
+subset synchronizes its final transforms but does not reproduce native TOI proxy
+updates or callback timing. Windows behavioral equivalence remains unverified.
+
+## Running numerical verification
+
+From the repository root (after the normal package restore), run:
+
+```sh
+dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContactLifecycleTests'
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BroadPhaseTests'
+```
+
+These headless comparisons need no game assets or native compiler. They use
+checked-in synthetic outputs of the independent native oracle; the managed engine
+does not generate its own expected results. Failures identify the scenario, tick,
+proxy/bound or body-state component. Run the DLL without a class filter for all
+joint, terrain, polygon, cutting, sensor and continuous reference comparisons plus
+other regressions. Passing fixtures establishes those tested scenarios, rather
+than full original-game or cross-platform bitwise parity.
 
 ## Physics-first verification priority
 
@@ -352,8 +415,8 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are remaining joint APIs/limited-angle cases, broadphase integration and
-contact lifetime/order, general two-body contact solving, distance/GJK and native
+Next gates are remaining joint APIs/limited-angle cases, general two-body contact
+solving and contact-connected dynamic islands, filters/sensor callbacks, distance/GJK and native
 TOI islands. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons

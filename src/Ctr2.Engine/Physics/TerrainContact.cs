@@ -12,8 +12,8 @@ namespace Ctr2.Engine.Physics
         private readonly List<TerrainFixture> terrain = [];
         /// <summary>Monotonic contact creation sequence, matching prepended body contact edges.</summary>
         private long contactSequence;
-        /// <summary>Previous active contacts, retaining accumulated normal and tangent impulses.</summary>
-        private Dictionary<(PhysicsBody, TerrainFixture, int), PhysicsContact> contacts = [];
+        /// <summary>Persistent broadphase candidates; touching manifolds retain compatible impulses.</summary>
+        private readonly Dictionary<(PhysicsBody, TerrainFixture, int), TerrainCandidate> contacts = [];
 
         /// <summary>Adds one convex static terrain fixture; vertices are copied into the world.</summary>
         /// <param name="vertices">Three to eight counterclockwise world-space vertices in meters.</param>
@@ -29,7 +29,9 @@ namespace Ctr2.Engine.Physics
                 throw new ArgumentException("Invalid convex terrain fixture.");
             }
             ConvexPolygon polygon = new(vertices);
-            terrain.Add(new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center));
+            TerrainFixture fixture = new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center);
+            RegisterTerrainProxy(fixture);
+            terrain.Add(fixture);
         }
 
         /// <summary>Rebuilds supported manifolds and assigns contacts to independent dynamic-body islands.</summary>
@@ -39,46 +41,36 @@ namespace Ctr2.Engine.Physics
         private List<List<PhysicsContact>> BuildContacts(List<List<PhysicsJoint>> islands, Dictionary<PhysicsBody, (int Island, int Order)> bodyOrder)
         {
             List<List<PhysicsContact>> groups = [.. islands.Select(_ => new List<PhysicsContact>())];
-            Dictionary<(PhysicsBody, TerrainFixture, int), PhysicsContact> active = [];
-            foreach (PhysicsBody body in bodies)
+            foreach (var entry in contacts.ToArray())
             {
-                if (body.Mass == 0 || body.IsSensor)
+                TerrainCandidate candidate = entry.Value;
+                if (!broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
                 {
+                    contacts.Remove(entry.Key);
                     continue;
                 }
-
-                foreach (TerrainFixture fixture in terrain)
+                PhysicsBody body = candidate.Body;
+                TerrainFixture fixture = candidate.TerrainProxy.Terrain!;
+                int localIndex = candidate.BodyProxy.LocalIndex;
+                PhysicsContact? contact = body.IsSensor ? null : body.PolygonFixtures.Count == 0 ? TerrainContact.Create(body, fixture) :
+                    PolygonContact.Create(body, body.PolygonFixtures[localIndex], fixture);
+                if (contact != null)
                 {
-                    for (int localIndex = 0; localIndex < Math.Max(1, body.PolygonFixtures.Count); localIndex++)
+                    if (candidate.Manifold != null)
                     {
-                        PhysicsContact? contact = body.PolygonFixtures.Count == 0 ? TerrainContact.Create(body, fixture) :
-                            PolygonContact.Create(body, body.PolygonFixtures[localIndex], fixture);
-                        if (contact == null)
-                        {
-                            continue;
-                        }
-                        (PhysicsBody, TerrainFixture, int) key = (body, fixture, localIndex);
-                        if (contacts.TryGetValue(key, out PhysicsContact? previous))
-                        {
-                            contact.Restore(previous);
-                            contact.CreationOrder = previous.CreationOrder;
-                        }
-                        if (contact.CreationOrder == 0)
-                        {
-                            contact.CreationOrder = ++contactSequence;
-                        }
-                        active.Add(key, contact);
-                        int index = bodyOrder[body].Island;
-                        groups[index].Add(contact);
+                        contact.Restore(candidate.Manifold);
                     }
+                    contact.CreationOrder = candidate.CreationOrder;
+                    groups[bodyOrder[body].Island].Add(contact);
                 }
+                // Losing the manifold keeps candidate order, but clears warm-start impulses.
+                candidate.Manifold = contact;
             }
             foreach (List<PhysicsContact> group in groups)
             {
                 group.Sort((a, b) => bodyOrder[a.Body].Order != bodyOrder[b.Body].Order ?
                     bodyOrder[a.Body].Order.CompareTo(bodyOrder[b.Body].Order) : b.CreationOrder.CompareTo(a.CreationOrder));
             }
-            contacts = active;
             return groups;
         }
     }

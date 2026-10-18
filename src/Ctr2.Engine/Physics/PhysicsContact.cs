@@ -9,7 +9,7 @@ namespace Ctr2.Engine.Physics
         {
             get;
         }
-        /// <summary>Contact creation sequence retained while touching.</summary>
+        /// <summary>Contact creation sequence retained while broadphase proxies overlap.</summary>
         internal long CreationOrder;
         /// <summary>Restores compatible accumulated impulses.</summary>
         /// <param name="previous">Previous manifold for the same fixture pair.</param>

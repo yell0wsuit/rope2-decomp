@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <None Update="ContactLifecycleReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BroadPhaseReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="JointAnchorReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="JointTopologyReference.csv" CopyToOutputDirectory="PreserveNewest" />

@@ -72,7 +72,7 @@ namespace Ctr2.Engine.Physics
 
         /// <summary>Gets the inverse centroid moment of inertia of the owned fixtures.</summary>
         /// <value>Zero for static bodies.</value>
-        internal float InverseInertia => Mass <= 0 || FixedRotation ? 0 : PolygonFixtures.Count > 0 ? 1 / (Mass * field) : 2 / (Mass * Radius * Radius);
+        internal float InverseInertia => Mass <= 0 || FixedRotation ? 0 : PolygonFixtures.Count > 0 ? polygonInverseInertia * (polygonInitialMass / Mass) : 2 / (Mass * Radius * Radius);
         /// <summary>Gets the circular fixture mass in kilograms; zero denotes a static body.</summary>
         /// <value>Density times circle area for a dynamic body.</value>
         public float Mass
@@ -323,6 +323,7 @@ namespace Ctr2.Engine.Physics
                 throw new ArgumentOutOfRangeException(nameof(radius));
             }
             PhysicsBody body = new(position, radius, density, gravityScale);
+            RegisterBodyProxies(body);
             bodies.Add(body);
             return body;
         }
@@ -387,12 +388,13 @@ namespace Ctr2.Engine.Physics
         /// <summary>Removes an owned body and every attached constraint and cached terrain contact between steps.</summary>
         /// <param name="body">Body to retire.</param>
         /// <returns>Whether the body belonged to this world.</returns>
-        internal bool RemoveBody(PhysicsBody body)
+        public bool RemoveBody(PhysicsBody body)
         {
             if (!bodies.Remove(body))
             {
                 return false;
             }
+            RemoveBodyProxies(body);
             _ = joints.RemoveAll(j => j.A == body || j.B == body);
             foreach ((PhysicsBody, TerrainFixture, int) key in new List<(PhysicsBody, TerrainFixture, int)>(contacts.Keys))
             {
@@ -408,6 +410,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>
         public void Step()
         {
+            Dictionary<PhysicsBody, (Vector2 Origin, float Angle)> proxyStarts = BeginBroadPhaseStep();
             Dictionary<PhysicsBody, (Vector2 Position, float Angle)>? starts = ContinuousPhysics && terrain.Count > 0 ? new() : null;
             if (starts != null)
             {
@@ -514,6 +517,7 @@ namespace Ctr2.Engine.Physics
                     }
                 }
             }
+            SynchronizeBodyProxies(proxyStarts);
             stepped = true;
         }
 
