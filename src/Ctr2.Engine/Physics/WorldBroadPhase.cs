@@ -75,16 +75,20 @@ namespace Ctr2.Engine.Physics
             internal readonly TerrainFixture? Terrain = terrain;
             internal readonly int LocalIndex = localIndex;
             internal int Id;
+            internal PhysicsDistanceProxy? Distance;
             internal PhysicsCollisionFilter Filter = PhysicsCollisionFilter.Default;
         }
 
-        private sealed class TerrainCandidate(FixtureProxy body, FixtureProxy terrain, long creationOrder)
+        private sealed class TerrainCandidate(FixtureProxy body, FixtureProxy terrain, long creationOrder, bool terrainFirst)
         {
             internal readonly FixtureProxy BodyProxy = body;
             internal readonly FixtureProxy TerrainProxy = terrain;
             internal PhysicsBody Body => BodyProxy.Body!;
+            internal FixtureProxy A => terrainFirst ? TerrainProxy : BodyProxy;
+            internal FixtureProxy B => terrainFirst ? BodyProxy : TerrainProxy;
             internal readonly long CreationOrder = creationOrder;
             internal PhysicsContact? Manifold;
+            internal bool Touching;
         }
 
         private sealed class BodyCandidate(FixtureProxy a, FixtureProxy b, long order)
@@ -96,6 +100,7 @@ namespace Ctr2.Engine.Physics
             internal readonly float Friction = MathF.Sqrt(a.Body!.Friction * b.Body!.Friction);
             internal readonly float Restitution = MathF.Max(a.Body!.Restitution, b.Body!.Restitution);
             internal PhysicsContact? Manifold;
+            internal bool Touching;
         }
 
         private bool JointBlocksCollision(PhysicsBody a, PhysicsBody b) => collisionBlocks.ContainsKey((a, b));
@@ -125,6 +130,7 @@ namespace Ctr2.Engine.Physics
                 PhysicsBody a = pair.A.Body!, b = pair.B.Body!;
                 if (JointBlocksCollision(a, b) || !ShouldCollide(pair.A.Filter, pair.B.Filter) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
                 {
+                    RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, false, true);
                     bodyContacts.Remove(entry.Key);
                     continue;
                 }
@@ -140,6 +146,9 @@ namespace Ctr2.Engine.Physics
                     next.CreationOrder = pair.CreationOrder;
                     active.Add(next);
                 }
+                bool touching = a.IsSensor || b.IsSensor ? SensorOverlap(pair.A, pair.B) : next != null;
+                RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, touching, false);
+                pair.Touching = touching;
                 pair.Manifold = next;
             }
             return active;
@@ -188,10 +197,6 @@ namespace Ctr2.Engine.Physics
                 proxies.Remove(fixtures[i].Label);
             }
             bodyProxies.Remove(body);
-            foreach (var entry in bodyContacts.Where(c => c.Value.A.Body == body || c.Value.B.Body == body).ToArray())
-            {
-                bodyContacts.Remove(entry.Key);
-            }
         }
 
         private void FindNewContacts()
@@ -199,6 +204,7 @@ namespace Ctr2.Engine.Physics
             foreach (BroadPhasePair pair in broadPhase.UpdatePairs())
             {
                 FixtureProxy a = proxies[pair.First], b = proxies[pair.Second];
+                FixtureProxy nativeA = a;
                 if (!ShouldCollide(a.Filter, b.Filter))
                 {
                     continue;
@@ -225,7 +231,8 @@ namespace Ctr2.Engine.Physics
                 var key = (b.Body, a.Terrain, b.LocalIndex);
                 if (!contacts.ContainsKey(key))
                 {
-                    contacts.Add(key, new(b, a, ++contactSequence));
+                    bool terrainFirst = b.Body.PolygonFixtures.Count == 0 || nativeA.Terrain != null;
+                    contacts.Add(key, new(b, a, ++contactSequence, terrainFirst));
                 }
             }
         }

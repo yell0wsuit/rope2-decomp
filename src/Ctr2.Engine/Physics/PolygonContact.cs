@@ -19,6 +19,7 @@ namespace Ctr2.Engine.Physics
         private readonly Vector2 localPlane;
         /// <summary>Clipped incident points in the incident polygon's frame.</summary>
         private readonly List<Point> points;
+        internal override int PointCount => points.Count;
         /// <summary>Mixed friction coefficient.</summary>
         private readonly float friction;
         /// <summary>Mixed restitution coefficient.</summary>

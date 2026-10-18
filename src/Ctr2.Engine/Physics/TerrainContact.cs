@@ -44,6 +44,7 @@ namespace Ctr2.Engine.Physics
                 if (!ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter) ||
                     !broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
                 {
+                    RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, false, true);
                     contacts.Remove(entry.Key);
                     continue;
                 }
@@ -62,6 +63,9 @@ namespace Ctr2.Engine.Physics
                     active.Add(contact);
                 }
                 // Losing the manifold keeps candidate order, but clears warm-start impulses.
+                bool touching = body.IsSensor ? SensorOverlap(candidate.A, candidate.B) : contact != null;
+                RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false);
+                candidate.Touching = touching;
                 candidate.Manifold = contact;
             }
             return active;

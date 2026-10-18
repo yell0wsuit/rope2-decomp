@@ -222,6 +222,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `SensorEventsReference.json` | 1,170 native world ticks: sensor passages, mixed/compound pairs, terrain orientation, sensor/solid toggles, masks/joints and destruction/replacement. Exact ordered Begin/End snapshots, all fixture candidates/manifold counts and finite body states. |
 | `GjkReference.json` | 1,752 native standalone distance queries: fresh/warm caches, circle/segment/polygon hulls, transforms, radii on/off, near-threshold gaps and cached triangle jumps. Witnesses/distance/metric, exact iterations/simplex support IDs/order and overlap. |
 | `CollisionFilterReference.json` | 720 native ticks: masks, signed groups, asymmetric acceptance, terrain, compound fixtures, joint suppression and early new-fixture discovery. Exact candidate lifetime/order, proxy IDs/bounds and six body-state components. |
 | `PolygonBodyReference.json` | 1,800 native ticks: flat/tilted/reversed polygon pairs, restitution, fixed rotation, compound/offset shapes, stacks, replacement and narrow conditioning. Exact body/terrain candidates and clipped feature IDs/order, plus six body-state components. |
@@ -369,9 +370,10 @@ bodies have integrated, even though standalone pair generation retains pending w
 stable, monotonically assigned world-local fixture labels, reusable tree IDs and
 reverse candidate creation order. Contact snapshots include non-touching solid
 candidates; sensors are excluded from these solid-contact diagnostics. Proxy
-snapshots include sensors and static anchors. Sensor overlap callbacks remain a
-separate game-level subset; toggling a body sensor suppresses solid manifolds
-without losing a still-overlapping candidate.
+snapshots include sensors and static anchors. Generic queued Begin/End records
+are described below; existing gameplay overlap helpers remain separate. Toggling
+a body sensor suppresses solid manifolds at the next update without losing a
+still-overlapping candidate.
 
 `ContactLifecycleReference.json` compares 1,680 native world steps with sleeping
 and continuous physics disabled. Contact labels/order/touching and proxy IDs match
@@ -388,7 +390,7 @@ the two-point velocity solver retains the native matrix-product grouping and
 rounds inverse-matrix entries before multiplying. Algebraic simplification can
 change a later proxy-containment decision despite tiny body-state differences.
 
-Custom filter callbacks, sensor callbacks, raycasts and tree rebuilding remain separate work. The analytical CCD
+Custom filter callbacks, synchronous contact callbacks, raycasts and tree rebuilding remain separate work. The analytical CCD
 subset synchronizes its final transforms but does not reproduce native TOI proxy
 updates or callback timing. Windows behavioral equivalence remains unverified.
 
@@ -468,8 +470,8 @@ and a nearby miss, sensors on either shape, joint filtering without forced
 rediscovery, proxy reuse, removal and immutable snapshots.
 Fixture SHA-256: `b861c5a5d962c82385b0a0094d3b5ff30e5528059b21b3f9ffe3745a045543eb`.
 
-Continuous body-pair collision, sleeping, custom filter callbacks and native
-sensor/gameplay callbacks remain separate work. Terrain
+Continuous body-pair collision, sleeping, custom filter callbacks and synchronous
+native/gameplay callback integration remain separate work. Terrain
 added through `AddTerrain` retains its separately verified paths. Original Windows
 runtime and cross-platform bitwise parity remain unverified.
 
@@ -556,12 +558,10 @@ group limits, body exclusions, setter timing, retired ownership, repeated touche
 followed by removal and filtered analytical sweeps. Fixture SHA-256:
 `69490c911ed176f91dd5696dcb9d59484012eb1d6986d0c218167482f9711adc`.
 
-Sensor event timing remains a separate gate. Native sensor overlap uses fresh-cache
-GJK distance with radii and a strict `10 * epsilon` threshold, independently of
-solid manifold generation. The standalone query below now verifies that path;
-generic sensor Begin/End events still require world lifecycle integration.
-Existing gameplay sensor/overlap helpers are unchanged, and authored Windows
-collision-filter import remains unsupported.
+Sensor overlap uses fresh-cache GJK distance with radii and a strict `10 * epsilon`
+threshold, independently of solid manifold generation. Generic queued Begin/End
+records now expose its discrete world lifecycle below. Existing gameplay overlap
+helpers are unchanged; authored Windows collision-filter import remains unsupported.
 
 ## Standalone native GJK distance and overlap
 
@@ -615,9 +615,68 @@ twenty attempts; primary queries used at most four. These counts do not establis
 every compound-condition/equality boundary or managed branch coverage. Fixture
 SHA-256: `dac725265d6cc252ec20253cd03adfcc1d57cd63df4cb439b0b07ffe78c764c9`.
 
-This checkpoint does not route world contacts or gameplay sensors through GJK,
-add native TOI/separation functions or prove original Android/Windows runtime
-parity. Sensor Begin/End ordering and destruction/refilter timing are next.
+The world now routes sensor narrowphase through this GJK query as described below.
+Solid-contact geometry and existing gameplay overlap helpers retain their paths.
+Native TOI/separation functions and original Android/Windows runtime parity remain
+separate acceptance work.
+
+## Sensor touching and queued contact transitions
+
+Candidates store native touching independently of their solid manifold. If either
+body is a sensor, narrowphase uses fresh-cache GJK with radii and stores no manifold,
+features or impulses. Sensor contacts do not connect solver islands. A candidate
+discovered at the end of a step starts not touching until its next narrowphase
+update, even if the post-step geometry overlaps. Current solid-only diagnostic
+APIs retain their behavior; `CaptureFixtureContacts()` adds all candidates in
+reverse global creation order, including sensor touching and stored manifold count.
+Native fixture A/B orientation is preserved for mixed pairs and for polygon terrain
+created either before or after a body.
+
+`PhysicsBody.IsSensor` remains a body-wide convenience affecting every owned fixture.
+Changing it does not immediately clear stored touching/manifold state, touch proxies
+or generate a transition. A sensor update clears the solid manifold; toggling twice
+without an intervening update preserves the previous cache. If a sensor becomes
+solid while still touching, a manifold can appear without a second Begin. Conversely,
+GJK's small positive-gap overlap can disappear when switching to solid geometry,
+producing an Update End despite unchanged transforms. Independent per-triangle
+sensor flags and implicit terrain sensor setters are not exposed yet.
+
+Set `world.RecordContactEvents = true` to queue future discrete Begin/End transitions;
+recording is off by default. `DrainContactEvents()` returns a detached read-only batch
+and empties the pending queue. Drain regularly while recording. Enabling recording
+mid-contact does not synthesize Begin records, and disabling retains pending ones.
+Events contain stable native fixture labels, creation sequence, current sensor
+classification, event kind/stage and the touching flag at emission. They remain
+valid after removal; retired labels cannot be used to query a live fixture.
+
+An Update Begin reports touching true; an Update End reports false. Contact
+destruction from filtering, proxy separation or body removal emits End only for a
+stored touching contact, with touching still true. Sensor classification is captured
+from current flags even if the last narrowphase used the opposite sensor mode.
+Body removal retires joints first, incident contacts in reverse creation order,
+then proxies. No duplicate End is emitted for already non-touching/retired contacts.
+
+This is an immutable queued adaptation, not synchronous native callback execution.
+The independent terrain/body updates merge only their current traversal's records
+in reverse global creation order. Previous steps and between-step removals retain
+chronological order. This matches the tested always-awake subset with no callbacks
+mutating the solve; sleeping/wake-dependent traversal requires further work.
+PreSolve/PostSolve callbacks, contact disabling, native TOI events and gameplay
+reaction timing are not implemented by this queue. Analytical CCD may alter final
+transforms but does not invent additional discrete events.
+
+`SensorEventsReference.json` compares thirteen native scenes through tick 90:
+1,170 snapshots and 49 emitted records (27 Begin, ten Update End, twelve Destroy End).
+Cases cover sensor/sensor and circle/polygon/compound passages, terrain created
+before/after bodies, sensor/solid toggles, masks, joints, replacement, interleaved
+terrain/body order and a GJK-only positive-gap overlap. Ordered event metadata,
+all candidate labels/creation/touching/current sensor/manifold counts match exactly;
+six finite body-state components retain the 0.00002 tolerance. Extra regressions
+cover opt-in recording, cross-step queue order, retained snapshots, repeated removal,
+toggle-before-destruction and absence of sensor impulses/manifolds/features.
+The private native listener produces events directly; observation-only contact
+manager hooks label actual creation and destruction stages. Fixture SHA-256:
+`ee95e37681ea089fca805909dffd6db33e0e670f214d1bbd9245fa4705aad574`.
 
 ## Running numerical verification
 
@@ -625,6 +684,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SensorContactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PhysicsDistanceTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*CollisionFilterTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PolygonBodyContactTests'
@@ -650,8 +710,9 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are sensor event timing with GJK world integration, remaining joint
-APIs/limited-angle cases and native TOI/separation-function islands. Then verify Windows game body construction, materials, fixtures,
+Next gates are per-fixture sensor controls, remaining joint APIs/limited-angle
+cases and native TOI/separation-function islands. Synchronous callback/gameplay
+integration and sleeping remain separate verification work. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
 are a separate acceptance gate. Presentation expansion follows those gates.

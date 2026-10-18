@@ -13,6 +13,8 @@ namespace Ctr2.Engine.Physics
         internal virtual PhysicsBody? OtherBody => null;
         /// <summary>Snapshots native feature IDs in manifold point order.</summary>
         internal virtual int[] CaptureFeatures() => [];
+        /// <summary>Stored solid manifold point count, independent of velocity conditioning.</summary>
+        internal virtual int PointCount => 1;
         /// <summary>Contact creation sequence retained while broadphase proxies overlap.</summary>
         internal long CreationOrder;
         /// <summary>Restores compatible accumulated impulses.</summary>

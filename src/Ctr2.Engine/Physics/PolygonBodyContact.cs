@@ -17,6 +17,7 @@ namespace Ctr2.Engine.Physics
         private readonly Vector2 localNormal;
         private readonly Vector2 localPlane;
         private readonly List<Point> points;
+        internal override int PointCount => points.Count;
         private readonly float friction;
         private readonly float restitution;
         private Vector2 normal;

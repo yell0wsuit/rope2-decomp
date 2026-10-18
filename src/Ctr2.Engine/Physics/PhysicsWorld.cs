@@ -20,7 +20,7 @@ namespace Ctr2.Engine.Physics
         {
             get; internal set;
         }
-        /// <summary>Gets or sets whether this body skips supported solid contacts.</summary>
+        /// <summary>Gets or sets whether all fixtures of this body act as sensors.</summary>
         /// <value>True for rope material points and grab sensors.</value>
         public bool IsSensor
         {
@@ -390,7 +390,7 @@ namespace Ctr2.Engine.Physics
             return true;
         }
 
-        /// <summary>Removes an owned body and every attached constraint and cached terrain contact between steps.</summary>
+        /// <summary>Removes an owned body and all attached constraints and contact candidates between steps.</summary>
         /// <param name="body">Body to retire.</param>
         /// <returns>Whether the body belonged to this world.</returns>
         public bool RemoveBody(PhysicsBody body)
@@ -399,18 +399,12 @@ namespace Ctr2.Engine.Physics
             {
                 return false;
             }
-            RemoveBodyProxies(body);
             foreach (PhysicsJoint joint in joints.FindAll(j => j.A == body || j.B == body))
             {
                 _ = Remove(joint);
             }
-            foreach ((PhysicsBody, TerrainFixture, int) key in new List<(PhysicsBody, TerrainFixture, int)>(contacts.Keys))
-            {
-                if (key.Item1 == body)
-                {
-                    _ = contacts.Remove(key);
-                }
-            }
+            RetireBodyContacts(body);
+            RemoveBodyProxies(body);
             polygonFixtureCount -= body.PolygonFixtures.Count;
             return true;
         }
@@ -418,6 +412,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>
         public void Step()
         {
+            int eventStart = contactEvents.Count;
             Dictionary<PhysicsBody, (Vector2 Origin, float Angle)> proxyStarts = BeginBroadPhaseStep();
             Dictionary<PhysicsBody, (Vector2 Position, float Angle)>? starts = ContinuousPhysics && terrain.Count > 0 ? new() : null;
             if (starts != null)
@@ -432,6 +427,8 @@ namespace Ctr2.Engine.Physics
             }
             List<PhysicsContact> touching = UpdateTerrainContacts();
             touching.AddRange(UpdateBodyContacts());
+            // Merge this traversal only. Earlier queued batches keep chronological order.
+            contactEvents.Sort(eventStart, contactEvents.Count - eventStart, ContactEventOrder);
             List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands);
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
