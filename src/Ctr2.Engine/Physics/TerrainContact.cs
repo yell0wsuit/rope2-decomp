@@ -42,7 +42,7 @@ namespace Ctr2.Engine.Physics
             foreach (KeyValuePair<(PhysicsBody, TerrainFixture, int), TerrainCandidate> entry in contacts.ToArray())
             {
                 TerrainCandidate candidate = entry.Value;
-                if (!ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter) ||
+                if (candidate.Body.Mass == 0 || !ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter) ||
                     !broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
                 {
                     RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, false, true);
@@ -137,18 +137,20 @@ namespace Ctr2.Engine.Physics
             Feature = feature;
         }
 
-        /// <summary>Finds the maximum separating face and its circle Voronoi region.</summary>
+        /// <summary>Finds the maximum separating face and its circle Voronoi region, as native <c>b2CollidePolygonAndCircle</c>.</summary>
         /// <param name="body">Dynamic circle.</param>
         /// <param name="fixture">Static polygon.</param>
         /// <returns>A touching manifold, or null when separated.</returns>
         internal static TerrainContact? Create(PhysicsBody body, TerrainFixture fixture)
         {
-            float separation = float.NegativeInfinity;
-            int face = 0;
-            float radius = body.Radius + Skin;
-            for (int i = 0; i < fixture.Points.Length; i++)
+            // Terrain vertices are stored in world space, so the polygon frame is the identity.
+            Vector2 center = body.Origin;
+            int face = 0, count = fixture.Points.Length;
+            float separation = -float.MaxValue;
+            float radius = Skin + body.Radius;
+            for (int i = 0; i < count; i++)
             {
-                float distance = Vector2.Dot(fixture.Normals[i], body.Position - fixture.Points[i]);
+                float distance = Vector2.Dot(fixture.Normals[i], center - fixture.Points[i]);
                 if (distance > radius)
                 {
                     return null;
@@ -160,20 +162,34 @@ namespace Ctr2.Engine.Physics
                     face = i;
                 }
             }
-            Vector2 a = fixture.Points[face], b = fixture.Points[(face + 1) % fixture.Points.Length];
-            if (separation >= 1.1920929e-7f)
+            int next = face + 1 < count ? face + 1 : 0;
+            Vector2 a = fixture.Points[face], b = fixture.Points[next];
+            if (separation < 1.1920929e-7f)
             {
-                bool first = Vector2.Dot(body.Position - a, b - a) <= 0;
-                bool second = Vector2.Dot(body.Position - b, a - b) <= 0;
-                if (first || second)
-                {
-                    int index = first ? face : (face + 1) % fixture.Points.Length;
-                    Vector2 p = fixture.Points[index];
-                    return Vector2.DistanceSquared(p, body.Position) > radius * radius ? null :
-                        new(body, fixture, p, Vector2.Normalize(body.Position - p), index + 8);
-                }
+                return new(body, fixture, .5f * (a + b), fixture.Normals[face], face);
             }
-            return new(body, fixture, (a + b) * .5f, fixture.Normals[face], face);
+            float first = Vector2.Dot(center - a, b - a), second = Vector2.Dot(center - b, a - b);
+            if (first <= 0 || second <= 0)
+            {
+                int index = first <= 0 ? face : next;
+                Vector2 vertex = fixture.Points[index], offset = center - vertex;
+                return Vector2.Dot(offset, offset) > radius * radius ? null : new(body, fixture, vertex, Normalize(offset), index + 8);
+            }
+            Vector2 faceCenter = .5f * (a + b);
+            return Vector2.Dot(center - faceCenter, fixture.Normals[face]) > radius ? null :
+                new(body, fixture, faceCenter, fixture.Normals[face], face);
+        }
+
+        /// <summary>Native <c>b2Vec2::Normalize</c>: multiplies by the reciprocal length and leaves tiny vectors unchanged.</summary>
+        private static Vector2 Normalize(Vector2 value)
+        {
+            float length = MathF.Sqrt((value.X * value.X) + (value.Y * value.Y));
+            if (length < 1.1920929e-7f)
+            {
+                return value;
+            }
+            float inverse = 1 / length;
+            return new(value.X * inverse, value.Y * inverse);
         }
 
         /// <summary>Restores the native polygon/circle feature-zero accumulated impulses.</summary>
@@ -188,15 +204,21 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Computes effective masses, restitution and warm-start velocity changes.</summary>
+        /// <remarks>Uses native <c>b2WorldManifold</c> face-A point averaging and contact solver mass grouping.</remarks>
         internal override void Initialize()
         {
             normal = faceNormal;
             tangent = new(normal.Y, -normal.X);
-            float separation = Vector2.Dot(Body.Position - point, normal) - (Body.Radius + Skin);
-            arm = -(Body.Radius + (.5f * separation)) * normal;
+            // The circle's solver transform origin is its center; its local point is the circle center.
+            Vector2 clip = Body.Position;
+            Vector2 surfaceA = clip + ((Skin - Vector2.Dot(clip - point, normal)) * normal);
+            Vector2 surfaceB = clip - (Body.Radius * normal);
+            arm = (.5f * (surfaceA + surfaceB)) - Body.Position;
             float rn = Cross(arm, normal), rt = Cross(arm, tangent);
-            normalMass = 1 / (Body.InverseMass + (Body.InverseInertia * rn * rn));
-            tangentMass = 1 / (Body.InverseMass + (Body.InverseInertia * rt * rt));
+            float kNormal = Body.InverseMass + (Body.InverseInertia * rn * rn);
+            float kTangent = Body.InverseMass + (Body.InverseInertia * rt * rt);
+            normalMass = kNormal > 0 ? 1 / kNormal : 0;
+            tangentMass = kTangent > 0 ? 1 / kTangent : 0;
             float speed = Vector2.Dot(ContactVelocity(), normal);
             bias = speed < -1 ? -restitution * speed : 0;
         }
@@ -224,9 +246,12 @@ namespace Ctr2.Engine.Physics
         internal override bool SolvePosition(bool continuous = false)
         {
             Vector2 n = faceNormal;
-            float separation = Vector2.Dot(Body.Position - point, n) - (Body.Radius + Skin);
+            // Native b2PositionSolverManifold face A: the clip point is the circle center, so its arm is zero.
+            float separation = Vector2.Dot(Body.Position - point, n) - Skin - Body.Radius;
             float correction = Math.Clamp((continuous ? .75f : .2f) * (separation + PhysicsWorld.LinearSlop), -.2f, 0);
-            Body.Position -= correction * n;
+            float k = Body.InverseMass;
+            float impulse = k > 0 ? -correction / k : 0;
+            Body.Position += Body.InverseMass * (impulse * n);
             return separation >= -(continuous ? 1.5f : 3) * PhysicsWorld.LinearSlop;
         }
 

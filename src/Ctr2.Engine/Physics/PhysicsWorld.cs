@@ -93,14 +93,18 @@ namespace Ctr2.Engine.Physics
             return float.IsFinite(value) && value >= 0 && value <= maximum ? value : throw new ArgumentOutOfRangeException(nameof(value));
         }
 
-        /// <summary>Gets the inverse centroid moment of inertia of the owned fixtures.</summary>
-        /// <value>Zero for static bodies.</value>
-        internal float InverseInertia => Mass <= 0 || FixedRotation ? 0 : PolygonFixtures.Count > 0 ? field * (polygonInitialMass / Mass) : 2 / (Mass * Radius * Radius);
-        /// <summary>Gets the circular fixture mass in kilograms; zero denotes a static body.</summary>
-        /// <value>Density times circle area for a dynamic body.</value>
+        /// <summary>Gets the inverse centroid moment of inertia from the latest mass reset.</summary>
+        /// <value>Zero for static, kinematic and fixed-rotation bodies.</value>
+        internal float InverseInertia
+        {
+            get; private set;
+        }
+
+        /// <summary>Gets the body mass in kilograms; zero exactly for static and kinematic bodies.</summary>
+        /// <value>Summed fixture mass for a dynamic body, or one when its fixtures have no density.</value>
         public float Mass
         {
-            get; internal set;
+            get; private set;
         }
         /// <summary>Gets the inverse mass used by constraints.</summary>
         /// <value>Zero for static bodies.</value>
@@ -129,17 +133,16 @@ namespace Ctr2.Engine.Physics
             set => field = !float.IsFinite(value) || value < 0 ? throw new ArgumentOutOfRangeException(nameof(value)) : value;
         }
 
-        /// <summary>Creates a validated body; construction is owned by its world.</summary>
+        /// <summary>Creates a validated circle body; construction is owned by its world.</summary>
         /// <param name="position">Initial center in meters.</param>
         /// <param name="radius">Positive fixture radius.</param>
-        /// <param name="density">Fixture density, or zero for a static body.</param>
+        /// <param name="density">Nonnegative fixture density.</param>
         /// <param name="gravityScale">Gravity multiplier.</param>
-        internal PhysicsBody(Vector2 position, float radius, float density, float gravityScale)
+        /// <param name="type">Native body type.</param>
+        internal PhysicsBody(Vector2 position, float radius, float density, float gravityScale, PhysicsBodyType type)
+            : this([], radius, density, gravityScale, type, false)
         {
             Position = position;
-            Radius = radius;
-            Mass = density > 0 ? density * MathF.PI * radius * radius : 0;
-            GravityScale = gravityScale;
         }
     }
 
@@ -166,23 +169,25 @@ namespace Ctr2.Engine.Physics
             return bodies.Count + extraBodies <= 4096 && joints.Count + extraJoints <= 8192;
         }
 
-        /// <summary>Adds a circular body, using zero density to request a static anchor.</summary>
+        /// <summary>Adds a circular body; without an explicit type, zero density requests a static anchor.</summary>
         /// <param name="position">Initial center in meters.</param>
         /// <param name="radius">Positive radius in meters.</param>
         /// <param name="density">Positive dynamic fixture density, or zero for static.</param>
         /// <param name="gravityScale">Finite world gravity multiplier.</param>
         /// <param name="angle">Initial finite clockwise orientation in radians.</param>
+        /// <param name="type">Native body type, or null to infer static from zero density and dynamic otherwise.</param>
         /// <returns>The newly owned body.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Values or the body budget are invalid.</exception>
-        public PhysicsBody AddCircle(Vector2 position, float radius, float density, float gravityScale, float angle = 0)
+        public PhysicsBody AddCircle(Vector2 position, float radius, float density, float gravityScale, float angle = 0, PhysicsBodyType? type = null)
         {
             float mass = density * MathF.PI * radius * radius;
             if (bodies.Count >= 4096 || !float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(radius) || radius <= 0 ||
-                !float.IsFinite(density) || density < 0 || !float.IsFinite(gravityScale) || !float.IsFinite(angle) || !float.IsFinite(mass) || (density > 0 && mass < 1e-12f))
+                !float.IsFinite(density) || density < 0 || !float.IsFinite(gravityScale) || MathF.Abs(gravityScale) > 1000000 || !float.IsFinite(angle) || !float.IsFinite(mass) || (density > 0 && mass < 1e-12f) ||
+                (type.HasValue && !Enum.IsDefined(type.Value)))
             {
                 throw new ArgumentOutOfRangeException(nameof(radius));
             }
-            PhysicsBody body = new(position, radius, density, gravityScale)
+            PhysicsBody body = new(position, radius, density, gravityScale, type ?? (density > 0 ? PhysicsBodyType.Dynamic : PhysicsBodyType.Static))
             {
                 Angle = angle
             };
@@ -432,6 +437,7 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Traverses solid contacts before joints, preserving native body-edge and LIFO order.</summary>
+        /// <remarks>Dynamic and kinematic bodies seed and propagate islands; static bodies stop traversal.</remarks>
         private List<List<PhysicsJoint>> SolverOrder(IReadOnlyList<PhysicsContact> active, out List<List<PhysicsContact>> contactIslands)
         {
             Dictionary<PhysicsBody, List<PhysicsJoint>> jointEdges = [];
@@ -466,7 +472,7 @@ namespace Ctr2.Engine.Physics
             for (int i = bodies.Count - 1; i >= 0; i--)
             {
                 PhysicsBody seed = bodies[i];
-                if (seed.Mass == 0 || !visited.Add(seed))
+                if (seed.Type == PhysicsBodyType.Static || !visited.Add(seed))
                 {
                     continue;
                 }
@@ -488,7 +494,7 @@ namespace Ctr2.Engine.Physics
 
                         islandContacts.Add(contact);
                         PhysicsBody? other = contact.Body == body ? contact.OtherBody : contact.Body;
-                        if (other != null && other.Mass > 0 && visited.Add(other))
+                        if (other != null && other.Type != PhysicsBodyType.Static && visited.Add(other))
                         {
                             stack.Push(other);
                         }
@@ -504,7 +510,7 @@ namespace Ctr2.Engine.Physics
 
                         ordered.Add(joint);
                         PhysicsBody other = joint.A == body ? joint.B : joint.A;
-                        if (other.Mass > 0 && visited.Add(other))
+                        if (other.Type != PhysicsBodyType.Static && visited.Add(other))
                         {
                             stack.Push(other);
                         }

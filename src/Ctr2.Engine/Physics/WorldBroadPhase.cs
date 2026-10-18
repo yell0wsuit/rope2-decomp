@@ -155,7 +155,8 @@ namespace Ctr2.Engine.Physics
             {
                 BodyCandidate pair = entry.Value;
                 PhysicsBody a = pair.A.Body!, b = pair.B.Body!;
-                if (JointBlocksCollision(a, b) || !ShouldCollide(pair.A.Filter, pair.B.Filter) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
+                // SetBodyType refilters every contact of the changed body, so this matches native flagged filtering.
+                if ((a.Mass == 0 && b.Mass == 0) || JointBlocksCollision(a, b) || !ShouldCollide(pair.A.Filter, pair.B.Filter) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
                 {
                     RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, false, true);
                     _ = bodyContacts.Remove(entry.Key);
@@ -287,7 +288,7 @@ namespace Ctr2.Engine.Physics
             Dictionary<PhysicsBody, (Vector2, float)> starts = [];
             foreach (PhysicsBody body in bodies)
             {
-                if (body.Mass > 0)
+                if (body.Type != PhysicsBodyType.Static)
                 {
                     // Native rebuilds the start transform from the sweep, not the cached teleport transform.
                     starts.Add(body, (body.ComputedOrigin, body.Angle));

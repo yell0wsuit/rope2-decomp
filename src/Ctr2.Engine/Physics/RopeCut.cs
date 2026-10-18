@@ -63,10 +63,11 @@ namespace Ctr2.Engine.Physics
             rope.Joints.Insert(segment + 1, world.AddRope(right, b, Vector2.Distance(position, b.Position)));
             rope.Points.InsertRange(segment + 1, [left, right]);
             rope.CutGap = segment + 1;
-            // Reduce fixture density and recompute mass without changing existing velocities.
+            // Native divides each interior fixture density by ten, then resets mass data.
             foreach (PhysicsBody body in rope.Points.Skip(1).SkipLast(1))
             {
-                body.Mass /= 10;
+                body.Densities[0] /= 10;
+                body.ResetMassData();
             }
             return true;
         }

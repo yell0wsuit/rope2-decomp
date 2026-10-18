@@ -1,7 +1,7 @@
 # Candy, character, cutting, terrain and star physics slice
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
-[the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies with native velocity, impulse, force and teleport controls,
+[the original license](BOX2D_LICENSE.txt). It implements always-awake static, kinematic and dynamic circle and compound polygon bodies with native velocity, impulse, force, teleport, type and mass controls,
 rope/soft-distance and revolute joints with rotating body-local anchors, discrete circle/circle and
 polygon/circle and polygon/polygon body contacts, and circle/polygon contacts against static convex terrain.
 A native-style dynamic-tree broadphase owns fixture proxies and supported discrete terrain contacts.
@@ -223,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `BodyTypeReference.json` | 900 native ticks: static/dynamic fruit-style toggles, offset-COM polygon type and density resets, kinematic pushers and island bridges, explicit mass data and roped body freezing. Exact types/proxy IDs/candidates/events; mass, inertia, centers and six body-state components. |
 | `BodyControlReference.json` | 900 native ticks: velocity setters, point/angular impulses, accumulated forces/torques, gravity-scale changes and teleports. Finite body states/proxy bounds, exact proxy IDs and pre-/post-step candidate/event metadata. |
 | `RevoluteReference.json` | 2,340 native ticks: free/motor hinges, lower/upper/equal/narrow limits, equal-width threshold neighbors, fixed rotation, offset COM, contacts and topology changes. Finite body/anchor/reaction/motor state and exact limit/candidate/event metadata. |
 | `FixtureSensorReference.json` | 720 native world ticks: mixed triangle/circle/polygon sensors, terrain initialization/toggles, body broadcasts, filters/joints and proxy reuse. Exact per-fixture flags/events/candidates/proxy IDs, finite bounds/body states and unchanged mass. |
@@ -847,7 +848,56 @@ contacts under sustained forcing likewise amplify the existing terrain-contact f
 noise about 1.2x per tick and are not used as acceptance scenes.
 
 The game's only mouse joint is guarded by a null check and is never created, so it is
-not ported. Body type changes (`SetType`) and mass resets remain separate work.
+not ported.
+
+## Body types, kinematic bodies and mass resets
+
+Bodies carry a native `PhysicsBodyType`: static, kinematic or dynamic. The Windows
+master design document authors kinematic bodies (snail, star, helicopter, clover,
+hook dragger) alongside static and dynamic ones, and gameplay toggles fruit and
+fireballs between static and dynamic. `AddCircle` and `AddPolygon` accept an explicit
+type; without one, a zero-density circle stays static as before. Static and kinematic
+bodies have zero mass and may carry density for a later type change. A dynamic body
+whose fixtures have no density gets native mass one and no rotational inertia.
+
+Mass follows native `ResetMassData`. Fixture densities are summed in fixture-list
+order, the center of mass is weighted and scaled by the reciprocal mass, and inertia
+is centered once. Circle inertia now uses the native `mass * (0.5 * r * r)` grouping
+instead of an algebraically equal shortcut. Moving the center keeps the cached
+transform and adds `cross(angularVelocity, centerShift)` to linear velocity.
+`SetFixtureDensity` changes only the stored density until `ResetMassData`. Rope cuts
+now divide interior fixture densities by ten and reset mass, as the game does, rather
+than scaling mass directly. `SetMassData` overrides dynamic mass properties (inertia
+about the origin, nonpositive mass becoming one) and is ignored by other types.
+`RotationalInertia` reports native `GetInertia`.
+
+`SetBodyType` returns at once for an unchanged type, which matters because collected
+fruit requests static every frame. Otherwise it resets mass and clears forces. A body
+made static loses its velocity, collapses its center onto its origin and synchronizes
+its proxies in place. Every fixture is then refiltered: contacts that no longer
+involve a dynamic body end at the next step with destroy-phase events, and new pairs
+for a newly dynamic body appear after that step's synchronization.
+
+Kinematic bodies accept velocity setters but ignore gravity, damping, forces and
+impulses. Like native, they seed and propagate islands, so joint/contact order across
+a kinematic bridge matches. They integrate positions and synchronize proxies, and
+they collide only with dynamic bodies.
+
+`BodyTypeReference.json` compares five independent native scenes through tick 180
+(900 snapshots), including pre-step mass, inertia, local center, center and velocity
+after every mutation. Fixture SHA-256:
+`de320ff6367bf0db1e3833592041f6c88c34d9b0003174bc6f8fb5886c0f3e12`.
+
+## Native circle-terrain arithmetic
+
+The circle-terrain contact was an algebraically simplified rewrite: arm, separation,
+vertex normalization and position correction used different float operations from
+native. It now follows `b2CollidePolygonAndCircle` (including the face-region
+separation recheck and reciprocal-multiply normalization), `b2WorldManifold` face-A
+point averaging, contact-solver mass grouping and the native `c + mB * ((-C / K) * n)`
+position update. A circle rolling on terrain is now bit-identical to native for every
+compared tick. The new body-control and body-type scenes are bit-identical except
+where polygon contacts take part; those paths are the next exactness target.
 
 ## Running numerical verification
 
@@ -855,6 +905,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyTypeTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyControlTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RevoluteJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FixtureSensorTests'
@@ -884,7 +935,7 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are body type changes and mass resets, missing distance/rope APIs (including zero-rest-length springs),
+Next gates are bit-exact polygon contact arithmetic, missing distance/rope APIs (including zero-rest-length springs),
 prismatic constraints, world queries (ray casts, AABB queries, point tests) and native TOI/separation-function islands. Synchronous callback/gameplay integration and
 sleeping remain separate verification work. Then verify Windows game body
 construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing

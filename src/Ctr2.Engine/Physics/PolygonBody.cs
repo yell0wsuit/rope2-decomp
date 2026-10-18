@@ -7,8 +7,6 @@ namespace Ctr2.Engine.Physics
 {
     public sealed partial class PhysicsBody
     {
-        private readonly float polygonInitialMass;
-
         /// <summary>Gets immutable local convex fixtures, in creation order.</summary>
         /// <value>Empty for circles; otherwise the compound triangle or single convex fixture geometry.</value>
         public IReadOnlyList<ConvexPolygon> PolygonFixtures
@@ -20,7 +18,7 @@ namespace Ctr2.Engine.Physics
         /// <value>Zero for centered circles, or the mass-weighted polygon centroid.</value>
         public Vector2 LocalCenter
         {
-            get;
+            get; private set;
         }
 
         /// <summary>Gets the authored body origin in world meters.</summary>
@@ -43,53 +41,36 @@ namespace Ctr2.Engine.Physics
         /// <summary>Creates a compound body and combines fixture mass data in fixture order.</summary>
         /// <param name="fixtures">Owned immutable local convex geometry.</param>
         /// <param name="origin">Initial authored body origin in meters.</param>
-        /// <param name="density">Positive fixture density.</param>
+        /// <param name="density">Nonnegative fixture density.</param>
         /// <param name="gravityScale">World gravity multiplier.</param>
         /// <param name="angle">Initial clockwise radians.</param>
         /// <param name="fixedRotation">Whether to disable angular motion.</param>
-        internal PhysicsBody(IReadOnlyList<ConvexPolygon> fixtures, Vector2 origin, float density, float gravityScale, float angle, bool fixedRotation)
-            : this(origin, 0, 0, gravityScale)
+        /// <param name="type">Native body type.</param>
+        internal PhysicsBody(IReadOnlyList<ConvexPolygon> fixtures, Vector2 origin, float density, float gravityScale, float angle, bool fixedRotation,
+            PhysicsBodyType type) : this(fixtures, 0, density, gravityScale, type, fixedRotation)
         {
-            PolygonFixtures = fixtures;
-            SensorFlags = new bool[fixtures.Count];
-            Vector2 weightedCenter = Vector2.Zero;
-            // ResetMassData traverses Box2D's prepended fixture list.
-            for (int index = fixtures.Count - 1; index >= 0; index--)
-            {
-                PolygonMass data = fixtures[index].ComputeMass(density);
-                Mass += data.Mass;
-                weightedCenter += data.Mass * data.Center;
-            }
-            LocalCenter = weightedCenter * (1 / Mass);
-            // ResetMassData sums origin moments in fixture-list order, then shifts once.
-            float inertia = 0;
-            for (int index = fixtures.Count - 1; index >= 0; index--)
-            {
-                inertia += fixtures[index].ComputeMass(density).OriginInertia;
-            }
-            inertia -= Mass * Vector2.Dot(LocalCenter, LocalCenter);
-            if (inertia <= 0)
-            {
-                // Native asserts here when large origin moments cancel. Retain the managed
-                // valid-small-shape extension without changing ordinary native float arithmetic.
-                double centered = 0;
-                foreach (ConvexPolygon fixture in fixtures)
-                {
-                    PolygonMass data = fixture.ComputeMass(density);
-                    double dx = (double)data.Center.X - LocalCenter.X, dy = (double)data.Center.Y - LocalCenter.Y;
-                    centered += data.CenterInertia + (data.Mass * ((dx * dx) + (dy * dy)));
-                }
-                inertia = (float)centered;
-            }
-            if (!float.IsFinite(Mass) || Mass < 1e-12f || !float.IsFinite(inertia) || inertia <= 0)
-            {
-                throw new ArgumentException("Invalid compound polygon mass or inertia.");
-            }
-            polygonInitialMass = Mass;
-            InverseInertia = 1 / inertia;
-            FixedRotation = fixedRotation;
             Angle = angle;
             Position = origin + PhysicsMath.Rotate(LocalCenter, angle);
+        }
+
+        private PhysicsBody(IReadOnlyList<ConvexPolygon> fixtures, float radius, float density, float gravityScale, PhysicsBodyType type, bool fixedRotation)
+        {
+            PolygonFixtures = fixtures;
+            Radius = radius;
+            GravityScale = gravityScale;
+            Type = type;
+            FixedRotation = fixedRotation;
+            int count = Math.Max(1, fixtures.Count);
+            SensorFlags = new bool[count];
+            Densities = new float[count];
+            Array.Fill(Densities, density);
+            if (!TryComputeMass(type, out float mass, out Vector2 center, out float inverse))
+            {
+                throw new ArgumentException("Invalid body mass or inertia.");
+            }
+            Mass = mass;
+            LocalCenter = center;
+            InverseInertia = inverse;
         }
     }
 
@@ -106,16 +87,18 @@ namespace Ctr2.Engine.Physics
         /// <param name="angle">Initial clockwise radians.</param>
         /// <param name="fixedRotation">Whether to disable angular motion.</param>
         /// <param name="compound">Whether to create cyclic triangle fixtures instead of one convex fixture.</param>
-        /// <returns>The owned dynamic body with its mass-weighted center.</returns>
+        /// <param name="type">Native body type; static and kinematic bodies accept zero density.</param>
+        /// <returns>The owned body with its mass-weighted center.</returns>
         /// <exception cref="ArgumentException">Body data, mass or fixture budgets are invalid.</exception>
         /// <remarks>Polygon contacts are discrete; polygon CCD is not implemented in this subset.</remarks>
-        public PhysicsBody AddPolygon(ConvexPolygon shape, Vector2 origin, float density, float gravityScale, float angle = 0, bool fixedRotation = false, bool compound = true)
+        public PhysicsBody AddPolygon(ConvexPolygon shape, Vector2 origin, float density, float gravityScale, float angle = 0, bool fixedRotation = false, bool compound = true,
+            PhysicsBodyType type = PhysicsBodyType.Dynamic)
         {
             ArgumentNullException.ThrowIfNull(shape);
             int count = compound ? shape.Vertices.Count - 2 : 1;
             if (bodies.Count >= 4096 || polygonFixtureCount + count > 8192 ||
                 !float.IsFinite(origin.X) || !float.IsFinite(origin.Y) || MathF.Abs(origin.X) > 10000 || MathF.Abs(origin.Y) > 10000 ||
-                !float.IsFinite(density) || density <= 0 || density > 1000000 || !float.IsFinite(gravityScale) || MathF.Abs(gravityScale) > 1000000 ||
+                !Enum.IsDefined(type) || !float.IsFinite(density) || density < 0 || (density == 0 && type == PhysicsBodyType.Dynamic) || density > 1000000 || !float.IsFinite(gravityScale) || MathF.Abs(gravityScale) > 1000000 ||
                 !float.IsFinite(angle) || MathF.Abs(angle) > 1000000)
             {
                 throw new ArgumentException("Invalid polygon body values or fixture budget.");
@@ -137,7 +120,7 @@ namespace Ctr2.Engine.Physics
             {
                 fixtures.Add(shape);
             }
-            PhysicsBody body = new(fixtures.AsReadOnly(), origin, density, gravityScale, angle, fixedRotation);
+            PhysicsBody body = new(fixtures.AsReadOnly(), origin, density, gravityScale, angle, fixedRotation, type);
             RegisterBodyProxies(body);
             bodies.Add(body);
             polygonFixtureCount += count;

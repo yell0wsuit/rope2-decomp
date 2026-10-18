@@ -12,25 +12,25 @@ namespace Ctr2.Engine.Physics
         /// <summary>Torque accumulated since the last step, cleared after each step.</summary>
         internal float Torque;
 
-        /// <summary>Replaces the linear velocity of a dynamic body; static bodies ignore the call.</summary>
+        /// <summary>Replaces the linear velocity of a dynamic or kinematic body; static bodies ignore the call.</summary>
         /// <param name="velocity">Finite center-of-mass velocity in meters per second.</param>
         /// <exception cref="ArgumentOutOfRangeException">The velocity is nonfinite.</exception>
         public void SetLinearVelocity(Vector2 velocity)
         {
             Finite(velocity);
-            if (Mass > 0)
+            if (Type != PhysicsBodyType.Static)
             {
                 Velocity = velocity;
             }
         }
 
-        /// <summary>Replaces the angular velocity of a dynamic body; static bodies ignore the call.</summary>
+        /// <summary>Replaces the angular velocity of a dynamic or kinematic body; static bodies ignore the call.</summary>
         /// <param name="velocity">Finite clockwise radians per second.</param>
         /// <exception cref="ArgumentOutOfRangeException">The velocity is nonfinite.</exception>
         public void SetAngularVelocity(float velocity)
         {
             Finite(velocity);
-            if (Mass > 0)
+            if (Type != PhysicsBodyType.Static)
             {
                 AngularVelocity = velocity;
             }
