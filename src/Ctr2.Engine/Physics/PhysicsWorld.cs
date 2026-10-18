@@ -431,9 +431,76 @@ namespace Ctr2.Engine.Physics
             {
                 throw new ArgumentOutOfRangeException(nameof(length));
             }
-            PhysicsJoint joint = new PhysicsDistanceJoint(a, b, length, frequency, damping, anchorA, anchorB);
+            PhysicsJoint joint = new PhysicsDistanceJoint(a, b, frequency == 0, length, frequency, damping, anchorA, anchorB, false);
             joints.Add(joint);
             ChangeCollisionBlock(a, b, 1);
+            return joint;
+        }
+
+        /// <summary>Adds a native rope joint.</summary>
+        /// <param name="a">First owned body.</param>
+        /// <param name="b">Second owned body.</param>
+        /// <param name="definition">Local anchors, maximum length and collision allowance.</param>
+        /// <returns>The owned rope joint.</returns>
+        /// <exception cref="ArgumentException">Bodies, definition or joint budget are invalid.</exception>
+        public PhysicsJoint AddRope(PhysicsBody a, PhysicsBody b, PhysicsRopeDefinition definition)
+        {
+            return AddDistanceJoint(a, b, true, definition.MaxLength, 0, 0, definition.LocalAnchorA, definition.LocalAnchorB, definition.CollideConnected);
+        }
+
+        /// <summary>Adds a native distance joint; zero frequency makes it rigid and zero length is allowed.</summary>
+        /// <param name="a">First owned body.</param>
+        /// <param name="b">Second owned body.</param>
+        /// <param name="definition">Local anchors, rest length, spring parameters and collision allowance.</param>
+        /// <returns>The owned distance joint.</returns>
+        /// <exception cref="ArgumentException">Bodies, definition or joint budget are invalid.</exception>
+        public PhysicsJoint AddDistance(PhysicsBody a, PhysicsBody b, PhysicsDistanceDefinition definition)
+        {
+            return AddDistanceJoint(a, b, false, definition.Length, definition.FrequencyHz, definition.DampingRatio,
+                definition.LocalAnchorA, definition.LocalAnchorB, definition.CollideConnected);
+        }
+
+        /// <summary>Adds a distance joint from world anchors, as native <c>b2DistanceJointDef::Initialize</c>.</summary>
+        /// <param name="a">First owned body.</param>
+        /// <param name="b">Second owned body.</param>
+        /// <param name="anchorA">First world anchor in meters.</param>
+        /// <param name="anchorB">Second world anchor in meters.</param>
+        /// <param name="frequency">Spring frequency, or zero for a rigid constraint.</param>
+        /// <param name="damping">Nonnegative damping ratio.</param>
+        /// <param name="collideConnected">Whether connected bodies can collide.</param>
+        /// <returns>The owned distance joint with the current anchor separation as its length.</returns>
+        /// <exception cref="ArgumentException">Bodies, anchors, parameters or joint budget are invalid.</exception>
+        public PhysicsJoint AddDistance(PhysicsBody a, PhysicsBody b, Vector2 anchorA, Vector2 anchorB, float frequency = 0, float damping = 0,
+            bool collideConnected = false)
+        {
+            ArgumentNullException.ThrowIfNull(a);
+            ArgumentNullException.ThrowIfNull(b);
+            if (!ValidAnchor(anchorA) || !ValidAnchor(anchorB))
+            {
+                throw new ArgumentException("Invalid distance anchors.", nameof(anchorA));
+            }
+            Vector2 delta = anchorB - anchorA;
+            return AddDistance(a, b, new(PhysicsMath.InverseRotate(anchorA - a.Origin, a.Angle), PhysicsMath.InverseRotate(anchorB - b.Origin, b.Angle),
+                MathF.Sqrt((delta.X * delta.X) + (delta.Y * delta.Y)), frequency, damping, collideConnected));
+        }
+
+        private PhysicsDistanceJoint AddDistanceJoint(PhysicsBody a, PhysicsBody b, bool rope, float length, float frequency, float damping,
+            Vector2 anchorA, Vector2 anchorB, bool collideConnected)
+        {
+            ArgumentNullException.ThrowIfNull(a);
+            ArgumentNullException.ThrowIfNull(b);
+            if (!ValidAnchor(anchorA) || !ValidAnchor(anchorB) || joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) ||
+                !float.IsFinite(length) || length < 0 || length > 1000000 || !float.IsFinite(frequency) || frequency < 0 || frequency > 1000000 ||
+                !float.IsFinite(damping) || damping < 0 || damping > 1000000)
+            {
+                throw new ArgumentException("Invalid distance definition or owned bodies.", nameof(length));
+            }
+            PhysicsDistanceJoint joint = new(a, b, rope, length, frequency, damping, anchorA, anchorB, collideConnected);
+            joints.Add(joint);
+            if (!collideConnected)
+            {
+                ChangeCollisionBlock(a, b, 1);
+            }
             return joint;
         }
 

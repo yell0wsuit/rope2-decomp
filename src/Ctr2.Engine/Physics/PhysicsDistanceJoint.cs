@@ -4,10 +4,29 @@ using System.Numerics;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>A Box2D 2.2.1 rope or soft distance constraint with rotating local anchors.</summary>
+    /// <summary>Native rope joint definition with body-origin local anchors.</summary>
+    /// <param name="LocalAnchorA">Anchor relative to body A's origin.</param>
+    /// <param name="LocalAnchorB">Anchor relative to body B's origin.</param>
+    /// <param name="MaxLength">Nonnegative maximum anchor separation in meters.</param>
+    /// <param name="CollideConnected">Whether connected bodies can collide.</param>
+    public readonly record struct PhysicsRopeDefinition(Vector2 LocalAnchorA, Vector2 LocalAnchorB, float MaxLength, bool CollideConnected = false);
+
+    /// <summary>Native distance joint definition with body-origin local anchors.</summary>
+    /// <param name="LocalAnchorA">Anchor relative to body A's origin.</param>
+    /// <param name="LocalAnchorB">Anchor relative to body B's origin.</param>
+    /// <param name="Length">Nonnegative rest length in meters.</param>
+    /// <param name="FrequencyHz">Spring frequency, or zero for a rigid constraint.</param>
+    /// <param name="DampingRatio">Nonnegative spring damping ratio.</param>
+    /// <param name="CollideConnected">Whether connected bodies can collide.</param>
+    public readonly record struct PhysicsDistanceDefinition(Vector2 LocalAnchorA, Vector2 LocalAnchorB, float Length, float FrequencyHz = 0,
+        float DampingRatio = 0, bool CollideConnected = false);
+
+    /// <summary>A Box2D 2.2.1 rope limit, or a rigid or soft distance constraint, with rotating local anchors.</summary>
     internal sealed class PhysicsDistanceJoint : PhysicsJoint
     {
-        /// <summary>Positive spring frequency, or zero for a unilateral rope limit.</summary>
+        /// <summary>Whether this is a unilateral rope limit rather than a distance joint.</summary>
+        private readonly bool rope;
+        /// <summary>Spring frequency; zero makes a distance joint rigid.</summary>
         private readonly float frequency;
         /// <summary>Spring damping ratio.</summary>
         private readonly float damping;
@@ -45,13 +64,17 @@ namespace Ctr2.Engine.Physics
         /// <summary>Creates a constraint with body-origin local anchors.</summary>
         /// <param name="a">First body.</param>
         /// <param name="b">Second body.</param>
-        /// <param name="length">Positive rest length or upper limit.</param>
-        /// <param name="frequency">Zero for rope; positive for spring.</param>
+        /// <param name="rope">Whether to create a rope limit.</param>
+        /// <param name="length">Nonnegative rest length or upper limit.</param>
+        /// <param name="frequency">Distance spring frequency, or zero.</param>
         /// <param name="damping">Spring damping ratio.</param>
         /// <param name="localAnchorA">First body-local anchor.</param>
         /// <param name="localAnchorB">Second body-local anchor.</param>
-        internal PhysicsDistanceJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping, Vector2 localAnchorA, Vector2 localAnchorB) : base(a, b)
+        /// <param name="collideConnected">Whether connected bodies can collide.</param>
+        internal PhysicsDistanceJoint(PhysicsBody a, PhysicsBody b, bool rope, float length, float frequency, float damping, Vector2 localAnchorA, Vector2 localAnchorB,
+            bool collideConnected) : base(a, b, collideConnected)
         {
+            this.rope = rope;
             Length = length;
             this.frequency = frequency;
             this.damping = damping;
@@ -74,7 +97,7 @@ namespace Ctr2.Engine.Physics
             else
             {
                 direction = Vector2.Zero;
-                if (frequency == 0)
+                if (rope)
                 {
                     mass = impulse = 0;
                     return;
@@ -110,39 +133,46 @@ namespace Ctr2.Engine.Physics
             Vector2 velocityA = A.Velocity + (A.AngularVelocity * new Vector2(-armA.Y, armA.X));
             Vector2 velocityB = B.Velocity + (B.AngularVelocity * new Vector2(-armB.Y, armB.X));
             float speed = Vector2.Dot(direction, velocityB - velocityA);
-            if (frequency == 0 && separation < Length)
+            if (rope && separation < Length)
             {
                 speed += 1 / PhysicsWorld.TimeStep * (separation - Length);
             }
             float change = -mass * (speed + bias + (gamma * impulse));
             float previous = impulse;
-            impulse = frequency == 0 ? MathF.Min(0, impulse + change) : impulse + change;
+            impulse = rope ? MathF.Min(0, impulse + change) : impulse + change;
             // Rope impulses clamp the accumulated limit; native distance joints apply the raw increment.
-            ApplyVelocity((frequency == 0 ? impulse - previous : change) * direction);
+            ApplyVelocity((rope ? impulse - previous : change) * direction);
         }
 
-        /// <summary>Corrects excessive rope length; soft springs defer correction to the velocity solver.</summary>
-        /// <returns>Whether the uncorrected rope error is below the CTR2 linear slop.</returns>
+        /// <summary>Corrects rope overstretch or rigid distance error; soft springs defer correction to the velocity solver.</summary>
+        /// <returns>Whether the uncorrected error is below the CTR2 linear slop.</returns>
         internal override bool SolvePosition()
         {
-            if (frequency > 0)
+            if (!rope && frequency > 0)
             {
                 return true;
             }
             Vector2 rA = Rotate(localAnchorA - A.LocalCenter, A.Angle);
             Vector2 rB = Rotate(localAnchorB - B.LocalCenter, B.Angle);
             Vector2 u = B.Position + rB - A.Position - rA;
-            float length = u.Length();
-            if (length >= 1.1920929e-7f)
+            // Native b2Vec2::Normalize returns zero, leaving the vector unchanged, for tiny lengths.
+            float length = MathF.Sqrt((u.X * u.X) + (u.Y * u.Y));
+            if (length < 1.1920929e-7f)
             {
-                u *= 1 / length;
+                length = 0;
             }
-            Vector2 correction = -mass * Math.Clamp(length - Length, 0, 0.2f) * u;
+            else
+            {
+                float inverse = 1 / length;
+                u = new(u.X * inverse, u.Y * inverse);
+            }
+            float error = Math.Clamp(length - Length, rope ? 0 : -.2f, .2f);
+            Vector2 correction = -mass * error * u;
             A.Position -= A.InverseMass * correction;
             A.Angle -= A.InverseInertia * Cross(rA, correction);
             B.Position += B.InverseMass * correction;
             B.Angle += B.InverseInertia * Cross(rB, correction);
-            return length - Length < PhysicsWorld.LinearSlop;
+            return rope ? length - Length < PhysicsWorld.LinearSlop : MathF.Abs(error) < PhysicsWorld.LinearSlop;
         }
 
         /// <summary>Applies equal and opposite impulses at the rotating anchors.</summary>
