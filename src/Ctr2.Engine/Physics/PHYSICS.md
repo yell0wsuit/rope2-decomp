@@ -208,15 +208,20 @@ first-entry arrival and completion without a general dynamic-contact solver.
 
 ## Numerical fixtures
 
-The private C++ harness uses licensed upstream Box2D 2.2.1 with linear slop changed
-from `0.005f` to `0.001f`. No other CTR2 patches are applied. Harnesses and tools stay
-under ignored local storage; only CSV states and synthetic C# scene definitions
-belong in commits. Tests require neither native compilation nor game assets.
+The original private C++ oracle uses licensed upstream Box2D 2.2.1 with linear
+slop changed from `0.005f` to `0.001f`. A separate Android numerical profile adds
+the audited AABB/angular settings below. Both joint fixture sets were independently
+rebuilt with that profile and matched their slop-only versions byte for byte.
+This does not validate the settings that those contact-free scenarios cannot
+exercise. Harnesses and tools stay under ignored local storage; only CSV states
+and synthetic C# scene definitions belong in commits. Tests require neither native
+compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `JointAnchorReference.csv` | Offset circles, shifted-centroid rotating polygons, fixed rotation and two dynamic endpoints for rope and soft-distance constraints. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY` |
+| `JointTopologyReference.csv` | Coincident anchors, zero/short ropes, short springs, multiple attachments, independent islands and joint removal/recreation. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY,jointActive` |
 | `RopeCutReference.csv` | Synthetic `game_cut` chain, cut before zero-based tick 30 with crossing `(30,20)` logical units and tip impulse `(0.001,0)`. Same columns as above; new tips are body indices 4/5. |
 | `PolygonContactReference.csv` | Flat/tilted/bouncing/offset/compound/fixed-rotation/slope/free-fall polygon bodies, triangulated terrain and two bodies sharing a floor. `scenario,tick,originX,originY,centerX,centerY,vx,vy,angle,angularVelocity,mass,localCenterX,localCenterY` |
 | `PolygonMassReference.csv` | Four invented convex shapes at densities 0, 0.5 and 3.25. `scenario,density,mass,centerX,centerY,originInertia,centerInertia` |
@@ -250,14 +255,73 @@ SHA-256: `d590d946c02efcd127133ac2af65704ae67532da2405dc357d87c2664c57472d`.
 These contact-free scenarios verify rotational joint behavior; they do not verify
 game-specific broadphase, collision callbacks or general TOI behavior.
 
+Joint-topology fixtures add eleven scenarios, sampled every tick 1–240, with
+6,720 body states. They retain the same state/anchor and reaction-force tolerances,
+require finite values and complete tick/body ordering, and verify active-joint
+state. Warm-started joints are removed before step 61 and recreated before step 91
+with a changed local anchor and length. Multi-attachment scenarios observe both
+joint reaction forces and the extra joint's first anchor; its second anchor on
+the shared body is not separately sampled. Independent-island scenarios observe
+both endpoints of each joint. No additional engine changes were needed for these
+comparisons. Fixture SHA-256:
+`0bf54256e755ef6b22f3403f53a251eb7e0772b87f49fc23886e7ca93b9ef125`.
+
+## Audited Android numerical profile
+
+The supplied Android decompilation establishes these settings within the inspected
+dynamic-tree, shape, joint, contact-solver, TOI and world-step code. This is a
+bounded audit, not proof that all game patches or control-flow differences are known.
+
+| Setting | Upstream 2.2.1 | Android reference | Evidence scope |
+| --- | --- | --- | --- |
+| Linear slop | 0.005 m | 0.001 m | Rope/distance initialization and convergence thresholds |
+| Polygon skin | 0.01 m | 0.002 m | Polygon/edge/chain constructors; twice linear slop |
+| Fixed AABB padding | 0.1 m | 0 m | Dynamic-tree proxy creation and movement |
+| AABB prediction multiplier | 2 | 1 | Dynamic-tree displacement expansion |
+| Joint angular slop | 2 degrees | 1 degree | Revolute, weld and prismatic limit correction/termination |
+| Angular sleep tolerance | 2 degrees | 2 degrees | Island sleep test; independent of joint angular slop |
+
+The angular-slop degree expression is inferred from consistent rounded decompiler
+literals; their display does not establish exact original float bits. The separate
+native profile uses `(1 / 180) * pi`, preserving upstream expression structure.
+Polygon skin and inspected TOI/contact thresholds already follow from the linear
+slop patch; they must not be independently scaled a second time. Inspected native
+TOI target/tolerance, correction/iteration limits, velocity threshold and ordinary
+world clamps are consistent with upstream formulas after that patch.
+
+A synthetic native dynamic-tree probe confirms that the Android numerical profile
+creates an unpadded `(0,0)`–`(1,1)` proxy. A small `(0.05,0.05)` translation causes
+reinsertion; the slop-only profile retains its padded proxy. This establishes a
+reference behavior for future managed broadphase tests, not observed execution of
+the original Android or Windows game.
+
+Two custom Android behaviors also require future coverage: mouse-joint
+`SetAnchorB` transforms a world point to a local anchor without a visible wake/reset,
+and contact creation returns null if either fixture has a null shape. The settings-only
+oracle profile does not implement these APIs/guards. No gameplay caller of the mouse
+setter was found within the bounded supplied cpp/h search; do not invent one.
+
+The game overrides world sleeping to false, keeps continuous physics enabled and
+steps at `0.0167f` with 15 velocity and 30 ordinary position iterations. Native TOI
+position solving uses its separate 20-iteration limit. These policies must be kept
+distinct from constructor defaults and the ordinary step's iteration counts.
+
+Windows behavioral equivalence remains unknown. Static artifact identity confirms
+the supplied Windows executable and ARM Android library, but available deep native
+analysis providers were unavailable during this audit. Windows assets continue to
+use Windows metadata; the behavioral evidence above is Android-only. Original-runtime
+traces or Windows instruction-level analysis remain necessary before claiming
+cross-build or bitwise parity.
+
 ## Physics-first verification priority
 
 Further development prioritizes source-faithful physics before game object or
 presentation expansion. The managed engine remains a bounded subset, not a
-complete or proven 1:1 replacement for the game's physics. The native oracle has
-only the stated linear-slop patch; other game-specific changes still need auditing.
+complete or proven 1:1 replacement for the game's physics. The audited numerical
+profile and synthetic comparisons still leave control-flow and runtime differences
+to verify.
 
-Next gates are degenerate/joint mutation cases, source-compatible broadphase and
+Next gates are remaining joint APIs/limited-angle cases, source-compatible broadphase and
 contact lifetime/order, general two-body contact solving, distance/GJK and native
 TOI islands. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
