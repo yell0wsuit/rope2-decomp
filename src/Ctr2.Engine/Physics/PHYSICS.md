@@ -94,29 +94,49 @@ texturing and scratches remain unverified.
 Analytic synthetic geometry tests check curved square midpoints and concave area;
 these are not an original-runtime geometry capture.
 
-## Swept terrain contacts
+## Native continuous collision (TOI)
 
-`PhysicsWorld.ContinuousPhysics` defaults to true. The discrete step retains each
-solid dynamic circle's initial transform; a subsequent analytical sweep finds the
-first entry into static convex terrain expanded by the target circle radius.
-Faces use ray/offset-plane intersection; rounded vertices use ray/circle roots.
-The target is `max(linearSlop, circleRadius - linearSlop)`, matching the polygon
-skin contribution to Box2D's time-of-impact target. Existing overlaps remain with
-the discrete solver. Static anchors and sensor circles skip the sweep.
+`PhysicsWorld.ContinuousPhysics` defaults to true, as the game sets it, and runs a
+port of Box2D 2.2.1 `b2World::SolveTOI` after each discrete step's proxy
+synchronization and pair discovery. Bodies keep native sweeps: island solves store
+each dynamic, kinematic and touched static body's start center and angle, and
+teleports, mass resets and type changes reset them as native does. Each step clears
+every body's start fraction and every contact's cached TOI and sub-step count.
 
-At an impact, circle position and angle advance to the hit fraction. Touching
-terrain contacts receive up to 20 position iterations (Baumgarte 0.75, tolerance
-1.5 slops), then 15 velocity iterations without warm starting. The remaining tick
-integrates the resulting velocity without repeating gravity, damping or joint
-solving. Further impacts repeat this process, capped at 32 per circle per tick.
-Budget exhaustion retains the last safe transform. Time-of-impact impulses are
-not cached into the next discrete step. A manifold disagreement also retains the
-safe transform rather than continuing through the fixture.
+The solver repeatedly scans candidates in native contact-list order (newest first).
+It skips disabled contacts, contacts past eight sub-steps, sensors, static pairs and
+dynamic pairs (the game authors no bullets). For the rest it aligns both sweeps to
+the later start fraction and computes `b2TimeOfImpact`, caching the result. The
+earliest TOI advances both bodies, and a mid-TOI `Update` recomputes the manifold,
+carries matching stored impulses and may emit Begin/End events. A non-touching
+result restores the sweeps and disables the contact until its next update. Otherwise
+the TOI island gathers each dynamic body's other touching contacts with static and
+kinematic bodies, tentatively advancing those neighbours. `b2Island::SolveTOI` then
+runs 20 TOI position iterations, moves the TOI bodies' sweep starts to the corrected
+positions, and solves 15 unwarmed velocity iterations on fresh constraints so stored
+warm-start impulses stay untouched. It integrates the remaining sub-step and reports
+PostSolve. Displaced dynamic bodies resynchronize proxies from their new sweep start
+and invalidate their cached TOIs, and new pairs are discovered before the next scan.
 
-This is an analytical circle/static-convex subset, not a port of Box2D's general
-GJK/separation-function TOI solver. Circle/circle CCD, polygon sweeps, native TOI
-contact lifetime/order and arbitrary multi-body TOI islands remain unsupported.
-The switch can disable sweeps for isolated discrete fixture verification.
+`b2TimeOfImpact` is ported literally: sweep normalization, the conservative-advancement
+outer loop over cached GJK distance without radii, point/face-A/face-B separation
+functions, deepest-point push-back bounded by eight vertices, and 50-iteration
+bisection/secant root finding. The native TOI position solver applies body A's mass
+only for TOI bodies but always applies body B's; with no bullets, every other body in a
+TOI island is static or kinematic, so ordinary masses give identical results.
+
+`ToiReference.json` compares 2,636 standalone native TOI queries (random and
+deterministic circle/polygon sweeps, partial `tMax`, nonzero start fractions and local
+centers). `ContinuousWorldReference.json` compares five native continuous worlds
+through tick 100: thin-terrain tunneling with a sensor layer, fast rotating boxes and
+compounds against floors and walls, kinematic sweepers, fast bodies against static
+circle bodies, and a burst of simultaneous impacts. It checks bodies, proxies,
+TOI-phase events, TOI PostSolve reports and candidates. Both are bit-identical on the
+oracle platform. Fixture SHA-256: `3bb4f54e5b1bdd56dcd5cc2d40ed30944f51aa6d41d6bf2404a863502d347a64` and `f05be01202b91910958eaf9df58768fa9411f0a74ec752bb4caa9a9a9778d401`.
+
+The earlier analytical circle sweep has been removed. The continuous native
+references from earlier checkpoints were generated with native TOI enabled, and they
+now pass against the port as well.
 
 ## Stationary stars
 
@@ -206,8 +226,8 @@ including fixed rotation, bounce, slope, offset centers, free fall, triangulated
 terrain and two independent bodies sharing a floor. These do not
 prove native broadphase/contact-order parity or original Om Nom movement.
 
-Character polygons use discrete contacts even when circle CCD is enabled. Polygon
-CCD, remaining gameplay adjustments and character star collection remain pending. The opt-in gameplay layer below adds feeding,
+Character polygons take part in native TOI like every other dynamic body. Remaining
+gameplay adjustments and character star collection remain pending. The opt-in gameplay layer below adds feeding,
 first-entry arrival and completion without a general dynamic-contact solver.
 
 ## Numerical fixtures
@@ -223,6 +243,8 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `ToiReference.json` | 2,636 standalone native time-of-impact queries over circle/polygon sweeps. Exact states and times. |
+| `ContinuousWorldReference.json` | 500 native continuous ticks: tunneling, rotating polygons, kinematic sweepers, static circle bodies and impact bursts. Exact proxies/events/report identity/candidates; bodies, bounds and TOI impulses. |
 | `QueryReference.json` | Five snapshots of a moving mixed world: 32 ray casts per snapshot under all/closest/stop/filter callbacks, 8 AABB queries with early stops, 96-point tests per fixture and swept fixture bounds. Exact report order and labels; points, normals, fractions, bounds and body states. |
 | `DistanceJointReference.json` | 750 native ticks: rigid distance pendulums and compression, zero-rest-length and banner springs, colliding/blocking rope and spring pairs, world-anchor initialization and coincident anchors. Exact candidates; anchors, reaction forces and six body-state components. |
 | `ContactReportReference.json` | 480 native ticks: terrain circles/compounds/boxes with restitution, multi-island body pairs, redundant two-point manifolds, sensors and teleports. Exact event/report identity, order and impulse counts; Begin-time and PostSolve world manifolds, impulses and six body-state components. |
@@ -256,10 +278,9 @@ terrain references also disable continuous physics to isolate supported discrete
 contacts. `game` names identify invented test scenes, not original-game captures.
 Scene definitions are in the corresponding C# tests. Continuous fixtures sample
 every completed tick 1–10 under extreme gravity (800) and the two-meter translation
-clamp, producing speeds near 120 m/s. Analytical root finding differs from native
-TOI tolerance/search; continuous-fixture tolerances are 0.001 meters/radians and
-0.01 meters/second or radians/second, while discrete/contact-free tolerances remain
-unchanged. Sensor fixtures sample zero-based ticks 0–119, require exact collected
+clamp, producing speeds near 120 m/s. Their looser tolerances (0.001 meters/radians
+and 0.01 meters/second or radians/second) date from the removed analytical sweep;
+the native TOI port now runs these scenes too. Sensor fixtures sample zero-based ticks 0–119, require exact collected
 masks and use the original 0.00002 position tolerance. Polygon mass fixtures require
 0.00002 component tolerance; circle overlap fixtures require exact Boolean results.
 Polygon fixtures contain only invented geometry, not Om Nom game vertices.
@@ -399,9 +420,8 @@ the two-point velocity solver retains the native matrix-product grouping and
 rounds inverse-matrix entries before multiplying. Algebraic simplification can
 change a later proxy-containment decision despite tiny body-state differences.
 
-Custom filter callbacks, synchronous contact callbacks, raycasts and tree rebuilding remain separate work. The analytical CCD
-subset synchronizes its final transforms but does not reproduce native TOI proxy
-updates or callback timing. Complete authored-input trajectory coverage remains pending.
+Custom filter callbacks and tree rebuilding remain separate work. Native TOI proxy
+updates are described in the continuous collision section. Complete authored-input trajectory coverage remains pending.
 
 ## Discrete circle pairs and contact-connected islands
 
@@ -554,8 +574,7 @@ refilter touches are coalesced when a leaf already has a pending query. Sorted
 unique pair outputs are unchanged; this deliberately avoids the upstream hazard
 where repeated touches followed by destruction can leave a stale move ID. The
 standalone broadphase preserves its separately tested native duplicate behavior.
-Both primary analytical terrain sweeps and their additional impact manifolds
-honor the filters; this does not turn that bounded CCD path into native TOI.
+Native TOI considers only existing candidates, so filters apply to it too.
 
 `CollisionFilterReference.json` contains eight independent native scenes, every
 tick through 90 (720 snapshots). They cover initial rejection, signed-group
@@ -565,7 +584,7 @@ Exact candidate labels/orientation/creation/touching and proxy IDs are compared;
 proxy bounds use the existing 0.000001 tolerance and all six finite body-state
 components use 0.00002. Additional boundary tests cover high category bits, signed
 group limits, body exclusions, setter timing, retired ownership, repeated touches
-followed by removal and filtered analytical sweeps. Fixture SHA-256:
+followed by removal and filtered continuous sweeps. Fixture SHA-256:
 `69490c911ed176f91dd5696dcb9d59484012eb1d6986d0c218167482f9711adc`.
 
 Sensor overlap uses fresh-cache GJK distance with radii and a strict `10 * epsilon`
@@ -671,9 +690,8 @@ The independent terrain/body updates merge only their current traversal's record
 in reverse global creation order. Previous steps and between-step removals retain
 chronological order. This matches the tested always-awake subset with no callbacks
 mutating the solve; sleeping/wake-dependent traversal requires further work.
-PreSolve/PostSolve callbacks, contact disabling, native TOI events and gameplay
-reaction timing are not implemented by this queue. Analytical CCD may alter final
-transforms but does not invent additional discrete events.
+TOI-phase Begin/End transitions are queued in occurrence order after the discrete
+traversal's batch. PostSolve data is described under contact reports.
 
 `SensorEventsReference.json` compares thirteen native scenes through tick 90:
 1,170 snapshots and 49 emitted records (27 Begin, ten Update End, twelve Destroy End).
@@ -712,9 +730,8 @@ uses the OR of the two actual fixture flags, independently of their bodies'
 aggregate convenience values. A changed solid/sensor mode retains existing
 candidate/material ownership. Sensor contacts use GJK and no solid solver; mixed
 bodies can have sensor and solid contacts simultaneously. Solid-only diagnostics
-exclude just the sensor pairs. Both primary analytical terrain sweeps and nearby
-extra impact manifolds skip pairs with either fixture marked as a sensor.
-Native TOI/cache/substep mutation and sleeping behavior remain separate work.
+exclude just the sensor pairs. Native TOI skips pairs with either fixture marked as a
+sensor. Sleeping behavior remains separate work.
 
 The body-before-terrain regression also exposed a preexisting reference-face bias
 in the static polygon solver. Near-equal separating faces must favor native
@@ -734,7 +751,7 @@ creation/touching/sensor/manifold counts and proxy IDs match exactly. Finite bod
 components/mass use 0.00002 tolerance; predicted bounds use 0.000002. Additional
 regressions cover mixed broadcast normalization, retired ownership, deferred
 snapshots, no-touch setter behavior, pair-specific diagnostics and sensor exclusion
-from primary/additional analytical sweep contacts. Fixture SHA-256:
+from continuous sweep contacts. Fixture SHA-256:
 `c939a65759435f9ffbfc89c6003ce7b319b23f3b4f35de4aa39c1352f5ab1dd8`.
 
 ## Revolute hinges, angular limits and motors
@@ -914,7 +931,7 @@ They now follow native arithmetic:
 
 With every native-trace comparison set to exact equality, every JSON fixture suite
 (broadphase, circle, polygon-circle, polygon-pair, contact lifecycle, filters, sensors,
-fixture sensors, revolute, body control, body type, contact report, distance joint, world query, joint anchor and joint topology) is
+fixture sensors, revolute, body control, body type, contact report, distance joint, world query, time of impact, continuous world, joint anchor and joint topology) is
 bit-identical to the Android-profile native oracle for every compared tick on macOS
 arm64, where .NET and the clang-built oracle share the platform `sinf`/`cosf`. The
 committed tests keep their tolerances so they stay valid where the C runtime's
@@ -982,7 +999,7 @@ Queued records therefore carry everything the handlers read at callback time:
 Both flags default off, so existing event consumers are unchanged.
 `ContactReportReference.json` compares four independent native scenes through
 tick 120 (480 snapshots) and is bit-identical on the oracle platform. Fixture
-SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI-phase reports belong to the native TOI work.
+SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI islands report PostSolve the same way; see the continuous collision section.
 
 ## Running numerical verification
 
@@ -990,6 +1007,8 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContinuousWorldTests'
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*TimeOfImpactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*WorldQueryTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*DistanceJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContactReportTests'
@@ -1023,7 +1042,7 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are prismatic constraints and native TOI/separation-function islands. Synchronous callback/gameplay integration and
+Next gates are prismatic constraints. Synchronous callback/gameplay integration and
 sleeping remain separate verification work. Then verify Windows game body
 construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
@@ -1060,8 +1079,7 @@ the motion history and contact latch. This does not change any body velocity,
 collision constant or solver iteration count.
 
 This is not the full Om Nom state machine: sliding, turning,
-costume substitutions, particles/audio, native contact ordering and general CCD
-remain pending. Physical overlap is a discrete compound fixture test, not the
+costume substitutions, particles/audio and native contact ordering remain pending. Physical overlap is a discrete compound fixture test, not the
 complete native dynamic-contact graph. The original fade completion queues
 destruction; this subset retires after the completed fixed tick reaches 0.2 seconds.
 
@@ -1096,7 +1114,7 @@ floating-point tick; exact original timing/visual parity still needs runtime com
 
 ## Remaining acceptance work (broader engine)
 
-There is no general Box2D continuous solver, polygon CCD, sleeping,
+There is no sleeping,
 dynamic terrain, noncenter anchors, moving stars, hazards or broader intro logic.
 Broader consumption and completion mechanics beyond the opt-in forest slice,
 complex contact

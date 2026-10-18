@@ -199,9 +199,11 @@ namespace Ctr2.Engine.Physics
             else
             {
                 Position = origin;
+                Angle0 = Angle;
             }
             // Native keeps its cached transform; only the sweep center moves.
             TransformOrigin = origin;
+            Center0 = Position;
         }
     }
 

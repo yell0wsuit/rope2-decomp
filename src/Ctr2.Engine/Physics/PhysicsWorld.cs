@@ -192,6 +192,8 @@ namespace Ctr2.Engine.Physics
             {
                 Angle = angle
             };
+            body.Center0 = body.Position;
+            body.Angle0 = angle;
             RegisterBodyProxies(body);
             bodies.Add(body);
             return body;
@@ -288,19 +290,9 @@ namespace Ctr2.Engine.Physics
         public void Step()
         {
             ThrowIfLocked();
+            polygonImpacts.Clear();
             int eventStart = contactEvents.Count;
             Dictionary<PhysicsBody, (Vector2 Origin, float Angle)> proxyStarts = BeginBroadPhaseStep();
-            Dictionary<PhysicsBody, (Vector2 Position, float Angle)>? starts = ContinuousPhysics && terrain.Count > 0 ? new() : null;
-            if (starts != null)
-            {
-                foreach (PhysicsBody body in bodies)
-                {
-                    if (body.Mass > 0 && body.PolygonFixtures.Count == 0 && !bodyProxies[body][0].IsSensor)
-                    {
-                        starts.Add(body, (body.Position, body.Angle));
-                    }
-                }
-            }
             List<PhysicsContact> touching = UpdateTerrainContacts();
             touching.AddRange(UpdateBodyContacts());
             // Narrowphase used each body's cached transform; native solvers rebuild it from the sweep.
@@ -311,7 +303,7 @@ namespace Ctr2.Engine.Physics
 
             // Merge this traversal only. Earlier queued batches keep chronological order.
             contactEvents.Sort(eventStart, contactEvents.Count - eventStart, ContactEventOrder);
-            List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands);
+            List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands, out HashSet<PhysicsBody> islandStatics);
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
             {
@@ -319,6 +311,12 @@ namespace Ctr2.Engine.Physics
             }
             foreach (PhysicsBody body in bodies)
             {
+                // Island solves store sweep starts for continuous collision.
+                if (body.Type != PhysicsBodyType.Static || islandStatics.Contains(body))
+                {
+                    body.Center0 = body.Position;
+                    body.Angle0 = body.Angle;
+                }
                 if (body.Mass > 0)
                 {
                     // Native grouping: h * (gravityScale * gravity + invMass * force), then h * invI * torque.
@@ -393,22 +391,11 @@ namespace Ctr2.Engine.Physics
                 }
                 ReportPostSolve(contactIslands[islandIndex]);
             }
-            if (starts != null)
-            {
-                SolveContinuous(starts);
-            }
-            polygonImpacts.Clear();
-            foreach (List<PhysicsContact> island in contactIslands)
-            {
-                foreach (PhysicsContact contact in island)
-                {
-                    if (contact is PolygonBodyContact { Terrain: true } polygon)
-                    {
-                        polygonImpacts.Add(polygon.CaptureImpact());
-                    }
-                }
-            }
             SynchronizeBodyProxies(proxyStarts);
+            if (ContinuousPhysics)
+            {
+                SolveToi();
+            }
             foreach (PhysicsBody body in bodies)
             {
                 body.Force = Vector2.Zero;
@@ -518,7 +505,8 @@ namespace Ctr2.Engine.Physics
 
         /// <summary>Traverses solid contacts before joints, preserving native body-edge and LIFO order.</summary>
         /// <remarks>Dynamic and kinematic bodies seed and propagate islands; static bodies stop traversal.</remarks>
-        private List<List<PhysicsJoint>> SolverOrder(IReadOnlyList<PhysicsContact> active, out List<List<PhysicsContact>> contactIslands)
+        private List<List<PhysicsJoint>> SolverOrder(IReadOnlyList<PhysicsContact> active, out List<List<PhysicsContact>> contactIslands,
+            out HashSet<PhysicsBody> islandStatics)
         {
             Dictionary<PhysicsBody, List<PhysicsJoint>> jointEdges = [];
             Dictionary<PhysicsBody, List<PhysicsContact>> contactEdges = [];
@@ -554,6 +542,8 @@ namespace Ctr2.Engine.Physics
             HashSet<PhysicsContact> seenContacts = [];
             List<List<PhysicsJoint>> islands = [];
             contactIslands = [];
+            // Native islands also add, but never propagate through, touching static world bodies.
+            islandStatics = [];
             for (int i = bodies.Count - 1; i >= 0; i--)
             {
                 PhysicsBody seed = bodies[i];
@@ -579,7 +569,11 @@ namespace Ctr2.Engine.Physics
 
                         islandContacts.Add(contact);
                         PhysicsBody? other = contact.Body == body ? contact.OtherBody : contact.Body;
-                        if (other != null && other.Type != PhysicsBodyType.Static && visited.Add(other))
+                        if (other != null && other.Type == PhysicsBodyType.Static)
+                        {
+                            _ = islandStatics.Add(other);
+                        }
+                        else if (other != null && visited.Add(other))
                         {
                             stack.Push(other);
                         }
@@ -595,7 +589,11 @@ namespace Ctr2.Engine.Physics
 
                         ordered.Add(joint);
                         PhysicsBody other = joint.A == body ? joint.B : joint.A;
-                        if (other.Type != PhysicsBodyType.Static && visited.Add(other))
+                        if (other.Type == PhysicsBodyType.Static)
+                        {
+                            _ = islandStatics.Add(other);
+                        }
+                        else if (visited.Add(other))
                         {
                             stack.Push(other);
                         }

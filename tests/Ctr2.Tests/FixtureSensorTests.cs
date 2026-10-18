@@ -432,7 +432,7 @@ namespace Ctr2.Tests
             Assert.True(Assert.Single(world.DrainContactEvents()).IsSensor);
         }
 
-        /// <summary>Both primary and nearby extra analytical contacts exclude terrain sensors.</summary>
+        /// <summary>Native continuous sweeps pass terrain sensors and land on the solid floor in the same step.</summary>
         /// <param name="initial">Whether the first terrain starts as a sensor or is changed before stepping.</param>
         /// <param name="height">Excluded terrain height, including a nearby secondary manifold.</param>
         [Theory]
@@ -440,7 +440,7 @@ namespace Ctr2.Tests
         [InlineData(true, .6f)]
         [InlineData(false, .99f)]
         [InlineData(true, .99f)]
-        public void AnalyticalSweepsExcludeTerrainSensors(bool initial, float height)
+        public void ContinuousSweepsExcludeTerrainSensors(bool initial, float height)
         {
             PhysicsWorld world = new()
             {
@@ -455,14 +455,16 @@ namespace Ctr2.Tests
 
             PhysicsBody body = world.AddCircle(Vector2.Zero, .16f, .5f, 800);
             world.Step();
-            Assert.InRange(body.Position.Y, .83f, .85f);
-            Assert.Equal(0, body.Velocity.Y, 5);
-            Assert.Empty(world.DrainContactEvents());
+            // Native TOI passes the sensor terrain, lands in the same step and begins only the solid floor contact.
+            Assert.Equal(.839031219f, body.Position.Y);
+            Assert.Equal(0, body.Velocity.Y);
+            PhysicsContactEvent begin = Assert.Single(world.DrainContactEvents());
+            Assert.Equal((PhysicsContactEventKind.Begin, 2, 3, true), (begin.Kind, begin.FirstFixture, begin.SecondFixture, begin.Touching));
         }
 
         /// <summary>A circle's individual flag excludes its own swept solid solving.</summary>
         [Fact]
-        public void CircleFixtureSensorDisablesAnalyticalSweeps()
+        public void CircleFixtureSensorDisablesContinuousSweeps()
         {
             PhysicsWorld world = new();
             world.AddTerrain([new(-2, 1), new(2, 1), new(2, 1.02f), new(-2, 1.02f)], 0, 0);

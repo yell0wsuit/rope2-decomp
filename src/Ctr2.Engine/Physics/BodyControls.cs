@@ -148,6 +148,8 @@ namespace Ctr2.Engine.Physics
             body.Angle = angle;
             body.Position = origin + PhysicsMath.Rotate(body.LocalCenter, angle);
             body.TransformOrigin = origin;
+            body.Center0 = body.Position;
+            body.Angle0 = angle;
             List<FixtureProxy> fixtures = bodyProxies[body];
             // Native body fixture lists prepend creation.
             for (int index = fixtures.Count - 1; index >= 0; index--)

@@ -111,14 +111,20 @@ namespace Ctr2.Engine.Physics
         private readonly List<PhysicsContactEvent> contactEvents = [];
         private readonly List<PhysicsPostSolve> postSolves = [];
 
+        /// <summary>Native <c>b2Island::Report</c>, for discrete and TOI islands alike.</summary>
         private void ReportPostSolve(IEnumerable<PhysicsContact> island)
         {
-            if (!RecordPostSolve)
-            {
-                return;
-            }
             foreach (PhysicsContact contact in island)
             {
+                // Character landing reactions read the same post-solve impulses as the game's Omnom handler.
+                if (contact is PolygonBodyContact { Terrain: true } polygon)
+                {
+                    polygonImpacts.Add(polygon.CaptureImpact());
+                }
+                if (!RecordPostSolve)
+                {
+                    continue;
+                }
                 (int count, float firstNormal, float secondNormal, float firstTangent, float secondTangent) = contact.Impulses();
                 postSolves.Add(new(contact.FirstFixture, contact.SecondFixture, contact.CreationOrder, count,
                     firstNormal, secondNormal, firstTangent, secondTangent, contact.WorldManifold()));

@@ -105,32 +105,40 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        private sealed class TerrainCandidate(FixtureProxy body, FixtureProxy terrain, long creationOrder, bool terrainFirst)
-        {
-            internal readonly FixtureProxy BodyProxy = body;
-            internal readonly FixtureProxy TerrainProxy = terrain;
-            // Native contacts mix material once at construction.
-            internal readonly float Friction = MathF.Sqrt(body.Body!.Friction * terrain.Terrain!.Friction);
-            internal readonly float Restitution = MathF.Max(body.Body.Restitution, terrain.Terrain.Restitution);
-            internal PhysicsBody Body => BodyProxy.Body!;
-            internal FixtureProxy A => terrainFirst ? TerrainProxy : BodyProxy;
-            internal FixtureProxy B => terrainFirst ? BodyProxy : TerrainProxy;
-            internal readonly long CreationOrder = creationOrder;
-            internal PhysicsContact? Manifold;
-            internal bool Touching;
-        }
-
-        private sealed class BodyCandidate(FixtureProxy a, FixtureProxy b, long order)
+        /// <summary>A native contact: fixtures in native orientation, mixed material, manifold and TOI state.</summary>
+        private abstract class ContactCandidate(FixtureProxy a, FixtureProxy b, long order, float friction, float restitution)
         {
             internal readonly FixtureProxy A = a;
             internal readonly FixtureProxy B = b;
             internal readonly long CreationOrder = order;
-            // Native contacts mix material once at candidate construction, including before first touch.
-            internal readonly float Friction = MathF.Sqrt(a.Body!.Friction * b.Body!.Friction);
-            internal readonly float Restitution = MathF.Max(a.Body.Restitution, b.Body.Restitution);
+            // Native contacts mix material once at construction, including before first touch.
+            internal readonly float Friction = friction;
+            internal readonly float Restitution = restitution;
             internal PhysicsContact? Manifold;
             internal bool Touching;
+            /// <summary>Native enabled flag; cleared when a TOI update finds no touch, restored by the next update.</summary>
+            internal bool Enabled = true;
+            /// <summary>Whether <see cref="Toi"/> holds a valid cached time of impact.</summary>
+            internal bool ToiFlag;
+            internal float Toi = 1;
+            internal int ToiCount;
+            /// <summary>Gets native fixture A's body, or a terrain fixture's static frame.</summary>
+            internal PhysicsBody BodyA => A.Body ?? A.Terrain!.Frame;
+            /// <summary>Gets native fixture B's body, or a terrain fixture's static frame.</summary>
+            internal PhysicsBody BodyB => B.Body ?? B.Terrain!.Frame;
         }
+
+        private sealed class TerrainCandidate(FixtureProxy body, FixtureProxy terrain, long creationOrder, bool terrainFirst)
+            : ContactCandidate(terrainFirst ? terrain : body, terrainFirst ? body : terrain, creationOrder,
+                MathF.Sqrt(body.Body!.Friction * terrain.Terrain!.Friction), MathF.Max(body.Body.Restitution, terrain.Terrain.Restitution))
+        {
+            internal readonly FixtureProxy BodyProxy = body;
+            internal readonly FixtureProxy TerrainProxy = terrain;
+            internal PhysicsBody Body => BodyProxy.Body!;
+        }
+
+        private sealed class BodyCandidate(FixtureProxy a, FixtureProxy b, long order)
+            : ContactCandidate(a, b, order, MathF.Sqrt(a.Body!.Friction * b.Body!.Friction), MathF.Max(a.Body.Restitution, b.Body.Restitution));
 
         private bool JointBlocksCollision(PhysicsBody a, PhysicsBody b)
         {
@@ -167,30 +175,70 @@ namespace Ctr2.Engine.Physics
                     _ = bodyContacts.Remove(entry.Key);
                     continue;
                 }
-                bool sensor = IsSensor(pair.A, pair.B);
-                PhysicsContact? next = sensor ? null : a.PolygonFixtures.Count == 0 ?
-                    CircleContact.Create(a, b, pair.Friction, pair.Restitution) :
-                    b.PolygonFixtures.Count == 0 ?
-                    PolygonCircleContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, pair.Friction, pair.Restitution) :
-                    PolygonBodyContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, b.PolygonFixtures[pair.B.LocalIndex], pair.Friction, pair.Restitution);
-                if (next != null)
+                if (UpdateCandidate(pair) is PhysicsContact next)
                 {
-                    if (pair.Manifold != null)
-                    {
-                        next.Restore(pair.Manifold);
-                    }
-
-                    next.CreationOrder = pair.CreationOrder;
-                    next.FirstFixture = pair.A.Label;
-                    next.SecondFixture = pair.B.Label;
                     active.Add(next);
                 }
-                bool touching = sensor ? SensorOverlap(pair.A, pair.B) : next != null;
-                RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, touching, false, next);
-                pair.Touching = touching;
-                pair.Manifold = next;
             }
             return active;
+        }
+
+        /// <summary>Computes a fresh solid manifold with zero impulses at the bodies' current transforms.</summary>
+        private PhysicsContact? Narrowphase(ContactCandidate candidate)
+        {
+            if (IsSensor(candidate.A, candidate.B))
+            {
+                return null;
+            }
+            PhysicsContact? next;
+            if (candidate is TerrainCandidate terrain)
+            {
+                PhysicsBody body = terrain.Body;
+                TerrainFixture fixture = terrain.TerrainProxy.Terrain!;
+                int localIndex = terrain.BodyProxy.LocalIndex;
+                // Polygon bodies collide with terrain through the native polygon pair path, using
+                // the terrain's static identity frame in native fixture orientation.
+                next = body.PolygonFixtures.Count == 0 ?
+                    TerrainContact.Create(body, fixture, candidate.Friction, candidate.Restitution) :
+                    candidate.A.Terrain != null ?
+                    PolygonBodyContact.Create(fixture.Frame, fixture.Shape, body, body.PolygonFixtures[localIndex], candidate.Friction, candidate.Restitution, true) :
+                    PolygonBodyContact.Create(body, body.PolygonFixtures[localIndex], fixture.Frame, fixture.Shape, candidate.Friction, candidate.Restitution, true);
+            }
+            else
+            {
+                PhysicsBody a = candidate.A.Body!, b = candidate.B.Body!;
+                next = a.PolygonFixtures.Count == 0 ?
+                    CircleContact.Create(a, b, candidate.Friction, candidate.Restitution) :
+                    b.PolygonFixtures.Count == 0 ?
+                    PolygonCircleContact.Create(a, a.PolygonFixtures[candidate.A.LocalIndex], b, candidate.Friction, candidate.Restitution) :
+                    PolygonBodyContact.Create(a, a.PolygonFixtures[candidate.A.LocalIndex], b, b.PolygonFixtures[candidate.B.LocalIndex], candidate.Friction, candidate.Restitution);
+            }
+            if (next != null)
+            {
+                next.CreationOrder = candidate.CreationOrder;
+                next.FirstFixture = candidate.A.Label;
+                next.SecondFixture = candidate.B.Label;
+            }
+            return next;
+        }
+
+        /// <summary>Native <c>b2Contact::Update</c>: re-enables, recomputes the manifold, carries matching impulses and emits transitions.</summary>
+        /// <returns>The new solid manifold, or null when separated or a sensor.</returns>
+        private PhysicsContact? UpdateCandidate(ContactCandidate candidate)
+        {
+            candidate.Enabled = true;
+            bool sensor = IsSensor(candidate.A, candidate.B);
+            PhysicsContact? next = Narrowphase(candidate);
+            if (next != null && candidate.Manifold != null)
+            {
+                next.Restore(candidate.Manifold);
+            }
+            // Losing the manifold keeps candidate order, but clears warm-start impulses.
+            bool touching = sensor ? SensorOverlap(candidate.A, candidate.B) : next != null;
+            RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false, next);
+            candidate.Touching = touching;
+            candidate.Manifold = next;
+            return next;
         }
 
         private void RegisterBodyProxies(PhysicsBody body)

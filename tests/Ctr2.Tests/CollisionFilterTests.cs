@@ -296,14 +296,14 @@ namespace Ctr2.Tests
             Assert.Empty(world.CaptureProxies());
         }
 
-        /// <summary>Excluded terrain is ignored by analytical sweeps, including extra impact manifolds.</summary>
+        /// <summary>Excluded terrain is ignored by native continuous sweeps.</summary>
         /// <param name="filterBody">Whether the rejection is set on the circle.</param>
         /// <param name="excludedY">Excluded terrain height, including a nearby secondary manifold.</param>
         [Theory]
         [InlineData(false, .6f)]
         [InlineData(false, .99f)]
         [InlineData(true, .6f)]
-        public void AnalyticalTerrainSweepsRespectFilters(bool filterBody, float excludedY)
+        public void ContinuousTerrainSweepsRespectFilters(bool filterBody, float excludedY)
         {
             PhysicsWorld world = new();
             world.AddTerrain([new(-2, excludedY), new(2, excludedY), new(2, excludedY + .02f), new(-2, excludedY + .02f)], 0, .9f);

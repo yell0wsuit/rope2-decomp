@@ -124,6 +124,8 @@ namespace Ctr2.Engine.Physics
                 fixtures.Add(shape);
             }
             PhysicsBody body = new(fixtures.AsReadOnly(), origin, density, gravityScale, angle, fixedRotation, type);
+            body.Center0 = body.Position;
+            body.Angle0 = angle;
             RegisterBodyProxies(body);
             bodies.Add(body);
             polygonFixtureCount += count;

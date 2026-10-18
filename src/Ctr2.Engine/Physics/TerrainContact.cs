@@ -50,33 +50,10 @@ namespace Ctr2.Engine.Physics
                     _ = contacts.Remove(entry.Key);
                     continue;
                 }
-                PhysicsBody body = candidate.Body;
-                TerrainFixture fixture = candidate.TerrainProxy.Terrain!;
-                int localIndex = candidate.BodyProxy.LocalIndex;
-                bool sensor = IsSensor(candidate.A, candidate.B);
-                // Polygon bodies collide with terrain through the native polygon pair path, using
-                // the terrain's static identity frame in native fixture orientation.
-                PhysicsContact? contact = sensor ? null : body.PolygonFixtures.Count == 0 ?
-                    TerrainContact.Create(body, fixture, candidate.Friction, candidate.Restitution) :
-                    candidate.A.Terrain != null ?
-                    PolygonBodyContact.Create(fixture.Frame, fixture.Shape, body, body.PolygonFixtures[localIndex], candidate.Friction, candidate.Restitution, true) :
-                    PolygonBodyContact.Create(body, body.PolygonFixtures[localIndex], fixture.Frame, fixture.Shape, candidate.Friction, candidate.Restitution, true);
-                if (contact != null)
+                if (UpdateCandidate(candidate) is PhysicsContact contact)
                 {
-                    if (candidate.Manifold != null)
-                    {
-                        contact.Restore(candidate.Manifold);
-                    }
-                    contact.CreationOrder = candidate.CreationOrder;
-                    contact.FirstFixture = candidate.A.Label;
-                    contact.SecondFixture = candidate.B.Label;
                     active.Add(contact);
                 }
-                // Losing the manifold keeps candidate order, but clears warm-start impulses.
-                bool touching = sensor ? SensorOverlap(candidate.A, candidate.B) : contact != null;
-                RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false, contact);
-                candidate.Touching = touching;
-                candidate.Manifold = contact;
             }
             return active;
         }
