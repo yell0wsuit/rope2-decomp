@@ -69,7 +69,7 @@ namespace Ctr2.Engine.Physics
         private readonly List<PhysicsContactEvent> contactEvents = [];
         private static readonly IComparer<PhysicsContactEvent> ContactEventOrder =
             Comparer<PhysicsContactEvent>.Create((a, b) => b.CreationOrder.CompareTo(a.CreationOrder));
-        private static bool IsSensor(FixtureProxy a, FixtureProxy b) => a.Body?.IsSensor == true || b.Body?.IsSensor == true;
+        private static bool IsSensor(FixtureProxy a, FixtureProxy b) => a.IsSensor || b.IsSensor;
         private void RecordContactChange(FixtureProxy a, FixtureProxy b, long order, bool previous, bool touching, bool destroying)
         {
             if (!RecordContactEvents || previous == touching)

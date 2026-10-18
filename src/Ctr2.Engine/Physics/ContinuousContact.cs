@@ -31,7 +31,8 @@ namespace Ctr2.Engine.Physics
                     TerrainFixture? selected = null;
                     foreach (TerrainFixture fixture in terrain)
                     {
-                        if (!ShouldCollide(bodyProxies[body][0].Filter, terrainProxies[fixture].Filter))
+                        if (IsSensor(bodyProxies[body][0], terrainProxies[fixture]) ||
+                            !ShouldCollide(bodyProxies[body][0].Filter, terrainProxies[fixture].Filter))
                         {
                             continue;
                         }
@@ -59,7 +60,7 @@ namespace Ctr2.Engine.Physics
                     for (int index = terrain.Count - 1; index >= 0; index--)
                     {
                         TerrainFixture fixture = terrain[index];
-                        if (fixture != selected && ShouldCollide(bodyProxies[body][0].Filter, terrainProxies[fixture].Filter) && TerrainContact.Create(body, fixture) is TerrainContact contact)
+                        if (fixture != selected && !IsSensor(bodyProxies[body][0], terrainProxies[fixture]) && ShouldCollide(bodyProxies[body][0].Filter, terrainProxies[fixture].Filter) && TerrainContact.Create(body, fixture) is TerrainContact contact)
                         {
                             touching.Add(contact);
                         }

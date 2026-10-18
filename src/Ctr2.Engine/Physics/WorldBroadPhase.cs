@@ -37,14 +37,14 @@ namespace Ctr2.Engine.Physics
     {
         /// <summary>Captures native feature IDs in reverse candidate creation order, then manifold point order.</summary>
         public IReadOnlyList<PhysicsContactFeatureState> CaptureBodyContactFeatures() =>
-            Array.AsReadOnly(bodyContacts.Values.Where(c => c.Manifold != null && !c.A.Body!.IsSensor && !c.B.Body!.IsSensor)
+            Array.AsReadOnly(bodyContacts.Values.Where(c => c.Manifold != null && !IsSensor(c.A, c.B))
                 .OrderByDescending(c => c.CreationOrder)
                 .SelectMany(c => c.Manifold!.CaptureFeatures().Select((feature, index) =>
                     new PhysicsContactFeatureState(c.A.Label, c.B.Label, index, feature))).ToArray());
 
         /// <summary>Captures supported solid body candidates in reverse creation order.</summary>
         public IReadOnlyList<PhysicsBodyContactState> CaptureBodyContacts() =>
-            Array.AsReadOnly(bodyContacts.Values.Where(c => !c.A.Body!.IsSensor && !c.B.Body!.IsSensor)
+            Array.AsReadOnly(bodyContacts.Values.Where(c => !IsSensor(c.A, c.B))
                 .OrderByDescending(c => c.CreationOrder)
                 .Select(c => new PhysicsBodyContactState(c.A.Label, c.B.Label, c.CreationOrder, c.Manifold != null)).ToArray());
 
@@ -56,7 +56,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Captures supported solid terrain candidates; labels are never reused within a world.</summary>
         /// <remarks>Newly discovered candidates have no touching manifold until the next discrete step.</remarks>
         public IReadOnlyList<PhysicsContactState> CaptureTerrainContacts() =>
-            Array.AsReadOnly(contacts.Values.Where(c => !c.Body.IsSensor).OrderByDescending(c => c.CreationOrder)
+            Array.AsReadOnly(contacts.Values.Where(c => !IsSensor(c.A, c.B)).OrderByDescending(c => c.CreationOrder)
                 .Select(c => new PhysicsContactState(c.BodyProxy.Label, c.TerrainProxy.Label, c.CreationOrder, c.Manifold != null)).ToArray());
 
         private readonly PhysicsBroadPhase broadPhase = new();
@@ -77,6 +77,18 @@ namespace Ctr2.Engine.Physics
             internal int Id;
             internal PhysicsDistanceProxy? Distance;
             internal PhysicsCollisionFilter Filter = PhysicsCollisionFilter.Default;
+            private bool terrainSensor;
+            internal bool IsSensor
+            {
+                get => Body != null ? Body.SensorFlags[LocalIndex] : terrainSensor;
+                set
+                {
+                    if (Body != null)
+                        Body.SensorFlags[LocalIndex] = value;
+                    else
+                        terrainSensor = value;
+                }
+            }
         }
 
         private sealed class TerrainCandidate(FixtureProxy body, FixtureProxy terrain, long creationOrder, bool terrainFirst)
@@ -134,7 +146,8 @@ namespace Ctr2.Engine.Physics
                     bodyContacts.Remove(entry.Key);
                     continue;
                 }
-                PhysicsContact? next = a.IsSensor || b.IsSensor ? null : a.PolygonFixtures.Count == 0 ?
+                bool sensor = IsSensor(pair.A, pair.B);
+                PhysicsContact? next = sensor ? null : a.PolygonFixtures.Count == 0 ?
                     CircleContact.Create(a, b, pair.Friction, pair.Restitution) :
                     b.PolygonFixtures.Count == 0 ?
                     PolygonCircleContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, pair.Friction, pair.Restitution) :
@@ -146,7 +159,7 @@ namespace Ctr2.Engine.Physics
                     next.CreationOrder = pair.CreationOrder;
                     active.Add(next);
                 }
-                bool touching = a.IsSensor || b.IsSensor ? SensorOverlap(pair.A, pair.B) : next != null;
+                bool touching = sensor ? SensorOverlap(pair.A, pair.B) : next != null;
                 RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, touching, false);
                 pair.Touching = touching;
                 pair.Manifold = next;
@@ -176,11 +189,14 @@ namespace Ctr2.Engine.Physics
             newFixtures = true;
         }
 
-        private void RegisterTerrainProxy(TerrainFixture fixture)
+        private void RegisterTerrainProxy(TerrainFixture fixture, bool isSensor)
         {
             PhysicsAabb bounds = PolygonBounds(fixture.Points, Vector2.Zero, 0);
             bounds.Validate();
-            FixtureProxy proxy = new(++fixtureLabel, null, fixture, 0);
+            FixtureProxy proxy = new(++fixtureLabel, null, fixture, 0)
+            {
+                IsSensor = isSensor
+            };
             proxy.Id = broadPhase.CreateProxy(bounds, proxy.Label);
             proxies.Add(proxy.Label, proxy);
             terrainProxies.Add(fixture, proxy);

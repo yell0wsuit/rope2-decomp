@@ -21,11 +21,22 @@ namespace Ctr2.Engine.Physics
             get; internal set;
         }
         /// <summary>Gets or sets whether all fixtures of this body act as sensors.</summary>
-        /// <value>True for rope material points and grab sensors.</value>
+        /// <value>True only when every owned fixture is a sensor; false for mixed bodies.</value>
+        /// <remarks>Assignment broadcasts to all fixtures even when the aggregate value already matches.</remarks>
         public bool IsSensor
         {
-            get; set;
+            get
+            {
+                foreach (bool sensor in SensorFlags)
+                {
+                    if (!sensor)
+                        return false;
+                }
+                return true;
+            }
+            set => Array.Fill(SensorFlags, value);
         }
+        internal readonly bool[] SensorFlags = new bool[1];
         /// <summary>Gets the clockwise orientation in radians.</summary>
         /// <value>The integrated circle angle.</value>
         public float Angle
@@ -419,7 +430,7 @@ namespace Ctr2.Engine.Physics
             {
                 foreach (PhysicsBody body in bodies)
                 {
-                    if (body.Mass > 0 && !body.IsSensor && body.PolygonFixtures.Count == 0)
+                    if (body.Mass > 0 && body.PolygonFixtures.Count == 0 && !bodyProxies[body][0].IsSensor)
                     {
                         starts.Add(body, (body.Position, body.Angle));
                     }

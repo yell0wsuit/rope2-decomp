@@ -19,8 +19,9 @@ namespace Ctr2.Engine.Physics
         /// <param name="vertices">Three to eight counterclockwise world-space vertices in meters.</param>
         /// <param name="friction">Finite nonnegative friction coefficient.</param>
         /// <param name="restitution">Finite nonnegative restitution coefficient.</param>
+        /// <param name="isSensor">Whether to initialize the terrain fixture as a sensor.</param>
         /// <exception cref="ArgumentException">Geometry or coefficients are invalid or exceed budgets.</exception>
-        public void AddTerrain(IReadOnlyList<Vector2> vertices, float friction, float restitution)
+        public void AddTerrain(IReadOnlyList<Vector2> vertices, float friction, float restitution, bool isSensor = false)
         {
             if (terrain.Count >= 4096 || vertices.Count is < 3 or > 8 ||
                 !float.IsFinite(friction) || friction < 0 || friction > 100 ||
@@ -30,7 +31,7 @@ namespace Ctr2.Engine.Physics
             }
             ConvexPolygon polygon = new(vertices);
             TerrainFixture fixture = new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center);
-            RegisterTerrainProxy(fixture);
+            RegisterTerrainProxy(fixture, isSensor);
             terrain.Add(fixture);
         }
 
@@ -51,8 +52,9 @@ namespace Ctr2.Engine.Physics
                 PhysicsBody body = candidate.Body;
                 TerrainFixture fixture = candidate.TerrainProxy.Terrain!;
                 int localIndex = candidate.BodyProxy.LocalIndex;
-                PhysicsContact? contact = body.IsSensor ? null : body.PolygonFixtures.Count == 0 ? TerrainContact.Create(body, fixture) :
-                    PolygonContact.Create(body, body.PolygonFixtures[localIndex], fixture);
+                bool sensor = IsSensor(candidate.A, candidate.B);
+                PhysicsContact? contact = sensor ? null : body.PolygonFixtures.Count == 0 ? TerrainContact.Create(body, fixture) :
+                    PolygonContact.Create(body, body.PolygonFixtures[localIndex], fixture, candidate.A.Terrain != null);
                 if (contact != null)
                 {
                     if (candidate.Manifold != null)
@@ -63,7 +65,7 @@ namespace Ctr2.Engine.Physics
                     active.Add(contact);
                 }
                 // Losing the manifold keeps candidate order, but clears warm-start impulses.
-                bool touching = body.IsSensor ? SensorOverlap(candidate.A, candidate.B) : contact != null;
+                bool touching = sensor ? SensorOverlap(candidate.A, candidate.B) : contact != null;
                 RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false);
                 candidate.Touching = touching;
                 candidate.Manifold = contact;

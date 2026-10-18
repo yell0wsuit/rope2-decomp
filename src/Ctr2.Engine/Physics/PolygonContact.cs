@@ -74,8 +74,9 @@ namespace Ctr2.Engine.Physics
         /// <param name="body">Dynamic polygon body.</param>
         /// <param name="shape">One local convex compound fixture.</param>
         /// <param name="terrain">Static convex fixture.</param>
+        /// <param name="terrainFirst">Whether the native contact factory placed terrain at fixture A.</param>
         /// <returns>A touching manifold, or null when the fixtures are separated.</returns>
-        internal static PolygonContact? Create(PhysicsBody body, ConvexPolygon shape, TerrainFixture terrain)
+        internal static PolygonContact? Create(PhysicsBody body, ConvexPolygon shape, TerrainFixture terrain, bool terrainFirst = true)
         {
             Vector2[] moving = [.. shape.Vertices.Select(p => ToWorld(body, p))];
             Vector2[] movingNormals = [.. shape.Normals.Select(n => Rotate(n, body.Angle))];
@@ -89,7 +90,10 @@ namespace Ctr2.Engine.Physics
             {
                 return null;
             }
-            bool flip = separationB > (.98f * separationA) + .001f;
+            // Near-equal separating faces favor native fixture A. Geometry below
+            // remains terrain/body oriented even when native A is the moving fixture.
+            bool flip = terrainFirst ? separationB > (.98f * separationA) + .001f :
+                !(separationA > (.98f * separationB) + .001f);
             Vector2[] reference = flip ? moving : terrain.Points, incident = flip ? terrain.Points : moving;
             Vector2[] referenceNormals = flip ? movingNormals : terrain.Normals, incidentNormals = flip ? terrain.Normals : movingNormals;
             int edge = flip ? edgeB : edgeA;

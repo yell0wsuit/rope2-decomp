@@ -45,6 +45,7 @@ namespace Ctr2.Engine.Physics
             : this(origin, 0, 0, gravityScale)
         {
             PolygonFixtures = fixtures;
+            SensorFlags = new bool[fixtures.Count];
             Vector2 weightedCenter = Vector2.Zero;
             // ResetMassData traverses Box2D's prepended fixture list.
             for (int index = fixtures.Count - 1; index >= 0; index--)

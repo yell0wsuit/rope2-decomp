@@ -83,7 +83,8 @@ meters, swapped to counterclockwise order and placed with the static body's
 rotation and translation. Ears that collapse to zero meter-space area are clipped
 without a fixture, whereas the original keeps them as zero-area Box2D fixtures.
 Translation and authored polygon rotation apply to both drawing and collision.
-Material sensors remain visual-only in this solid-contact subset.
+Authored material sensors remain visual-only in the current gameplay importer;
+the engine now supports explicit terrain sensor fixtures as described below.
 
 Geometry validates finite coordinates, duplicate edges, nonadjacent intersections,
 and zero area. Paths are bounded to 512 sampled vertices,
@@ -222,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `FixtureSensorReference.json` | 720 native world ticks: mixed triangle/circle/polygon sensors, terrain initialization/toggles, body broadcasts, filters/joints and proxy reuse. Exact per-fixture flags/events/candidates/proxy IDs, finite bounds/body states and unchanged mass. |
 | `SensorEventsReference.json` | 1,170 native world ticks: sensor passages, mixed/compound pairs, terrain orientation, sensor/solid toggles, masks/joints and destruction/replacement. Exact ordered Begin/End snapshots, all fixture candidates/manifold counts and finite body states. |
 | `GjkReference.json` | 1,752 native standalone distance queries: fresh/warm caches, circle/segment/polygon hulls, transforms, radii on/off, near-threshold gaps and cached triangle jumps. Witnesses/distance/metric, exact iterations/simplex support IDs/order and overlap. |
 | `CollisionFilterReference.json` | 720 native ticks: masks, signed groups, asymmetric acceptance, terrain, compound fixtures, joint suppression and early new-fixture discovery. Exact candidate lifetime/order, proxy IDs/bounds and six body-state components. |
@@ -639,7 +641,7 @@ without an intervening update preserves the previous cache. If a sensor becomes
 solid while still touching, a manifold can appear without a second Begin. Conversely,
 GJK's small positive-gap overlap can disappear when switching to solid geometry,
 producing an Update End despite unchanged transforms. Independent per-triangle
-sensor flags and implicit terrain sensor setters are not exposed yet.
+and implicit terrain controls are now available as described below.
 
 Set `world.RecordContactEvents = true` to queue future discrete Begin/End transitions;
 recording is off by default. `DrainContactEvents()` returns a detached read-only batch
@@ -678,12 +680,63 @@ The private native listener produces events directly; observation-only contact
 manager hooks label actual creation and destruction stages. Fixture SHA-256:
 `ee95e37681ea089fca805909dffd6db33e0e670f214d1bbd9245fa4705aad574`.
 
+## Per-fixture and terrain sensor controls
+
+`GetFixtureSensor(label)` and `SetFixtureSensor(label, value)` address active body
+or terrain fixtures using stable labels from `CaptureProxies()`. Unknown or retired
+labels throw before changing state. Every compound triangle owns its sensor flag;
+changing one leaves sibling fixtures, filters and density-derived mass unchanged.
+`AddTerrain(vertices, friction, restitution, isSensor: true)` initializes a terrain
+sensor directly; the optional flag defaults to false. Existing authored terrain
+sensor import remains visual-only until gameplay body construction is verified.
+
+`PhysicsBody.IsSensor` remains a managed convenience: its getter is true only when
+all owned fixtures are sensors, and false for mixed bodies. Assignment broadcasts
+to every fixture even if the getter already equals the requested value. In
+particular, assigning false must clear sensor siblings in a mixed body. Retired
+bodies retain their detached flag state; changing it cannot affect reused proxies.
+Use the per-fixture getter to inspect mixed state without ambiguity.
+
+Native SetSensor changes the flag only when needed and wakes its owning body;
+this subset remains always awake. Sensor changes do not touch/refilter proxies,
+clear cached manifolds/touching or emit immediate events. The next discrete update
+uses the OR of the two actual fixture flags, independently of their bodies'
+aggregate convenience values. A changed solid/sensor mode retains existing
+candidate/material ownership. Sensor contacts use GJK and no solid solver; mixed
+bodies can have sensor and solid contacts simultaneously. Solid-only diagnostics
+exclude just the sensor pairs. Both primary analytical terrain sweeps and nearby
+extra impact manifolds skip pairs with either fixture marked as a sensor.
+Native TOI/cache/substep mutation and sleeping behavior remain separate work.
+
+The body-before-terrain regression also exposed a preexisting reference-face bias
+in the static polygon solver. Near-equal separating faces must favor native
+fixture A, which can be the moving polygon when terrain was created afterward.
+The solver now chooses that priority from persistent candidate orientation, while
+retaining its terrain-to-body normal, clipping point order and position arithmetic.
+Terrain warm-start feature IDs remain in terrain/body canonical orientation; they
+are not exposed as raw native body-first IDs. The native scene that exposed the
+position mismatch now passes without changing tolerances, along with earlier
+terrain/reference suites.
+
+`FixtureSensorReference.json` checks eight native scenes through tick 90 (720
+snapshots and 35 Begin/End records). Cases cover mixed triangle/circle/polygon
+contacts, initial terrain sensors, terrain mode changes, terrain created after a
+body, multiple terrain fixtures, body broadcasts, filters, joint removal and
+body/proxy replacement. Per-fixture flags, ordered events, all candidate labels/
+creation/touching/sensor/manifold counts and proxy IDs match exactly. Finite body
+components/mass use 0.00002 tolerance; predicted bounds use 0.000002. Additional
+regressions cover mixed broadcast normalization, retired ownership, deferred
+snapshots, no-touch setter behavior, pair-specific diagnostics and sensor exclusion
+from primary/additional analytical sweep contacts. Fixture SHA-256:
+`c939a65759435f9ffbfc89c6003ce7b319b23f3b4f35de4aa39c1352f5ab1dd8`.
+
 ## Running numerical verification
 
 From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FixtureSensorTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SensorContactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PhysicsDistanceTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*CollisionFilterTests'
@@ -710,10 +763,10 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are per-fixture sensor controls, remaining joint APIs/limited-angle
-cases and native TOI/separation-function islands. Synchronous callback/gameplay
-integration and sleeping remain separate verification work. Then verify Windows game body construction, materials, fixtures,
-attachments and physics-based gameplay against authored input traces. Passing
+Next gates are remaining joint APIs/limited-angle cases and native
+TOI/separation-function islands. Synchronous callback/gameplay integration and
+sleeping remain separate verification work. Then verify Windows game body
+construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
 are a separate acceptance gate. Presentation expansion follows those gates.
 
