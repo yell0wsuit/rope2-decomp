@@ -16,6 +16,32 @@ decompiled game code or reconstructed reference harnesses. Verification artifact
 use synthetic inputs and numerical fixtures. No original game assets, level data
 or decompiled game code are included in the fixtures.
 
+## Deliberately unported Box2D features
+
+Do not port these just because Box2D 2.2.1 has them. Each was checked against the
+game's own code (the decompiled `Local/` tree and `MainNativeHelper.cpp`, Box2D sources
+excluded) and its level data, and nothing in the game reaches it. Porting them adds
+untested surface with no reference behavior to verify against.
+
+| Feature | Evidence it is unused |
+| --- | --- |
+| Mouse joint | `GameScene` only calls `SetTarget`/`DestroyJoint` behind a null check; no `b2MouseJointDef` is ever created. The CTR2 profile's custom `SetAnchorB` is likewise uncalled. |
+| Weld, wheel, pulley, gear, friction and motor joints | No definitions or calls. The game uses only revolute, prismatic, distance and rope joints. |
+| Edge and chain shapes | Only circle and polygon shapes are created. |
+| Bullets | No `SetBullet` calls. `PhysicsHelper` reads `bodydef.bullet` from design data, but every authored body in the Windows maps and the Android assets has `bullet="false"`. |
+| World gravity changes | Every world is created with (0, 10) and nothing calls `SetGravity`. Per-body `SetGravityScale` is used and ported. |
+| Variable time steps, sub-stepping and disabled warm starting | Worlds always step with dt 0.0167 (zero `frameStep` pauses skip the step). No `SetSubStepping` or `SetWarmStarting` calls. |
+| Contact filter callbacks, `PreSolve` and `SetEnabled` | No custom `b2ContactFilter`, no real `PreSolve` override and no contact disabling. The game's "pre-solve" delegates run from `BeginContact`. |
+| Inactive bodies (`SetActive`), `ApplyForce`/`ApplyTorque` at runtime, `SetAutoClearForces`, `ShiftOrigin` | No calls. |
+| Distance/rope runtime setters (`SetLength`, `SetFrequency`, `SetDampingRatio`, `SetMaxLength`) | No calls. Rope stretch changes destroy and recreate joints instead. |
+
+Some of these are already present for other reasons (for example `ApplyForce` and
+`ApplyTorque`); keep them, but do not extend them without a caller. Port one of the
+features above only when a newly supported data source or game build demonstrably
+reaches it: re-run the same call-site and data search first, record the evidence
+here, and verify the new path against an independent native oracle like every other
+checkpoint.
+
 ## Behavior contract
 
 The matching Windows master design supplies body radius, density, gravity scale,
@@ -1119,7 +1145,7 @@ The engine-level port of the game's Box2D usage is complete, including the intro
 sleep/wake behavior. The game only steps its worlds with dt 0.0167 (its zero `frameStep`
 pauses skip the step entirely), so variable dt ratios are not needed. The game never creates its mouse
 joint, authors no bullets, keeps gravity at (0, 10) and leaves sub-stepping off, so
-those paths are deliberately unported. Next, game objects must build their bodies,
+those paths are deliberately unported (see "Deliberately unported Box2D features"). Next, game objects must build their bodies,
 fixtures, filters, sensors and joints from authored data through these APIs, and then
 physics-based gameplay must be verified against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
