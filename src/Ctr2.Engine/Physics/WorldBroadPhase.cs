@@ -62,6 +62,7 @@ namespace Ctr2.Engine.Physics
         private readonly PhysicsBroadPhase broadPhase = new();
         private readonly Dictionary<int, FixtureProxy> proxies = [];
         private readonly Dictionary<PhysicsBody, List<FixtureProxy>> bodyProxies = [];
+        private readonly Dictionary<TerrainFixture, FixtureProxy> terrainProxies = [];
         private readonly Dictionary<(int, int), BodyCandidate> bodyContacts = [];
         private readonly Dictionary<(PhysicsBody, PhysicsBody), int> collisionBlocks = [];
         private int fixtureLabel;
@@ -74,6 +75,7 @@ namespace Ctr2.Engine.Physics
             internal readonly TerrainFixture? Terrain = terrain;
             internal readonly int LocalIndex = localIndex;
             internal int Id;
+            internal PhysicsCollisionFilter Filter = PhysicsCollisionFilter.Default;
         }
 
         private sealed class TerrainCandidate(FixtureProxy body, FixtureProxy terrain, long creationOrder)
@@ -121,7 +123,7 @@ namespace Ctr2.Engine.Physics
             {
                 BodyCandidate pair = entry.Value;
                 PhysicsBody a = pair.A.Body!, b = pair.B.Body!;
-                if (JointBlocksCollision(a, b) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
+                if (JointBlocksCollision(a, b) || !ShouldCollide(pair.A.Filter, pair.B.Filter) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
                 {
                     bodyContacts.Remove(entry.Key);
                     continue;
@@ -172,6 +174,7 @@ namespace Ctr2.Engine.Physics
             FixtureProxy proxy = new(++fixtureLabel, null, fixture, 0);
             proxy.Id = broadPhase.CreateProxy(bounds, proxy.Label);
             proxies.Add(proxy.Label, proxy);
+            terrainProxies.Add(fixture, proxy);
             newFixtures = true;
         }
 
@@ -196,6 +199,10 @@ namespace Ctr2.Engine.Physics
             foreach (BroadPhasePair pair in broadPhase.UpdatePairs())
             {
                 FixtureProxy a = proxies[pair.First], b = proxies[pair.Second];
+                if (!ShouldCollide(a.Filter, b.Filter))
+                {
+                    continue;
+                }
                 if (a.Body != null && b.Body != null && a.Body != b.Body &&
                     (a.Body.Mass > 0 || b.Body.Mass > 0) && !JointBlocksCollision(a.Body, b.Body))
                 {

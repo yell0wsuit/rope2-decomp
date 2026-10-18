@@ -222,6 +222,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `CollisionFilterReference.json` | 720 native ticks: masks, signed groups, asymmetric acceptance, terrain, compound fixtures, joint suppression and early new-fixture discovery. Exact candidate lifetime/order, proxy IDs/bounds and six body-state components. |
 | `PolygonBodyReference.json` | 1,800 native ticks: flat/tilted/reversed polygon pairs, restitution, fixed rotation, compound/offset shapes, stacks, replacement and narrow conditioning. Exact body/terrain candidates and clipped feature IDs/order, plus six body-state components. |
 | `PolygonCircleReference.json` | 1,800 native ticks: face, left/right vertices, containment, rotated/fixed and compound polygons, offset COM, static circle and circle-first creation. Exact mixed/terrain candidate orientation/order/touching and six body-state components. |
 | `CircleContactReference.json` | 1,800 native per-tick snapshots of static/dynamic circle impacts, oblique friction/spin, restitution, tangent/coincident centers, stacked contact islands, mixed joint/contact islands, joint refiltering and cached material changes. Exact circle/terrain candidate orientation/order/touching plus six body-state components. |
@@ -386,7 +387,7 @@ the two-point velocity solver retains the native matrix-product grouping and
 rounds inverse-matrix entries before multiplying. Algebraic simplification can
 change a later proxy-containment decision despite tiny body-state differences.
 
-General filters, sensor callbacks, raycasts and tree rebuilding remain separate work. The analytical CCD
+Custom filter callbacks, sensor callbacks, raycasts and tree rebuilding remain separate work. The analytical CCD
 subset synchronizes its final transforms but does not reproduce native TOI proxy
 updates or callback timing. Windows behavioral equivalence remains unverified.
 
@@ -466,7 +467,7 @@ and a nearby miss, sensors on either shape, joint filtering without forced
 rediscovery, proxy reuse, removal and immutable snapshots.
 Fixture SHA-256: `b861c5a5d962c82385b0a0094d3b5ff30e5528059b21b3f9ffe3745a045543eb`.
 
-Continuous body-pair collision, sleeping, general filter APIs and native
+Continuous body-pair collision, sleeping, custom filter callbacks and native
 sensor/gameplay callbacks remain separate work. Terrain
 added through `AddTerrain` retains its separately verified paths. Original Windows
 runtime and cross-platform bitwise parity remain unverified.
@@ -513,12 +514,60 @@ rather than numerically covered. Fixture SHA-256:
 `b556c7f355b8a735918cb66a396787cc45b4888bb366002965860d66bf28a5eb`.
 Original Windows runtime equivalence remains unverified.
 
+## Fixture collision filters
+
+Each circle, compound triangle and implicit terrain fixture has an independent
+`PhysicsCollisionFilter`. Native defaults are category 1, mask 65535 and group 0;
+use `PhysicsCollisionFilter.Default` to request these values explicitly. A zeroed
+struct accepts no categories. Equal nonzero signed groups override masks: positive
+groups allow contact, negative groups reject it. Otherwise both directional
+category/mask intersections must be nonzero. Fixture filters never override
+same-body, static/static or joint collision exclusions.
+
+`CaptureProxies()` exposes stable world-local fixture labels used by
+`GetFixtureFilter(label)` and `SetFixtureFilter(label, filter)`. Unknown or retired
+labels throw before mutation. Changing one triangle leaves its siblings unchanged.
+The setter stores the new value immediately, including an identical assignment,
+but leaves existing candidates/manifolds in place until the next collision update.
+Disallowed contacts are then retired. A newly allowed overlap normally becomes a
+candidate at the end of the step, with narrowphase on the following step. If new
+fixtures trigger discovery at the beginning of the step, the same refilter touch
+can create and evaluate that candidate immediately. Preserved candidates retain
+their creation sequence and material cache.
+
+The always-awake subset rechecks current filter values during each collision
+update; it does not expose native custom filter callbacks or sleep flags. World
+refilter touches are coalesced when a leaf already has a pending query. Sorted
+unique pair outputs are unchanged; this deliberately avoids the upstream hazard
+where repeated touches followed by destruction can leave a stale move ID. The
+standalone broadphase preserves its separately tested native duplicate behavior.
+Both primary analytical terrain sweeps and their additional impact manifolds
+honor the filters; this does not turn that bounded CCD path into native TOI.
+
+`CollisionFilterReference.json` contains eight independent native scenes, every
+tick through 90 (720 snapshots). They cover initial rejection, signed-group
+precedence, asymmetric masks, repeated setters, disabling/re-enabling, compound
+triangles, terrain, joint suppression/removal and early new-fixture discovery.
+Exact candidate labels/orientation/creation/touching and proxy IDs are compared;
+proxy bounds use the existing 0.000001 tolerance and all six finite body-state
+components use 0.00002. Additional boundary tests cover high category bits, signed
+group limits, body exclusions, setter timing, retired ownership, repeated touches
+followed by removal and filtered analytical sweeps. Fixture SHA-256:
+`69490c911ed176f91dd5696dcb9d59484012eb1d6986d0c218167482f9711adc`.
+
+Sensor event timing remains a separate gate. Native sensor overlap uses fresh-cache
+GJK distance with radii and a strict `10 * epsilon` threshold, independently of
+solid manifold generation. Generic sensor Begin/End events require that path to be
+ported and numerically verified first. Existing gameplay sensor/overlap helpers
+are unchanged, and authored Windows collision-filter import remains unsupported.
+
 ## Running numerical verification
 
 From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*CollisionFilterTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PolygonBodyContactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PolygonCircleTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*CircleContactTests'
@@ -542,8 +591,8 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are collision filters and sensor event timing, remaining joint
-APIs/limited-angle cases, distance/GJK and native TOI islands. Then verify Windows game body construction, materials, fixtures,
+Next gates are distance/GJK and sensor event timing, remaining joint
+APIs/limited-angle cases and native TOI islands. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
 are a separate acceptance gate. Presentation expansion follows those gates.

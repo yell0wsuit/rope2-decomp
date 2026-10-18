@@ -41,7 +41,8 @@ namespace Ctr2.Engine.Physics
             foreach (var entry in contacts.ToArray())
             {
                 TerrainCandidate candidate = entry.Value;
-                if (!broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
+                if (!ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter) ||
+                    !broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
                 {
                     contacts.Remove(entry.Key);
                     continue;

@@ -130,6 +130,17 @@ namespace Ctr2.Engine.Physics
             moves.Add(proxyId);
         }
 
+        /// <summary>Queues world refilter discovery without duplicating an already pending leaf.</summary>
+        internal void TouchProxyOnce(int proxyId)
+        {
+            CheckMutation();
+            tree.Leaf(proxyId);
+            if (!moves.Contains(proxyId))
+            {
+                TouchProxy(proxyId);
+            }
+        }
+
         /// <summary>Gets the stored predicted box of a live proxy.</summary>
         public PhysicsAabb GetBounds(int proxyId) => tree.Leaf(proxyId).Bounds;
         /// <summary>Gets the integer user data of a live proxy.</summary>
