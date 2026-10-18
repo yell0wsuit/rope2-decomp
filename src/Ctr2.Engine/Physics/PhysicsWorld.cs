@@ -118,7 +118,7 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>A Box2D 2.2.1 rope or soft distance constraint restricted to body centers.</summary>
+    /// <summary>A Box2D 2.2.1 rope or soft distance constraint with rotating local anchors.</summary>
     public sealed class PhysicsJoint
     {
         /// <summary>First body.</summary>
@@ -141,6 +141,10 @@ namespace Ctr2.Engine.Physics
         private float bias;
         /// <summary>Accumulated warm-start impulse.</summary>
         private float impulse;
+        private readonly Vector2 localAnchorA;
+        private readonly Vector2 localAnchorB;
+        private Vector2 armA;
+        private Vector2 armB;
         /// <summary>Gets the rope limit or spring rest length in meters.</summary>
         /// <value>The configured nonnegative length.</value>
         public float Length
@@ -151,26 +155,37 @@ namespace Ctr2.Engine.Physics
         /// <value>A force vector in newtons, based on the fixed timestep.</value>
         public Vector2 ReactionForce => impulse / PhysicsWorld.TimeStep * direction;
 
-        /// <summary>Creates a center-anchor constraint.</summary>
+        /// <summary>Gets the current world-space first anchor in meters.</summary>
+        public Vector2 AnchorA => A.Position + Rotate(localAnchorA - A.LocalCenter, A.Angle);
+        /// <summary>Gets the current world-space second anchor in meters.</summary>
+        public Vector2 AnchorB => B.Position + Rotate(localAnchorB - B.LocalCenter, B.Angle);
+
+        /// <summary>Creates a constraint with body-origin local anchors.</summary>
         /// <param name="a">First body.</param>
         /// <param name="b">Second body.</param>
         /// <param name="length">Positive rest length or upper limit.</param>
         /// <param name="frequency">Zero for rope; positive for spring.</param>
         /// <param name="damping">Spring damping ratio.</param>
-        internal PhysicsJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping)
+        /// <param name="localAnchorA">First body-local anchor.</param>
+        /// <param name="localAnchorB">Second body-local anchor.</param>
+        internal PhysicsJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping, Vector2 localAnchorA, Vector2 localAnchorB)
         {
             A = a;
             B = b;
             Length = length;
             this.frequency = frequency;
             this.damping = damping;
+            this.localAnchorA = localAnchorA;
+            this.localAnchorB = localAnchorB;
         }
 
         /// <summary>Computes effective mass and applies last step's accumulated impulse.</summary>
         /// <param name="firstStep">Whether previous-step impulses must be zeroed.</param>
         internal void Initialize(bool firstStep)
         {
-            direction = B.Position - A.Position;
+            armA = Rotate(localAnchorA - A.LocalCenter, A.Angle);
+            armB = Rotate(localAnchorB - B.LocalCenter, B.Angle);
+            direction = B.Position + armB - A.Position - armA;
             separation = direction.Length();
             if (separation > PhysicsWorld.LinearSlop)
             {
@@ -185,7 +200,9 @@ namespace Ctr2.Engine.Physics
                     return;
                 }
             }
-            float inverseMass = A.InverseMass + B.InverseMass;
+            float crossA = Cross(armA, direction), crossB = Cross(armB, direction);
+            float inverseMass = A.InverseMass + (A.InverseInertia * crossA * crossA) +
+                B.InverseMass + (B.InverseInertia * crossB * crossB);
             mass = inverseMass != 0 ? 1 / inverseMass : 0;
             gamma = bias = 0;
             if (frequency > 0)
@@ -210,7 +227,9 @@ namespace Ctr2.Engine.Physics
         /// <summary>Solves the predictive rope limit or soft distance velocity constraint.</summary>
         internal void SolveVelocity()
         {
-            float speed = Vector2.Dot(direction, B.Velocity - A.Velocity);
+            Vector2 velocityA = A.Velocity + (A.AngularVelocity * new Vector2(-armA.Y, armA.X));
+            Vector2 velocityB = B.Velocity + (B.AngularVelocity * new Vector2(-armB.Y, armB.X));
+            float speed = Vector2.Dot(direction, velocityB - velocityA);
             if (frequency == 0 && separation < Length)
             {
                 speed += 1 / PhysicsWorld.TimeStep * (separation - Length);
@@ -218,7 +237,8 @@ namespace Ctr2.Engine.Physics
             float change = -mass * (speed + bias + (gamma * impulse));
             float previous = impulse;
             impulse = frequency == 0 ? MathF.Min(0, impulse + change) : impulse + change;
-            ApplyVelocity((impulse - previous) * direction);
+            // Rope impulses clamp the accumulated limit; native distance joints apply the raw increment.
+            ApplyVelocity((frequency == 0 ? impulse - previous : change) * direction);
         }
 
         /// <summary>Corrects excessive rope length; soft springs defer correction to the velocity solver.</summary>
@@ -229,7 +249,9 @@ namespace Ctr2.Engine.Physics
             {
                 return true;
             }
-            Vector2 u = B.Position - A.Position;
+            Vector2 rA = Rotate(localAnchorA - A.LocalCenter, A.Angle);
+            Vector2 rB = Rotate(localAnchorB - B.LocalCenter, B.Angle);
+            Vector2 u = B.Position + rB - A.Position - rA;
             float length = u.Length();
             if (length >= 1.1920929e-7f)
             {
@@ -237,20 +259,32 @@ namespace Ctr2.Engine.Physics
             }
             Vector2 correction = -mass * Math.Clamp(length - Length, 0, 0.2f) * u;
             A.Position -= A.InverseMass * correction;
+            A.Angle -= A.InverseInertia * Cross(rA, correction);
             B.Position += B.InverseMass * correction;
+            B.Angle += B.InverseInertia * Cross(rB, correction);
             return length - Length < PhysicsWorld.LinearSlop;
         }
 
-        /// <summary>Applies equal and opposite center impulses.</summary>
+        /// <summary>Applies equal and opposite impulses at the rotating anchors.</summary>
         /// <param name="value">Impulse vector on body B.</param>
         private void ApplyVelocity(Vector2 value)
         {
             A.Velocity -= A.InverseMass * value;
+            A.AngularVelocity -= A.InverseInertia * Cross(armA, value);
             B.Velocity += B.InverseMass * value;
+            B.AngularVelocity += B.InverseInertia * Cross(armB, value);
+        }
+
+        private static float Cross(Vector2 a, Vector2 b) => (a.X * b.Y) - (a.Y * b.X);
+
+        private static Vector2 Rotate(Vector2 value, float angle)
+        {
+            float sine = MathF.Sin(angle), cosine = MathF.Cos(angle);
+            return new((cosine * value.X) - (sine * value.Y), (sine * value.X) + (cosine * value.Y));
         }
     }
 
-    /// <summary>Always-awake Box2D 2.2.1 subset with circle center joints and circle/polygon contacts against static terrain.</summary>
+    /// <summary>Always-awake Box2D 2.2.1 subset with local-anchor joints and circle/polygon contacts against static terrain.</summary>
     public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>
@@ -303,6 +337,18 @@ namespace Ctr2.Engine.Physics
             return AddJoint(a, b, length, 0, 0);
         }
 
+        /// <summary>Adds a rope limit between local anchors measured from the body origins.</summary>
+        /// <param name="a">First owned body.</param>
+        /// <param name="b">Second owned body.</param>
+        /// <param name="length">Nonnegative maximum separation in meters.</param>
+        /// <param name="localAnchorA">First body-local anchor in meters.</param>
+        /// <param name="localAnchorB">Second body-local anchor in meters.</param>
+        /// <returns>The owned rope constraint.</returns>
+        public PhysicsJoint AddRope(PhysicsBody a, PhysicsBody b, float length, Vector2 localAnchorA, Vector2 localAnchorB)
+        {
+            return AddJoint(a, b, length, 0, 0, localAnchorA, localAnchorB);
+        }
+
         /// <summary>Adds a soft center-anchor distance constraint.</summary>
         /// <param name="a">First owned body.</param>
         /// <param name="b">Second owned body.</param>
@@ -313,6 +359,21 @@ namespace Ctr2.Engine.Physics
         public PhysicsJoint AddSpring(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping)
         {
             return frequency <= 0 ? throw new ArgumentOutOfRangeException(nameof(frequency)) : AddJoint(a, b, length, frequency, damping);
+        }
+
+        /// <summary>Adds a soft distance constraint between local body-origin anchors.</summary>
+        /// <param name="a">First owned body.</param>
+        /// <param name="b">Second owned body.</param>
+        /// <param name="length">Positive rest length in meters.</param>
+        /// <param name="frequency">Positive frequency in hertz.</param>
+        /// <param name="damping">Nonnegative damping ratio.</param>
+        /// <param name="localAnchorA">First body-local anchor in meters.</param>
+        /// <param name="localAnchorB">Second body-local anchor in meters.</param>
+        /// <returns>The owned distance constraint.</returns>
+        public PhysicsJoint AddSpring(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping, Vector2 localAnchorA, Vector2 localAnchorB)
+        {
+            return frequency <= 0 ? throw new ArgumentOutOfRangeException(nameof(frequency)) :
+                AddJoint(a, b, length, frequency, damping, localAnchorA, localAnchorB);
         }
 
         /// <summary>Removes a constraint before the next step.</summary>
@@ -456,24 +517,31 @@ namespace Ctr2.Engine.Physics
             stepped = true;
         }
 
-        /// <summary>Validates and adds one center constraint within the world budget.</summary>
+        /// <summary>Validates and adds one local-anchor constraint within the world budget.</summary>
         /// <param name="a">First body.</param>
         /// <param name="b">Second body.</param>
         /// <param name="length">Positive length.</param>
         /// <param name="frequency">Zero for rope or positive for spring.</param>
         /// <param name="damping">Nonnegative spring damping ratio.</param>
+        /// <param name="localAnchorA">First body-origin anchor, or null for the center of mass.</param>
+        /// <param name="localAnchorB">Second body-origin anchor, or null for the center of mass.</param>
         /// <returns>The owned constraint.</returns>
-        private PhysicsJoint AddJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping)
+        private PhysicsJoint AddJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping,
+            Vector2? localAnchorA = null, Vector2? localAnchorB = null)
         {
-            if (joints.Count >= 8192 || a.PolygonFixtures.Count > 0 || b.PolygonFixtures.Count > 0 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length < 0 || (frequency > 0 && length == 0) ||
+            Vector2 anchorA = localAnchorA ?? a.LocalCenter, anchorB = localAnchorB ?? b.LocalCenter;
+            if (!ValidAnchor(anchorA) || !ValidAnchor(anchorB) || joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length < 0 || (frequency > 0 && length == 0) ||
                 !float.IsFinite(frequency) || frequency < 0 || !float.IsFinite(damping) || damping < 0)
             {
                 throw new ArgumentOutOfRangeException(nameof(length));
             }
-            PhysicsJoint joint = new(a, b, length, frequency, damping);
+            PhysicsJoint joint = new(a, b, length, frequency, damping, anchorA, anchorB);
             joints.Add(joint);
             return joint;
         }
+
+        private static bool ValidAnchor(Vector2 value) => float.IsFinite(value.X) && float.IsFinite(value.Y) &&
+            MathF.Abs(value.X) <= 10000 && MathF.Abs(value.Y) <= 10000;
 
         /// <summary>Builds Box2D's depth-first joint order, without traversing through static bodies.</summary>
         /// <param name="bodyOrder">Dynamic-body island memberships and depth-first traversal ranks.</param>

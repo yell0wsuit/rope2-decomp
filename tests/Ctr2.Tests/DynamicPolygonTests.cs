@@ -70,19 +70,27 @@ namespace Ctr2.Tests
             Assert.InRange(MathF.Abs(body.Velocity.Y), 0, .001f);
         }
 
-        /// <summary>Unsupported polygon anchors fail without preventing supported circle constraints.</summary>
+        /// <summary>Default polygon anchors remain at the center of mass and cannot generate torque.</summary>
         [Fact]
-        public void PolygonCenterJointsFailExplicitly()
+        public void PolygonCenterJointsFollowMassCenterWithoutTorque()
         {
             PhysicsWorld world = new();
             PhysicsBody polygon = world.AddPolygon(new([new(0, 0), new(.4f, 0), new(0, .4f)]), Vector2.Zero, 1, 1);
             PhysicsBody circle = world.AddCircle(Vector2.One, .1f, 1, 1);
             PhysicsBody anchor = world.AddCircle(Vector2.Zero, .1f, 0, 0);
-            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddRope(polygon, anchor, 1));
-            _ = Assert.Throws<ArgumentOutOfRangeException>(() => world.AddSpring(circle, polygon, 1, 10, .3f));
+            PhysicsJoint rope = world.AddRope(polygon, anchor, 1);
+            PhysicsJoint spring = world.AddSpring(circle, polygon, 1, 10, .3f);
             Assert.NotNull(world.AddRope(circle, anchor, 1));
-            world.Step();
-            Assert.True(float.IsFinite(polygon.Position.Y));
+            Assert.NotEqual(Vector2.Zero, polygon.LocalCenter);
+            for (int tick = 0; tick < 180; tick++)
+            {
+                world.Step();
+                Assert.Equal(polygon.Position, rope.AnchorA);
+                Assert.Equal(polygon.Position, spring.AnchorB);
+                Assert.Equal(0, polygon.Angle);
+                Assert.Equal(0, polygon.AngularVelocity);
+                Assert.True(float.IsFinite(polygon.Position.Y));
+            }
         }
 
         /// <summary>Compound fixture limits reject an oversized addition without consuming remaining capacity.</summary>

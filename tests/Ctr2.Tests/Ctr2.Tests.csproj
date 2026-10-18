@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <None Update="JointAnchorReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="RopeCutReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PolygonContactReference.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PolygonMassReference.csv" CopyToOutputDirectory="PreserveNewest" />

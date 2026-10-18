@@ -2,7 +2,7 @@
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
-circle center-anchored rope/soft-distance joints and circle/polygon contacts against
+rope/soft-distance joints with rotating body-local anchors and circle/polygon contacts against
 static convex terrain.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
 
@@ -174,8 +174,14 @@ internal fixture skin edges. Synthetic five-vertex geometry checks the triangle
 sequence. Compound inertia sums centroid moments and parallel-axis offsets directly
 to retain precision for small shapes far from their local origin. `compound: false` creates a single convex fixture for isolated solver
 verification. The world limits bodies to 4096 and dynamic polygon fixtures to 8192;
-failed additions do not mutate either budget. Polygon joints fail explicitly until
-local anchor constraints are supported.
+failed additions do not mutate either budget. Rope and soft-distance joints support
+circle and polygon bodies. Explicit anchors use local meters relative to each
+body origin, not its center of mass. Default overloads retain center-of-mass anchors.
+The solver rotates the anchor-minus-local-center lever arms, includes both bodies'
+angular inertia in effective mass, and applies angular velocity/position impulses.
+Fixed-rotation bodies retain zero inverse inertia. Soft-distance constraints apply
+the raw incremental velocity impulse as native Box2D does; rope limits apply the
+clamped accumulated-impulse difference.
 
 `CandySimulation.CharacterDefinitions` retains immutable initial definitions;
 `Characters` holds the corresponding integrated bodies in authored order. Character
@@ -210,6 +216,7 @@ belong in commits. Tests require neither native compilation nor game assets.
 | Fixture | Scenarios and columns |
 | --- | --- |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
+| `JointAnchorReference.csv` | Offset circles, shifted-centroid rotating polygons, fixed rotation and two dynamic endpoints for rope and soft-distance constraints. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY` |
 | `RopeCutReference.csv` | Synthetic `game_cut` chain, cut before zero-based tick 30 with crossing `(30,20)` logical units and tip impulse `(0.001,0)`. Same columns as above; new tips are body indices 4/5. |
 | `PolygonContactReference.csv` | Flat/tilted/bouncing/offset/compound/fixed-rotation/slope/free-fall polygon bodies, triangulated terrain and two bodies sharing a floor. `scenario,tick,originX,originY,centerX,centerY,vx,vy,angle,angularVelocity,mass,localCenterX,localCenterY` |
 | `PolygonMassReference.csv` | Four invented convex shapes at densities 0, 0.5 and 3.25. `scenario,density,mass,centerX,centerY,originInertia,centerInertia` |
@@ -232,6 +239,30 @@ unchanged. Sensor fixtures sample zero-based ticks 0–119, require exact collec
 masks and use the original 0.00002 position tolerance. Polygon mass fixtures require
 0.00002 component tolerance; circle overlap fixtures require exact Boolean results.
 Polygon fixtures contain only invented geometry, not Om Nom game vertices.
+
+Joint-anchor fixtures sample every tick 1–180 for both bodies in eight independent
+scenarios: 2,880 states. State/anchor tolerance is 0.00002; reaction-force tolerance
+is 0.0002 newtons. Every component must be finite. The native harness is
+`local/physics-reference/JointAnchorReference.cpp`, compiled with clang C++11,
+`-O0 -ffp-contract=off` against the local 2.2.1 tree. An archive comparison confirmed
+only `b2Settings.h` differs; the profile changes linear slop to 0.001. Fixture
+SHA-256: `d590d946c02efcd127133ac2af65704ae67532da2405dc357d87c2664c57472d`.
+These contact-free scenarios verify rotational joint behavior; they do not verify
+game-specific broadphase, collision callbacks or general TOI behavior.
+
+## Physics-first verification priority
+
+Further development prioritizes source-faithful physics before game object or
+presentation expansion. The managed engine remains a bounded subset, not a
+complete or proven 1:1 replacement for the game's physics. The native oracle has
+only the stated linear-slop patch; other game-specific changes still need auditing.
+
+Next gates are degenerate/joint mutation cases, source-compatible broadphase and
+contact lifetime/order, general two-body contact solving, distance/GJK and native
+TOI islands. Then verify Windows game body construction, materials, fixtures,
+attachments and physics-based gameplay against authored input traces. Passing
+synthetic fixtures is evidence for those scenarios; original-game trace comparisons
+are a separate acceptance gate. Presentation expansion follows those gates.
 
 ## Opt-in forest gameplay
 

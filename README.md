@@ -193,5 +193,9 @@ mass. Polygon contacts are discrete and can tunnel at high speed. Broader intro
 sequences, remaining gameplay adjustments and general dynamic-body collision remain pending.
 
 The opt-in `play-level` slice adds character/candy contact, consumption and completion.
-Next: native scenery, rope/star artwork, sound and
-broader collision verification. Web work follows the PC slice.
+Development now prioritizes physics verification before additional presentation.
+Rotating rope/spring anchors have headless native comparisons; the engine remains
+a subset, with broadphase/contact ordering, general dynamic-body collision and
+native continuous collision still pending. Next: verify those physics paths, then
+game object bodies/materials/attachments and physics-based mechanics. Presentation
+and web work follow the relevant physics gates. See [physics scope and verification](src/Ctr2.Engine/Physics/PHYSICS.md).
