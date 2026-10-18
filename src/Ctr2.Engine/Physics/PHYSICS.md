@@ -958,6 +958,15 @@ mutates; velocity and impulse setters remain allowed.
 `QueryReference.json` covers five snapshots of a moving mixed world and is bit-identical
 on the oracle platform. Fixture SHA-256: `53bc0856fe5f95d0f916c94c91df08407fabf5c6a5a1f7b7e3831e025f68dba9`.
 
+## World traversal
+
+`Bodies`, `GetJoints(body)`, `GetContacts(body)` and `CaptureFixtureContacts` follow
+native linked-list order, newest first, as the game's body, joint-edge and contact-edge
+loops see it. Joints expose `BodyA`/`BodyB`. `GetWorldPoint`, `GetLocalPoint` and
+`GetWorldVector` use the cached transform, as native does. `RemoveBody(body, jointRemoved)`
+reports each attached joint, newest first, just before removing it, as native
+`DestroyBody` calls the game's destruction listener.
+
 ## Rope and distance joint definitions
 
 `AddRope(a, b, PhysicsRopeDefinition)` and `AddDistance(a, b, PhysicsDistanceDefinition)`

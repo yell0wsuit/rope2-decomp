@@ -5,7 +5,7 @@ using System.Numerics;
 namespace Ctr2.Engine.Physics
 {
     /// <summary>A world-owned constraint participating in the native joint/island traversal.</summary>
-    public abstract class PhysicsJoint
+    public abstract partial class PhysicsJoint
     {
         internal readonly PhysicsBody A;
         internal readonly PhysicsBody B;
