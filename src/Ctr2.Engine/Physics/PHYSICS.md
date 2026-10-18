@@ -4,6 +4,7 @@ This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
 rope/soft-distance joints with rotating body-local anchors and circle/polygon contacts against
 static convex terrain.
+A standalone native-style broadphase is verified separately; world contact generation still uses exhaustive candidates.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
 
 Implementation research stays private and outside tracked files. Do not commit
@@ -31,8 +32,7 @@ joint initialization. Velocity solving applies joint impulses before contact
 friction/normal impulses. Position solving corrects contacts before joints.
 Circle impulses persist across face and vertex transitions within a fixture.
 Polygon impulses persist only for matching clipped manifold feature IDs. Touching contact edges use reverse creation order within each traversed
-body. The broadphase is bounded exhaustive candidate testing, not native Box2D's
-dynamic tree; contact lifetime and complex multi-fixture ordering still need
+body. World broadphase integration is pending; contact lifetime and complex multi-fixture ordering still need
 broader original-runtime comparison.
 
 `CandySimulation` requires zero initial velocities, centered grab anchors and
@@ -313,6 +313,37 @@ use Windows metadata; the behavioral evidence above is Android-only. Original-ru
 traces or Windows instruction-level analysis remain necessary before claiming
 cross-build or bitwise parity.
 
+## Standalone broadphase verification
+
+`PhysicsBroadPhase` ports the licensed Box2D 2.2.1 dynamic tree with the audited
+Android numerical settings: zero fixed padding and displacement multiplier one.
+It preserves the shared leaf/internal-node pool, initial capacity 16, doubling,
+free-list reuse, perimeter insertion costs, balancing ties, child-two-first query
+order and sorted, deduplicated proxy-ID candidate order. Pair payloads retain
+that proxy order rather than sorting user data.
+
+`BroadPhaseReference.json` contains 110 synthetic native snapshots covering pool
+growth, positive/negative movement, contained moves, boundary overlap, repeated
+touches, destruction, ID reuse and teardown. Tests compare exact IDs, reinsertion,
+height, query order and pairs, plus finite bounds within 0.000002 meters. Its
+SHA-256 is `6f1b033d956395b067745371d25c7c19c36b75d5d73b272dd9e7123dc6165bdd`.
+This compares against a separately compiled native oracle, not an original game run.
+
+Native destruction invalidates only the first buffered move for an ID. A duplicate
+entry can therefore reference a freed node. The managed component explicitly
+rejects such a flush and retains pending moves; native-style reuse of the ID before
+flushing is covered separately. This guard is a deliberate managed safety boundary.
+Queries reject mutation and restore the guard after nested queries or exceptions.
+
+Managed bounds require finite coordinates within one million meters. Limits are
+16,384 live proxies, 65,536 pending moves and one million raw candidate pairs,
+including duplicates. Capacity failures preserve pending work and leave rejected
+creation/movement atomic; tests cover reducing workload and retrying.
+
+This component is not yet connected to `PhysicsWorld` fixture/contact ownership.
+Native contact lifetime, filtering, sensors, island ordering, raycasts and tree
+rebuilding remain separate work. Windows behavioral equivalence is unverified.
+
 ## Physics-first verification priority
 
 Further development prioritizes source-faithful physics before game object or
@@ -321,7 +352,7 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are remaining joint APIs/limited-angle cases, source-compatible broadphase and
+Next gates are remaining joint APIs/limited-angle cases, broadphase integration and
 contact lifetime/order, general two-body contact solving, distance/GJK and native
 TOI islands. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
