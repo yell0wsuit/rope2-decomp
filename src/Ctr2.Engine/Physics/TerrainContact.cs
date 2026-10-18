@@ -23,6 +23,7 @@ namespace Ctr2.Engine.Physics
         /// <exception cref="ArgumentException">Geometry or coefficients are invalid or exceed budgets.</exception>
         public void AddTerrain(IReadOnlyList<Vector2> vertices, float friction, float restitution, bool isSensor = false)
         {
+            ThrowIfLocked();
             if (terrain.Count >= 4096 || vertices.Count is < 3 or > 8 ||
                 !float.IsFinite(friction) || friction < 0 || friction > 100 ||
                 !float.IsFinite(restitution) || restitution < 0 || restitution > 10)

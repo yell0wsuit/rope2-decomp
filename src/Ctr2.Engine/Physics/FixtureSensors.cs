@@ -20,6 +20,7 @@ namespace Ctr2.Engine.Physics
         /// <exception cref="KeyNotFoundException">The label is unknown or retired.</exception>
         public void SetFixtureSensor(int fixture, bool isSensor)
         {
+            ThrowIfLocked();
             proxies[fixture].IsSensor = isSensor;
         }
     }

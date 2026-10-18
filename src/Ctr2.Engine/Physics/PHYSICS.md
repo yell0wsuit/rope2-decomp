@@ -223,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `QueryReference.json` | Five snapshots of a moving mixed world: 32 ray casts per snapshot under all/closest/stop/filter callbacks, 8 AABB queries with early stops, 96-point tests per fixture and swept fixture bounds. Exact report order and labels; points, normals, fractions, bounds and body states. |
 | `DistanceJointReference.json` | 750 native ticks: rigid distance pendulums and compression, zero-rest-length and banner springs, colliding/blocking rope and spring pairs, world-anchor initialization and coincident anchors. Exact candidates; anchors, reaction forces and six body-state components. |
 | `ContactReportReference.json` | 480 native ticks: terrain circles/compounds/boxes with restitution, multi-island body pairs, redundant two-point manifolds, sensors and teleports. Exact event/report identity, order and impulse counts; Begin-time and PostSolve world manifolds, impulses and six body-state components. |
 | `BodyTypeReference.json` | 900 native ticks: static/dynamic fruit-style toggles, offset-COM polygon type and density resets, kinematic pushers and island bridges, explicit mass data and roped body freezing. Exact types/proxy IDs/candidates/events; mass, inertia, centers and six body-state components. |
@@ -913,13 +914,32 @@ They now follow native arithmetic:
 
 With every native-trace comparison set to exact equality, every JSON fixture suite
 (broadphase, circle, polygon-circle, polygon-pair, contact lifecycle, filters, sensors,
-fixture sensors, revolute, body control, body type, contact report, distance joint, joint anchor and joint topology) is
+fixture sensors, revolute, body control, body type, contact report, distance joint, world query, joint anchor and joint topology) is
 bit-identical to the Android-profile native oracle for every compared tick on macOS
 arm64, where .NET and the clang-built oracle share the platform `sinf`/`cosf`. The
 committed tests keep their tolerances so they stay valid where the C runtime's
 trigonometry differs; matching the original executables' trigonometry is outside
 this source-profile verification. The CSV polygon fixture prints too few digits to
 measure exactness.
+
+## World queries
+
+`RayCast(point1, point2, callback)` follows native `b2DynamicTree::RayCast`: segment-box
+and separating-axis culling, LIFO traversal, and clipping by the callback's returned
+fraction. Each leaf runs the native circle or polygon shape ray cast against the
+body's cached transform (terrain uses the identity frame), and the world point is
+`(1 - fraction) * p1 + fraction * p2`. Callbacks use native return values: -1 ignores
+the hit, 0 stops, the hit fraction clips to the closest hit and 1 continues. Sensors
+are reported, as in native. `QueryAabb` reports fixtures whose predicted proxy bounds
+overlap, in tree order, until the callback returns false. `TestPoint` uses native exact
+shape tests. `GetFixtureAabb` returns the fixture's swept tight bounds from its latest
+synchronization, which differ from the predicted tree bounds under this profile's
+zero extension and unit displacement multiplier. `GetFixtureBody` maps labels back
+to bodies. Structural world changes from inside query callbacks throw before anything
+mutates; velocity and impulse setters remain allowed.
+
+`QueryReference.json` covers five snapshots of a moving mixed world and is bit-identical
+on the oracle platform. Fixture SHA-256: `53bc0856fe5f95d0f916c94c91df08407fabf5c6a5a1f7b7e3831e025f68dba9`.
 
 ## Rope and distance joint definitions
 
@@ -970,6 +990,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*WorldQueryTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*DistanceJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContactReportTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyTypeTests'
@@ -1002,7 +1023,7 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are prismatic constraints, world queries (ray casts, AABB queries, point tests) and native TOI/separation-function islands. Synchronous callback/gameplay integration and
+Next gates are prismatic constraints and native TOI/separation-function islands. Synchronous callback/gameplay integration and
 sleeping remain separate verification work. Then verify Windows game body
 construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons

@@ -138,6 +138,7 @@ namespace Ctr2.Engine.Physics
         /// <remarks>Velocities and contact manifolds are retained, as in native <c>SetTransform</c>.</remarks>
         public void SetTransform(PhysicsBody body, Vector2 origin, float angle)
         {
+            ThrowIfLocked();
             ArgumentNullException.ThrowIfNull(body);
             if (!bodies.Contains(body) || !ValidAnchor(origin) || !float.IsFinite(angle) || MathF.Abs(angle) > 1000000)
             {
@@ -151,7 +152,8 @@ namespace Ctr2.Engine.Physics
             // Native body fixture lists prepend creation.
             for (int index = fixtures.Count - 1; index >= 0; index--)
             {
-                _ = broadPhase.MoveProxy(fixtures[index].Id, BodyBounds(body, index, origin, angle), Vector2.Zero);
+                fixtures[index].Bounds = BodyBounds(body, index, origin, angle);
+                _ = broadPhase.MoveProxy(fixtures[index].Id, fixtures[index].Bounds, Vector2.Zero);
             }
 
             FindNewContacts();

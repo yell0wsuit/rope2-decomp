@@ -217,6 +217,7 @@ namespace Ctr2.Engine.Physics
         /// <exception cref="InvalidOperationException">The densities produce invalid mass or inertia.</exception>
         public void SetBodyType(PhysicsBody body, PhysicsBodyType type)
         {
+            ThrowIfLocked();
             ArgumentNullException.ThrowIfNull(body);
             if (!bodies.Contains(body) || !Enum.IsDefined(type))
             {
@@ -232,8 +233,8 @@ namespace Ctr2.Engine.Physics
                 Vector2 origin = body.Origin;
                 for (int index = fixtures.Count - 1; index >= 0; index--)
                 {
-                    PhysicsAabb bounds = BodyBounds(body, index, origin, body.Angle);
-                    _ = broadPhase.MoveProxy(fixtures[index].Id, bounds, Vector2.Zero);
+                    fixtures[index].Bounds = BodyBounds(body, index, origin, body.Angle);
+                    _ = broadPhase.MoveProxy(fixtures[index].Id, fixtures[index].Bounds, Vector2.Zero);
                 }
             }
             for (int index = fixtures.Count - 1; index >= 0; index--)

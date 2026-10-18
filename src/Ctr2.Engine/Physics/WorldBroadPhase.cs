@@ -83,6 +83,8 @@ namespace Ctr2.Engine.Physics
             internal readonly TerrainFixture? Terrain = terrain;
             internal readonly int LocalIndex = localIndex;
             internal int Id;
+            /// <summary>Native <c>b2FixtureProxy::aabb</c>: the swept tight box from the latest synchronization.</summary>
+            internal PhysicsAabb Bounds;
             internal PhysicsDistanceProxy? Distance;
             internal PhysicsCollisionFilter Filter = PhysicsCollisionFilter.Default;
 
@@ -204,7 +206,10 @@ namespace Ctr2.Engine.Physics
             List<FixtureProxy> fixtures = [];
             for (int i = 0; i < count; i++)
             {
-                FixtureProxy proxy = new(++fixtureLabel, body, null, i);
+                FixtureProxy proxy = new(++fixtureLabel, body, null, i)
+                {
+                    Bounds = bounds[i]
+                };
                 proxy.Id = broadPhase.CreateProxy(bounds[i], proxy.Label);
                 proxies.Add(proxy.Label, proxy);
                 fixtures.Add(proxy);
@@ -219,7 +224,8 @@ namespace Ctr2.Engine.Physics
             bounds.Validate();
             FixtureProxy proxy = new(++fixtureLabel, null, fixture, 0)
             {
-                IsSensor = isSensor
+                IsSensor = isSensor,
+                Bounds = bounds
             };
             proxy.Id = broadPhase.CreateProxy(bounds, proxy.Label);
             proxies.Add(proxy.Label, proxy);
@@ -318,7 +324,8 @@ namespace Ctr2.Engine.Physics
                     FixtureProxy proxy = fixtures[index];
                     PhysicsAabb previous = BodyBounds(body, index, start.Origin, start.Angle);
                     PhysicsAabb current = BodyBounds(body, index, origin, body.Angle);
-                    _ = broadPhase.MoveProxy(proxy.Id, PhysicsAabb.Combine(previous, current), origin - start.Origin);
+                    proxy.Bounds = PhysicsAabb.Combine(previous, current);
+                    _ = broadPhase.MoveProxy(proxy.Id, proxy.Bounds, origin - start.Origin);
                 }
             }
             FindNewContacts();

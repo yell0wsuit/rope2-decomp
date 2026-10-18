@@ -73,7 +73,12 @@ namespace Ctr2.Engine.Physics
         private const int MaximumCandidatePairs = 1000000;
         private readonly Tree tree = new();
         private readonly List<int> moves = [];
-        private bool updating;
+
+        /// <summary>Gets whether a query or pair update is in progress.</summary>
+        internal bool Locked
+        {
+            get; private set;
+        }
 
         /// <summary>Gets the number of live leaf proxies.</summary>
         public int ProxyCount
@@ -181,13 +186,34 @@ namespace Ctr2.Engine.Physics
         {
             ArgumentNullException.ThrowIfNull(callback);
             bounds.Validate();
-            bool previous = updating;
-            updating = true;
+            bool previous = Locked;
+            Locked = true;
             try
             {
                 tree.Query(bounds, callback);
             }
-            finally { updating = previous; }
+            finally { Locked = previous; }
+        }
+
+        /// <summary>Casts a segment through proxy bounds in native tree order. Callbacks must not mutate the tree.</summary>
+        /// <param name="point1">Segment start.</param>
+        /// <param name="point2">Segment end, distinct from the start.</param>
+        /// <param name="callback">Receives the current maximum fraction and a leaf proxy ID. Returning zero stops,
+        /// a positive value clips the segment to that fraction, and a negative value leaves it unchanged.</param>
+        public void RayCast(Vector2 point1, Vector2 point2, Func<float, int, float> callback)
+        {
+            ArgumentNullException.ThrowIfNull(callback);
+            if (!PhysicsAabb.ValidVector(point1) || !PhysicsAabb.ValidVector(point2) || point1 == point2)
+            {
+                throw new ArgumentOutOfRangeException(nameof(point2));
+            }
+            bool previous = Locked;
+            Locked = true;
+            try
+            {
+                tree.RayCast(point1, point2, callback);
+            }
+            finally { Locked = previous; }
         }
 
         /// <summary>Consumes moved proxies and returns unique candidate data in lexicographic proxy-ID order.</summary>
@@ -204,7 +230,7 @@ namespace Ctr2.Engine.Physics
                     _ = tree.Leaf(id);
                 }
             }
-            updating = true;
+            Locked = true;
             try
             {
                 List<(int A, int B)> pairs = [];
@@ -241,12 +267,12 @@ namespace Ctr2.Engine.Physics
                 moves.Clear();
                 return result.AsReadOnly();
             }
-            finally { updating = false; }
+            finally { Locked = false; }
         }
 
         private void CheckMutation()
         {
-            if (updating)
+            if (Locked)
             {
                 throw new InvalidOperationException("Broadphase mutation during a query is not supported.");
             }
@@ -367,6 +393,56 @@ namespace Ctr2.Engine.Physics
                 nodes[id].Bounds = new(lower, upper);
                 Insert(id);
                 return true;
+            }
+
+            /// <summary>Native <c>b2DynamicTree::RayCast</c>: segment box and separating-axis culling, LIFO traversal.</summary>
+            internal void RayCast(Vector2 p1, Vector2 p2, Func<float, int, float> callback)
+            {
+                Vector2 r = PhysicsMath.Normalize(p2 - p1);
+                Vector2 v = new(-r.Y, r.X), absV = new(MathF.Abs(v.X), MathF.Abs(v.Y));
+                float maxFraction = 1;
+                PhysicsAabb segment = Segment(p1, p2, maxFraction);
+                Stack<int> stack = new();
+                stack.Push(root);
+                while (stack.TryPop(out int id))
+                {
+                    if (id == -1 || !nodes[id].Bounds.Overlaps(segment))
+                    {
+                        continue;
+                    }
+                    Node node = nodes[id];
+                    Vector2 center = .5f * (node.Bounds.Lower + node.Bounds.Upper), extents = .5f * (node.Bounds.Upper - node.Bounds.Lower);
+                    Vector2 offset = p1 - center;
+                    float separation = MathF.Abs((v.X * offset.X) + (v.Y * offset.Y)) - ((absV.X * extents.X) + (absV.Y * extents.Y));
+                    if (separation > 0)
+                    {
+                        continue;
+                    }
+                    if (node.Child1 == -1)
+                    {
+                        float value = callback(maxFraction, id);
+                        if (value == 0)
+                        {
+                            return;
+                        }
+                        if (value > 0)
+                        {
+                            maxFraction = value;
+                            segment = Segment(p1, p2, maxFraction);
+                        }
+                    }
+                    else
+                    {
+                        stack.Push(node.Child1);
+                        stack.Push(node.Child2);
+                    }
+                }
+            }
+
+            private static PhysicsAabb Segment(Vector2 p1, Vector2 p2, float fraction)
+            {
+                Vector2 t = p1 + (fraction * (p2 - p1));
+                return new(new(MathF.Min(p1.X, t.X), MathF.Min(p1.Y, t.Y)), new(MathF.Max(p1.X, t.X), MathF.Max(p1.Y, t.Y)));
             }
 
             internal void Query(PhysicsAabb bounds, Func<int, bool> callback)

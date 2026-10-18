@@ -436,6 +436,7 @@ namespace Ctr2.Engine.Physics
         /// <exception cref="ArgumentException">Bodies, definition or joint budget are invalid.</exception>
         public PhysicsRevoluteJoint AddRevolute(PhysicsBody a, PhysicsBody b, PhysicsRevoluteDefinition definition)
         {
+            ThrowIfLocked();
             ArgumentNullException.ThrowIfNull(a);
             ArgumentNullException.ThrowIfNull(b);
             if (a == b || !bodies.Contains(a) || !bodies.Contains(b) || joints.Count >= 8192 ||

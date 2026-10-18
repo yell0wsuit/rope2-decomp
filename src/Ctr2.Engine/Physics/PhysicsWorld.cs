@@ -180,6 +180,7 @@ namespace Ctr2.Engine.Physics
         /// <exception cref="ArgumentOutOfRangeException">Values or the body budget are invalid.</exception>
         public PhysicsBody AddCircle(Vector2 position, float radius, float density, float gravityScale, float angle = 0, PhysicsBodyType? type = null)
         {
+            ThrowIfLocked();
             float mass = density * MathF.PI * radius * radius;
             if (bodies.Count >= 4096 || !float.IsFinite(position.X) || !float.IsFinite(position.Y) || !float.IsFinite(radius) || radius <= 0 ||
                 !float.IsFinite(density) || density < 0 || !float.IsFinite(gravityScale) || MathF.Abs(gravityScale) > 1000000 || !float.IsFinite(angle) || !float.IsFinite(mass) || (density > 0 && mass < 1e-12f) ||
@@ -250,6 +251,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>True if this call removed an active constraint.</returns>
         public bool Remove(PhysicsJoint joint)
         {
+            ThrowIfLocked();
             if (!joints.Remove(joint))
             {
                 return false;
@@ -267,6 +269,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>Whether the body belonged to this world.</returns>
         public bool RemoveBody(PhysicsBody body)
         {
+            ThrowIfLocked();
             if (!bodies.Remove(body))
             {
                 return false;
@@ -284,6 +287,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>
         public void Step()
         {
+            ThrowIfLocked();
             int eventStart = contactEvents.Count;
             Dictionary<PhysicsBody, (Vector2 Origin, float Angle)> proxyStarts = BeginBroadPhaseStep();
             Dictionary<PhysicsBody, (Vector2 Position, float Angle)>? starts = ContinuousPhysics && terrain.Count > 0 ? new() : null;
@@ -425,6 +429,7 @@ namespace Ctr2.Engine.Physics
         private PhysicsJoint AddJoint(PhysicsBody a, PhysicsBody b, float length, float frequency, float damping,
             Vector2? localAnchorA = null, Vector2? localAnchorB = null)
         {
+            ThrowIfLocked();
             Vector2 anchorA = localAnchorA ?? a.LocalCenter, anchorB = localAnchorB ?? b.LocalCenter;
             if (!ValidAnchor(anchorA) || !ValidAnchor(anchorB) || joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) || !float.IsFinite(length) || length < 0 || (frequency > 0 && length == 0) ||
                 !float.IsFinite(frequency) || frequency < 0 || !float.IsFinite(damping) || damping < 0)
@@ -487,6 +492,7 @@ namespace Ctr2.Engine.Physics
         private PhysicsDistanceJoint AddDistanceJoint(PhysicsBody a, PhysicsBody b, bool rope, float length, float frequency, float damping,
             Vector2 anchorA, Vector2 anchorB, bool collideConnected)
         {
+            ThrowIfLocked();
             ArgumentNullException.ThrowIfNull(a);
             ArgumentNullException.ThrowIfNull(b);
             if (!ValidAnchor(anchorA) || !ValidAnchor(anchorB) || joints.Count >= 8192 || a == b || !bodies.Contains(a) || !bodies.Contains(b) ||

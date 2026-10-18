@@ -30,6 +30,7 @@ namespace Ctr2.Engine.Physics
         /// <exception cref="KeyNotFoundException">The fixture label is unknown or retired.</exception>
         public void SetFixtureFilter(int fixture, PhysicsCollisionFilter filter)
         {
+            ThrowIfLocked();
             FixtureProxy proxy = proxies[fixture];
             // Native Refilter also touches an unchanged value. Coalesce pending world
             // touches so repeated setters followed by destruction cannot leave stale IDs.

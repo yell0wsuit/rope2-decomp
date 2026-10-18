@@ -96,6 +96,7 @@ namespace Ctr2.Engine.Physics
         public PhysicsBody AddPolygon(ConvexPolygon shape, Vector2 origin, float density, float gravityScale, float angle = 0, bool fixedRotation = false, bool compound = true,
             PhysicsBodyType type = PhysicsBodyType.Dynamic)
         {
+            ThrowIfLocked();
             ArgumentNullException.ThrowIfNull(shape);
             int count = compound ? shape.Vertices.Count - 2 : 1;
             if (bodies.Count >= 4096 || polygonFixtureCount + count > 8192 ||
