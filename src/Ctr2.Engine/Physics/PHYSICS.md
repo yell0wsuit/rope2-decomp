@@ -222,6 +222,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `GjkReference.json` | 1,752 native standalone distance queries: fresh/warm caches, circle/segment/polygon hulls, transforms, radii on/off, near-threshold gaps and cached triangle jumps. Witnesses/distance/metric, exact iterations/simplex support IDs/order and overlap. |
 | `CollisionFilterReference.json` | 720 native ticks: masks, signed groups, asymmetric acceptance, terrain, compound fixtures, joint suppression and early new-fixture discovery. Exact candidate lifetime/order, proxy IDs/bounds and six body-state components. |
 | `PolygonBodyReference.json` | 1,800 native ticks: flat/tilted/reversed polygon pairs, restitution, fixed rotation, compound/offset shapes, stacks, replacement and narrow conditioning. Exact body/terrain candidates and clipped feature IDs/order, plus six body-state components. |
 | `PolygonCircleReference.json` | 1,800 native ticks: face, left/right vertices, containment, rotated/fixed and compound polygons, offset COM, static circle and circle-first creation. Exact mixed/terrain candidate orientation/order/touching and six body-state components. |
@@ -557,9 +558,66 @@ followed by removal and filtered analytical sweeps. Fixture SHA-256:
 
 Sensor event timing remains a separate gate. Native sensor overlap uses fresh-cache
 GJK distance with radii and a strict `10 * epsilon` threshold, independently of
-solid manifold generation. Generic sensor Begin/End events require that path to be
-ported and numerically verified first. Existing gameplay sensor/overlap helpers
-are unchanged, and authored Windows collision-filter import remains unsupported.
+solid manifold generation. The standalone query below now verifies that path;
+generic sensor Begin/End events still require world lifecycle integration.
+Existing gameplay sensor/overlap helpers are unchanged, and authored Windows
+collision-filter import remains unsupported.
+
+## Standalone native GJK distance and overlap
+
+`PhysicsDistanceProxy` owns one through eight copied support vertices and a radius.
+It represents their convex support hull: one point for a circle, two for a rounded
+segment or several polygon support vertices. Stored vertex order is retained for
+native support tie decisions. Segment support alone does not implement native
+edge/chain fixture construction, adjacency, one-sided collision or gameplay.
+Local vertices and world origins must be finite within +/-1,000,000 meters;
+radii must be finite between zero and 1,000,000, and angles finite.
+
+`PhysicsDistance.Measure(a, transformA, b, transformB, useRadii, cache)` returns world
+witness points, distance and support-pair query count. Transforms use body origins,
+independent of mass centroids. The optional `PhysicsSimplexCache` stores ordered
+support indices and the native signed triangle metric. Reuse with changed geometry
+is accepted only while cached indices still fit; otherwise reset it first.
+Null proxies, invalid transforms and incompatible indices are rejected before
+cache mutation. Proxies and cache diagnostics are detached read-only snapshots;
+a cache itself is mutable and must not be shared concurrently.
+
+The altered native algorithm preserves strict first-on-tie support selection,
+Solve2/Solve3 region order, barycentric grouping, signed cache metrics, metric
+invalidation and pre-reduction duplicate checks. Duplicate support attempts count
+as iterations. The native distance-progress early exit remains disabled. A tiny
+search direction or a containing triangle stops the loop; twenty attempts is the
+native upper bound, with no extra reduction afterward. Tentative support geometry
+retains the slot's earlier weight until the next reduction; managed stack storage
+starts at zero. Numerical behavior at the twenty-attempt limit remains unverified.
+
+Cache writes describe the core simplex before radius correction. With radii enabled,
+strictly separated witnesses shift to the rounded surfaces; otherwise both collapse
+to their midpoint with distance zero. `PhysicsDistance.Overlaps` always starts with
+a fresh cache, uses radii and returns `distance < 10 * 1.1920929e-7f`. A small positive
+distance may therefore count as overlap, and equality to that threshold does not.
+
+`GjkReference.json` contains 1,752 independent native queries: 864 fresh-cache and
+864 warm-cache cases across ordered circle/offset-circle/segment/box/triangle/
+pentagon pairs, 12 radius-boundary cases, six tiny-gap cases and six cached-triangle
+jumps. Queries include transformed/reversed pairs, separated/coincident/overlapping
+hulls, radii enabled/disabled and cache invalidation. Finite witness components,
+distance and cache metric use an absolute 0.000002 tolerance; support iteration
+counts, ordered cached index pairs and fresh-cache overlap decisions match exactly.
+Boundary regressions cover invalid inputs, incompatible cache reuse, immutable
+ownership and radius-independent core caches.
+
+Private native instrumentation produced byte-identical fixture output. Across
+3,504 primary/overlap calls it exercised all three Solve2 and all seven Solve3
+exits, count-one/multi-point cache reuse, all three invalidation causes, the three
+ordinary termination paths and both radius-correction branches. No call reached
+twenty attempts; primary queries used at most four. These counts do not establish
+every compound-condition/equality boundary or managed branch coverage. Fixture
+SHA-256: `dac725265d6cc252ec20253cd03adfcc1d57cd63df4cb439b0b07ffe78c764c9`.
+
+This checkpoint does not route world contacts or gameplay sensors through GJK,
+add native TOI/separation functions or prove original Android/Windows runtime
+parity. Sensor Begin/End ordering and destruction/refilter timing are next.
 
 ## Running numerical verification
 
@@ -567,6 +625,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PhysicsDistanceTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*CollisionFilterTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PolygonBodyContactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PolygonCircleTests'
@@ -591,8 +650,8 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are distance/GJK and sensor event timing, remaining joint
-APIs/limited-angle cases and native TOI islands. Then verify Windows game body construction, materials, fixtures,
+Next gates are sensor event timing with GJK world integration, remaining joint
+APIs/limited-angle cases and native TOI/separation-function islands. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
 are a separate acceptance gate. Presentation expansion follows those gates.
