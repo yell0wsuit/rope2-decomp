@@ -387,6 +387,7 @@ namespace Ctr2.Engine.Physics
                         break;
                     }
                 }
+                ReportPostSolve(contactIslands[islandIndex]);
             }
             if (starts != null)
             {

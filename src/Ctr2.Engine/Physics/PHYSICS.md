@@ -223,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `ContactReportReference.json` | 480 native ticks: terrain circles/compounds/boxes with restitution, multi-island body pairs, redundant two-point manifolds, sensors and teleports. Exact event/report identity, order and impulse counts; Begin-time and PostSolve world manifolds, impulses and six body-state components. |
 | `BodyTypeReference.json` | 900 native ticks: static/dynamic fruit-style toggles, offset-COM polygon type and density resets, kinematic pushers and island bridges, explicit mass data and roped body freezing. Exact types/proxy IDs/candidates/events; mass, inertia, centers and six body-state components. |
 | `BodyControlReference.json` | 900 native ticks: velocity setters, point/angular impulses, accumulated forces/torques, gravity-scale changes and teleports. Finite body states/proxy bounds, exact proxy IDs and pre-/post-step candidate/event metadata. |
 | `RevoluteReference.json` | 2,340 native ticks: free/motor hinges, lower/upper/equal/narrow limits, equal-width threshold neighbors, fixed rotation, offset COM, contacts and topology changes. Finite body/anchor/reaction/motor state and exact limit/candidate/event metadata. |
@@ -911,7 +912,7 @@ They now follow native arithmetic:
 
 With every native-trace comparison set to exact equality, every JSON fixture suite
 (broadphase, circle, polygon-circle, polygon-pair, contact lifecycle, filters, sensors,
-fixture sensors, revolute, body control, body type, joint anchor and joint topology) is
+fixture sensors, revolute, body control, body type, contact report, joint anchor and joint topology) is
 bit-identical to the Android-profile native oracle for every compared tick on macOS
 arm64, where .NET and the clang-built oracle share the platform `sinf`/`cosf`. The
 committed tests keep their tolerances so they stay valid where the C runtime's
@@ -919,12 +920,37 @@ trigonometry differs; matching the original executables' trigonometry is outside
 this source-profile verification. The CSV polygon fixture prints too few digits to
 measure exactness.
 
+## Contact reports for gameplay callbacks
+
+The game's `ContactListener` forwards native `BeginContact` to its "pre-solve"
+delegates, `PostSolve` to post-solve delegates and `EndContact` to finished
+delegates. It never overrides native `PreSolve` and never disables contacts, so
+callbacks cannot change solving. Native also locks the world during callbacks.
+Queued records therefore carry everything the handlers read at callback time:
+
+- With `RecordContactManifolds`, each queued Begin event includes its native world
+  manifold (normal, point count and points), computed during narrowphase from the
+  bodies' cached transforms. UniversalSoundGenerator reads this point. Sensors and
+  End events carry an empty manifold.
+- With `RecordPostSolve`, `DrainPostSolve` returns one report per touching solid
+  contact, right after each island's position solve and in native island and
+  island-contact order. Each report carries fixture identity, creation order, the
+  velocity-constraint impulse count (one for a redundant two-point manifold),
+  normal and tangent impulses, and the world manifold from the synchronized
+  transforms. Omnom and GeneralPolygon read these impulses and points.
+
+Both flags default off, so existing event consumers are unchanged.
+`ContactReportReference.json` compares four independent native scenes through
+tick 120 (480 snapshots) and is bit-identical on the oracle platform. Fixture
+SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI-phase reports belong to the native TOI work.
+
 ## Running numerical verification
 
 From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContactReportTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyTypeTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyControlTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RevoluteJointTests'

@@ -179,10 +179,12 @@ namespace Ctr2.Engine.Physics
                     }
 
                     next.CreationOrder = pair.CreationOrder;
+                    next.FirstFixture = pair.A.Label;
+                    next.SecondFixture = pair.B.Label;
                     active.Add(next);
                 }
                 bool touching = sensor ? SensorOverlap(pair.A, pair.B) : next != null;
-                RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, touching, false);
+                RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, touching, false, next);
                 pair.Touching = touching;
                 pair.Manifold = next;
             }

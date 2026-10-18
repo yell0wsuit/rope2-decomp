@@ -31,8 +31,29 @@ namespace Ctr2.Engine.Physics
     /// <param name="CreationOrder">Persistent candidate creation sequence.</param>
     /// <param name="IsSensor">Whether either fixture is a sensor at emission.</param>
     /// <param name="Touching">Native touching flag at emission; true for destruction End.</param>
+    /// <param name="Manifold">Begin-time world manifold when <see cref="PhysicsWorld.RecordContactManifolds"/> is set; otherwise empty.</param>
     public readonly record struct PhysicsContactEvent(PhysicsContactEventKind Kind, PhysicsContactEventPhase Phase,
-        int FirstFixture, int SecondFixture, long CreationOrder, bool IsSensor, bool Touching);
+        int FirstFixture, int SecondFixture, long CreationOrder, bool IsSensor, bool Touching, PhysicsWorldManifold Manifold = default);
+
+    /// <summary>A native <c>b2WorldManifold</c> snapshot.</summary>
+    /// <param name="Normal">World normal from fixture A to fixture B.</param>
+    /// <param name="PointCount">Manifold point count; zero for sensors and separated pairs.</param>
+    /// <param name="FirstPoint">First world contact point midway between the surfaces.</param>
+    /// <param name="SecondPoint">Second world contact point, or zero.</param>
+    public readonly record struct PhysicsWorldManifold(Vector2 Normal, int PointCount, Vector2 FirstPoint, Vector2 SecondPoint);
+
+    /// <summary>A native <c>PostSolve</c> report for one touching solid contact.</summary>
+    /// <param name="FirstFixture">Native fixture A's stable label.</param>
+    /// <param name="SecondFixture">Native fixture B's stable label.</param>
+    /// <param name="CreationOrder">Persistent candidate creation sequence.</param>
+    /// <param name="ImpulseCount">Velocity constraint point count; one for a redundant two-point manifold.</param>
+    /// <param name="FirstNormalImpulse">First point's accumulated normal impulse.</param>
+    /// <param name="SecondNormalImpulse">Second point's accumulated normal impulse, or zero.</param>
+    /// <param name="FirstTangentImpulse">First point's accumulated tangent impulse.</param>
+    /// <param name="SecondTangentImpulse">Second point's accumulated tangent impulse, or zero.</param>
+    /// <param name="Manifold">World manifold from transforms synchronized after the island's solve.</param>
+    public readonly record struct PhysicsPostSolve(int FirstFixture, int SecondFixture, long CreationOrder, int ImpulseCount,
+        float FirstNormalImpulse, float SecondNormalImpulse, float FirstTangentImpulse, float SecondTangentImpulse, PhysicsWorldManifold Manifold);
 
     /// <summary>An immutable candidate diagnostic, including sensors and implicit terrain.</summary>
     /// <param name="FirstFixture">Native fixture A's stable world-local label.</param>
@@ -52,6 +73,24 @@ namespace Ctr2.Engine.Physics
         {
             get; set;
         }
+        /// <summary>Gets or sets whether queued Begin events carry their narrowphase-time world manifold; false by default.</summary>
+        public bool RecordContactManifolds
+        {
+            get; set;
+        }
+        /// <summary>Gets or sets whether native PostSolve reports are queued after each island solve; false by default.</summary>
+        /// <remarks>Reports follow native island and island-contact order. Disabling recording retains pending reports.</remarks>
+        public bool RecordPostSolve
+        {
+            get; set;
+        }
+        /// <summary>Returns detached PostSolve reports in emission order and empties the pending queue.</summary>
+        public IReadOnlyList<PhysicsPostSolve> DrainPostSolve()
+        {
+            ReadOnlyCollection<PhysicsPostSolve> result = Array.AsReadOnly(postSolves.ToArray());
+            postSolves.Clear();
+            return result;
+        }
         /// <summary>Returns a detached immutable event batch in emission order and empties the pending queue.</summary>
         public IReadOnlyList<PhysicsContactEvent> DrainContactEvents()
         {
@@ -70,6 +109,21 @@ namespace Ctr2.Engine.Physics
         }
 
         private readonly List<PhysicsContactEvent> contactEvents = [];
+        private readonly List<PhysicsPostSolve> postSolves = [];
+
+        private void ReportPostSolve(IEnumerable<PhysicsContact> island)
+        {
+            if (!RecordPostSolve)
+            {
+                return;
+            }
+            foreach (PhysicsContact contact in island)
+            {
+                (int count, float firstNormal, float secondNormal, float firstTangent, float secondTangent) = contact.Impulses();
+                postSolves.Add(new(contact.FirstFixture, contact.SecondFixture, contact.CreationOrder, count,
+                    firstNormal, secondNormal, firstTangent, secondTangent, contact.WorldManifold()));
+            }
+        }
         private static readonly IComparer<PhysicsContactEvent> ContactEventOrder =
             Comparer<PhysicsContactEvent>.Create((a, b) => b.CreationOrder.CompareTo(a.CreationOrder));
         private static bool IsSensor(FixtureProxy a, FixtureProxy b)
@@ -77,16 +131,18 @@ namespace Ctr2.Engine.Physics
             return a.IsSensor || b.IsSensor;
         }
 
-        private void RecordContactChange(FixtureProxy a, FixtureProxy b, long order, bool previous, bool touching, bool destroying)
+        private void RecordContactChange(FixtureProxy a, FixtureProxy b, long order, bool previous, bool touching, bool destroying,
+            PhysicsContact? manifold = null)
         {
             if (!RecordContactEvents || previous == touching)
             {
                 return;
             }
 
+            PhysicsWorldManifold snapshot = RecordContactManifolds && touching && manifold != null ? manifold.WorldManifold() : default;
             contactEvents.Add(new(touching ? PhysicsContactEventKind.Begin : PhysicsContactEventKind.End,
                 destroying ? PhysicsContactEventPhase.Destroy : PhysicsContactEventPhase.Update,
-                a.Label, b.Label, order, IsSensor(a, b), destroying ? previous : touching));
+                a.Label, b.Label, order, IsSensor(a, b), destroying ? previous : touching, snapshot));
         }
         private static PhysicsDistanceProxy DistanceProxy(FixtureProxy fixture)
         {

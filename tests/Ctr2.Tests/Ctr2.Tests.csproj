@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <None Update="ContactReportReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BodyTypeReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BodyControlReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="RevoluteReference.json" CopyToOutputDirectory="PreserveNewest" />

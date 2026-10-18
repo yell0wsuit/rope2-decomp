@@ -21,6 +21,14 @@ namespace Ctr2.Engine.Physics
         internal virtual int PointCount => 1;
         /// <summary>Contact creation sequence retained while broadphase proxies overlap.</summary>
         internal long CreationOrder;
+        /// <summary>Native fixture A's stable label.</summary>
+        internal int FirstFixture;
+        /// <summary>Native fixture B's stable label.</summary>
+        internal int SecondFixture;
+        /// <summary>Computes native <c>GetWorldManifold</c> from the bodies' current transforms.</summary>
+        internal abstract PhysicsWorldManifold WorldManifold();
+        /// <summary>Gets native <c>b2ContactImpulse</c> data from the latest velocity solve.</summary>
+        internal abstract (int Count, float FirstNormal, float SecondNormal, float FirstTangent, float SecondTangent) Impulses();
         /// <summary>Restores compatible accumulated impulses.</summary>
         /// <param name="previous">Previous manifold for the same fixture pair.</param>
         internal abstract void Restore(PhysicsContact previous);

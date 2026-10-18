@@ -67,11 +67,13 @@ namespace Ctr2.Engine.Physics
                         contact.Restore(candidate.Manifold);
                     }
                     contact.CreationOrder = candidate.CreationOrder;
+                    contact.FirstFixture = candidate.A.Label;
+                    contact.SecondFixture = candidate.B.Label;
                     active.Add(contact);
                 }
                 // Losing the manifold keeps candidate order, but clears warm-start impulses.
                 bool touching = sensor ? SensorOverlap(candidate.A, candidate.B) : contact != null;
-                RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false);
+                RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false, contact);
                 candidate.Touching = touching;
                 candidate.Manifold = contact;
             }
@@ -229,6 +231,20 @@ namespace Ctr2.Engine.Physics
             tangentMass = kTangent > 0 ? 1 / kTangent : 0;
             float speed = Vector2.Dot(ContactVelocity(), normal);
             bias = speed < -1 ? -restitution * speed : 0;
+        }
+
+        /// <summary>Native face-A world manifold with terrain as fixture A and the circle as fixture B.</summary>
+        internal override PhysicsWorldManifold WorldManifold()
+        {
+            Vector2 clip = Body.Origin;
+            Vector2 surfaceA = clip + ((Skin - Vector2.Dot(clip - point, faceNormal)) * faceNormal);
+            Vector2 surfaceB = clip - (Body.Radius * faceNormal);
+            return new(faceNormal, 1, .5f * (surfaceA + surfaceB), Vector2.Zero);
+        }
+
+        internal override (int Count, float FirstNormal, float SecondNormal, float FirstTangent, float SecondTangent) Impulses()
+        {
+            return (1, NormalImpulse, 0, TangentImpulse, 0);
         }
 
         /// <summary>Applies retained contact impulses before joint warm starting.</summary>

@@ -97,6 +97,17 @@ namespace Ctr2.Engine.Physics
             return separation >= -(continuous ? 1.5f : 3) * PhysicsWorld.LinearSlop;
         }
 
+        internal override PhysicsWorldManifold WorldManifold()
+        {
+            (Vector2 Normal, Vector2 Point) = VelocityGeometry();
+            return new(Normal, 1, Point, Vector2.Zero);
+        }
+
+        internal override (int Count, float FirstNormal, float SecondNormal, float FirstTangent, float SecondTangent) Impulses()
+        {
+            return (1, normalImpulse, 0, tangentImpulse, 0);
+        }
+
         protected abstract (Vector2 Normal, Vector2 Point) VelocityGeometry();
         protected abstract (Vector2 Normal, Vector2 Point, float Separation) PositionGeometry();
 

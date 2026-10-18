@@ -42,6 +42,20 @@ namespace Ctr2.Engine.Physics
             return new(a.Type == PhysicsBodyType.Static && Terrain ? b : a, WorldPoint(point), point.NormalImpulse);
         }
 
+        internal override PhysicsWorldManifold WorldManifold()
+        {
+            PhysicsBody reference = faceB ? b : a;
+            Vector2 normal = PhysicsMath.Rotate(localNormal, reference.Angle);
+            return new(faceB ? -normal : normal, points.Count, WorldPoint(points[0]), points.Count > 1 ? WorldPoint(points[1]) : Vector2.Zero);
+        }
+
+        internal override (int Count, float FirstNormal, float SecondNormal, float FirstTangent, float SecondTangent) Impulses()
+        {
+            // Native reports the velocity constraint count, which drops to one for redundant points.
+            bool two = velocityCount > 1;
+            return (velocityCount, points[0].NormalImpulse, two ? points[1].NormalImpulse : 0, points[0].TangentImpulse, two ? points[1].TangentImpulse : 0);
+        }
+
         /// <summary>Native <c>b2WorldManifold</c> point: the midpoint of both radius-offset surfaces.</summary>
         private Vector2 WorldPoint(Point point)
         {
