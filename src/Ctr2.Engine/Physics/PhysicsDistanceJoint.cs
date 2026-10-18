@@ -35,12 +35,12 @@ namespace Ctr2.Engine.Physics
         }
         /// <summary>Gets the reaction force on body B from the latest solver initialization.</summary>
         /// <value>A force vector in newtons, based on the fixed timestep.</value>
-        public override Vector2 ReactionForce => impulse / PhysicsWorld.TimeStep * direction;
+        public override Vector2 ReactionForce => 1 / PhysicsWorld.TimeStep * impulse * direction;
 
         /// <summary>Gets the current world-space first anchor in meters.</summary>
-        public override Vector2 AnchorA => A.Position + Rotate(localAnchorA - A.LocalCenter, A.Angle);
+        public override Vector2 AnchorA => A.Origin + Rotate(localAnchorA, A.Angle);
         /// <summary>Gets the current world-space second anchor in meters.</summary>
-        public override Vector2 AnchorB => B.Position + Rotate(localAnchorB - B.LocalCenter, B.Angle);
+        public override Vector2 AnchorB => B.Origin + Rotate(localAnchorB, B.Angle);
 
         /// <summary>Creates a constraint with body-origin local anchors.</summary>
         /// <param name="a">First body.</param>

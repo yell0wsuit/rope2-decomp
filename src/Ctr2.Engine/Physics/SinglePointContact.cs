@@ -113,11 +113,6 @@ namespace Ctr2.Engine.Physics
             b.AngularVelocity += b.InverseInertia * Cross(armB, impulse);
         }
 
-        protected static Vector2 Normalize(Vector2 value)
-        {
-            float length = value.Length();
-            return length < Epsilon ? value : 1 / length * value;
-        }
 
         private static float Cross(Vector2 a, Vector2 b)
         {

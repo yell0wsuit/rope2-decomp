@@ -716,12 +716,11 @@ Native TOI/cache/substep mutation and sleeping behavior remain separate work.
 The body-before-terrain regression also exposed a preexisting reference-face bias
 in the static polygon solver. Near-equal separating faces must favor native
 fixture A, which can be the moving polygon when terrain was created afterward.
-The solver now chooses that priority from persistent candidate orientation, while
-retaining its terrain-to-body normal, clipping point order and position arithmetic.
-Terrain warm-start feature IDs remain in terrain/body canonical orientation; they
-are not exposed as raw native body-first IDs. The native scene that exposed the
-position mismatch now passes without changing tolerances, along with earlier
-terrain/reference suites.
+Polygon-terrain manifolds now run through the native polygon pair path in the
+candidate's persistent native orientation (see bit-exact arithmetic below), so the
+reference-face priority, normal sign, clipping order and warm-start feature IDs are
+all native. The native scene that exposed the position mismatch passes, along with
+earlier terrain/reference suites.
 
 `FixtureSensorReference.json` checks eight native scenes through tick 90 (720
 snapshots and 35 Begin/End records). Cases cover mixed triangle/circle/polygon
@@ -841,11 +840,12 @@ Fixture SHA-256: `e5edbb6ea6900b8ac494017b824ea8cf844c8e53ea1794ace13e1b478f4cee
 The CTR2 profile's zero AABB extension and unit displacement multiplier make proxy
 re-insertion knife-edge for a body in uniform motion. The fat box predicts exactly
 the next tight box, so the containment test is decided by last-bit rounding, in the
-native game as well. Managed float noise in that regime can shift one re-insertion
-by a step. The fixture scenes therefore avoid uniform sliding, and the knife edge
-remains a limit on proxy-ID parity during steady motion. Single-corner rocking
-contacts under sustained forcing likewise amplify the existing terrain-contact float
-noise about 1.2x per tick and are not used as acceptance scenes.
+native game as well. Any float difference in that regime can shift one re-insertion
+by a step. Single-corner rocking contacts under sustained forcing amplify float
+differences about 1.2x per tick, and predictive rope engagement multiplies position
+differences by 1/h. These scenes were chosen before the arithmetic below became
+bit-exact; they still avoid those regimes so that the tolerance checks remain
+meaningful on platforms whose `sinf`/`cosf` differ from the oracle's.
 
 The game's only mouse joint is guarded by a null check and is never created, so it is
 not ported.
@@ -888,16 +888,36 @@ they collide only with dynamic bodies.
 after every mutation. Fixture SHA-256:
 `de320ff6367bf0db1e3833592041f6c88c34d9b0003174bc6f8fb5886c0f3e12`.
 
-## Native circle-terrain arithmetic
+## Bit-exact contact and joint arithmetic
 
-The circle-terrain contact was an algebraically simplified rewrite: arm, separation,
-vertex normalization and position correction used different float operations from
-native. It now follows `b2CollidePolygonAndCircle` (including the face-region
-separation recheck and reciprocal-multiply normalization), `b2WorldManifold` face-A
-point averaging, contact-solver mass grouping and the native `c + mB * ((-C / K) * n)`
-position update. A circle rolling on terrain is now bit-identical to native for every
-compared tick. The new body-control and body-type scenes are bit-identical except
-where polygon contacts take part; those paths are the next exactness target.
+Several paths computed the right quantities through different float operations, so
+they drifted from native by an ulp per contact and then amplified in sensitive scenes.
+They now follow native arithmetic:
+
+- Circle-terrain contacts follow `b2CollidePolygonAndCircle` (including the face-region
+  separation recheck), `b2WorldManifold` face-A point averaging, contact-solver mass
+  grouping and the native `c + mB * ((-C / K) * n)` position update.
+- Polygon-terrain contacts no longer use a separate world-space reimplementation. Each
+  terrain fixture owns a static identity-frame body, as native ground bodies are, and
+  collides through the already exact polygon pair path in native fixture orientation.
+  Terrain candidates mix friction and restitution once at construction, as native
+  contacts do. Character impact capture uses the native world-manifold point.
+- All normalization uses native `b2Vec2::Normalize` (multiply by reciprocal length,
+  tiny vectors unchanged), including polygon face normals at shape construction.
+- Bodies cache their authored or teleported origin for narrowphase, as native `m_xf`
+  does, and solvers rebuild the origin from the sweep after narrowphase.
+- Rope/spring anchors use native `GetWorldPoint` (`xf.p + R * local`) and reaction
+  forces use `(inv_dt * impulse) * u`.
+
+With every native-trace comparison set to exact equality, every JSON fixture suite
+(broadphase, circle, polygon-circle, polygon-pair, contact lifecycle, filters, sensors,
+fixture sensors, revolute, body control, body type, joint anchor and joint topology) is
+bit-identical to the Android-profile native oracle for every compared tick on macOS
+arm64, where .NET and the clang-built oracle share the platform `sinf`/`cosf`. The
+committed tests keep their tolerances so they stay valid where the C runtime's
+trigonometry differs; matching the original executables' trigonometry is outside
+this source-profile verification. The CSV polygon fixture prints too few digits to
+measure exactness.
 
 ## Running numerical verification
 
@@ -935,7 +955,7 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are bit-exact polygon contact arithmetic, missing distance/rope APIs (including zero-rest-length springs),
+Next gates are missing distance/rope APIs (including zero-rest-length springs),
 prismatic constraints, world queries (ray casts, AABB queries, point tests) and native TOI/separation-function islands. Synchronous callback/gameplay integration and
 sleeping remain separate verification work. Then verify Windows game body
 construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing

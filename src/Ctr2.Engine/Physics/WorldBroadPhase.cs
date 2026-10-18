@@ -107,6 +107,9 @@ namespace Ctr2.Engine.Physics
         {
             internal readonly FixtureProxy BodyProxy = body;
             internal readonly FixtureProxy TerrainProxy = terrain;
+            // Native contacts mix material once at construction.
+            internal readonly float Friction = MathF.Sqrt(body.Body!.Friction * terrain.Terrain!.Friction);
+            internal readonly float Restitution = MathF.Max(body.Body.Restitution, terrain.Terrain.Restitution);
             internal PhysicsBody Body => BodyProxy.Body!;
             internal FixtureProxy A => terrainFirst ? TerrainProxy : BodyProxy;
             internal FixtureProxy B => terrainFirst ? BodyProxy : TerrainProxy;

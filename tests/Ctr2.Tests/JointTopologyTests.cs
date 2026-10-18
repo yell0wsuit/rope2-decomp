@@ -111,8 +111,11 @@ namespace Ctr2.Tests
                 PhysicsBody body = bodies[index];
                 PhysicsJoint? watched = index >= 2 ? extra : joint;
                 bool first = index is 0 or 2;
+                // Native GetWorldPoint: scalar rotation plus the cached origin.
+                Vector2 local = first ? localA : localB;
+                float cosine = MathF.Cos(body.Angle), sine = MathF.Sin(body.Angle);
                 Vector2 anchor = watched == null
-                    ? body.Origin + Vector2.Transform(first ? localA : localB, Matrix3x2.CreateRotation(body.Angle))
+                    ? body.Origin + new Vector2((cosine * local.X) - (sine * local.Y), (sine * local.X) + (cosine * local.Y))
                     : first ? watched.AnchorA : watched.AnchorB;
                 Vector2 force = watched?.ReactionForce ?? Vector2.Zero;
                 float[] actual = [body.Position.X, body.Position.Y, body.Velocity.X, body.Velocity.Y,

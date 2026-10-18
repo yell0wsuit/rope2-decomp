@@ -30,7 +30,7 @@ namespace Ctr2.Engine.Physics
                 throw new ArgumentException("Invalid convex terrain fixture.");
             }
             ConvexPolygon polygon = new(vertices);
-            TerrainFixture fixture = new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center);
+            TerrainFixture fixture = new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center, polygon);
             RegisterTerrainProxy(fixture, isSensor);
             terrain.Add(fixture);
         }
@@ -53,8 +53,13 @@ namespace Ctr2.Engine.Physics
                 TerrainFixture fixture = candidate.TerrainProxy.Terrain!;
                 int localIndex = candidate.BodyProxy.LocalIndex;
                 bool sensor = IsSensor(candidate.A, candidate.B);
-                PhysicsContact? contact = sensor ? null : body.PolygonFixtures.Count == 0 ? TerrainContact.Create(body, fixture) :
-                    PolygonContact.Create(body, body.PolygonFixtures[localIndex], fixture, candidate.A.Terrain != null);
+                // Polygon bodies collide with terrain through the native polygon pair path, using
+                // the terrain's static identity frame in native fixture orientation.
+                PhysicsContact? contact = sensor ? null : body.PolygonFixtures.Count == 0 ?
+                    TerrainContact.Create(body, fixture, candidate.Friction, candidate.Restitution) :
+                    candidate.A.Terrain != null ?
+                    PolygonBodyContact.Create(fixture.Frame, fixture.Shape, body, body.PolygonFixtures[localIndex], candidate.Friction, candidate.Restitution, true) :
+                    PolygonBodyContact.Create(body, body.PolygonFixtures[localIndex], fixture.Frame, fixture.Shape, candidate.Friction, candidate.Restitution, true);
                 if (contact != null)
                 {
                     if (candidate.Manifold != null)
@@ -80,7 +85,16 @@ namespace Ctr2.Engine.Physics
     /// <param name="Friction">Fixture friction.</param>
     /// <param name="Restitution">Fixture restitution.</param>
     /// <param name="Center">World-space polygon centroid.</param>
-    internal sealed record TerrainFixture(Vector2[] Points, Vector2[] Normals, float Friction, float Restitution, Vector2 Center);
+    /// <param name="Shape">The same world-space geometry as a convex polygon.</param>
+    internal sealed record TerrainFixture(Vector2[] Points, Vector2[] Normals, float Friction, float Restitution, Vector2 Center, ConvexPolygon Shape)
+    {
+        /// <summary>Gets the static identity-frame body that native terrain fixtures belong to.</summary>
+        /// <value>Never world-owned; used only as the static side of polygon pair manifolds.</value>
+        internal PhysicsBody Frame
+        {
+            get;
+        } = new([Shape], Vector2.Zero, 0, 0, 0, false, PhysicsBodyType.Static);
+    }
 
     /// <summary>A single-point static convex polygon/circle manifold and sequential impulse constraint.</summary>
     internal sealed class TerrainContact : PhysicsContact
@@ -123,26 +137,31 @@ namespace Ctr2.Engine.Physics
 
         /// <summary>Creates a manifold after geometry overlap has been confirmed.</summary>
         /// <param name="body">Dynamic circle.</param>
-        /// <param name="fixture">Static material.</param>
+        /// <param name="friction">Mixed friction.</param>
+        /// <param name="restitution">Mixed restitution.</param>
         /// <param name="point">Face midpoint or vertex.</param>
         /// <param name="normal">Outward normal.</param>
         /// <param name="feature">Stable feature identifier.</param>
-        private TerrainContact(PhysicsBody body, TerrainFixture fixture, Vector2 point, Vector2 normal, int feature)
+        private TerrainContact(PhysicsBody body, float friction, float restitution, Vector2 point, Vector2 normal, int feature)
         {
             Body = body;
             this.point = point;
             faceNormal = normal;
-            friction = MathF.Sqrt(body.Friction * fixture.Friction);
-            restitution = MathF.Max(body.Restitution, fixture.Restitution);
+            this.friction = friction;
+            this.restitution = restitution;
             Feature = feature;
         }
 
         /// <summary>Finds the maximum separating face and its circle Voronoi region, as native <c>b2CollidePolygonAndCircle</c>.</summary>
         /// <param name="body">Dynamic circle.</param>
         /// <param name="fixture">Static polygon.</param>
+        /// <param name="friction">Friction mixed when the native contact was constructed, or null to mix now.</param>
+        /// <param name="restitution">Restitution mixed when the native contact was constructed, or null to mix now.</param>
         /// <returns>A touching manifold, or null when separated.</returns>
-        internal static TerrainContact? Create(PhysicsBody body, TerrainFixture fixture)
+        internal static TerrainContact? Create(PhysicsBody body, TerrainFixture fixture, float? friction = null, float? restitution = null)
         {
+            float mixedFriction = friction ?? MathF.Sqrt(body.Friction * fixture.Friction);
+            float mixedRestitution = restitution ?? MathF.Max(body.Restitution, fixture.Restitution);
             // Terrain vertices are stored in world space, so the polygon frame is the identity.
             Vector2 center = body.Origin;
             int face = 0, count = fixture.Points.Length;
@@ -166,31 +185,20 @@ namespace Ctr2.Engine.Physics
             Vector2 a = fixture.Points[face], b = fixture.Points[next];
             if (separation < 1.1920929e-7f)
             {
-                return new(body, fixture, .5f * (a + b), fixture.Normals[face], face);
+                return new(body, mixedFriction, mixedRestitution, .5f * (a + b), fixture.Normals[face], face);
             }
             float first = Vector2.Dot(center - a, b - a), second = Vector2.Dot(center - b, a - b);
             if (first <= 0 || second <= 0)
             {
                 int index = first <= 0 ? face : next;
                 Vector2 vertex = fixture.Points[index], offset = center - vertex;
-                return Vector2.Dot(offset, offset) > radius * radius ? null : new(body, fixture, vertex, Normalize(offset), index + 8);
+                return Vector2.Dot(offset, offset) > radius * radius ? null : new(body, mixedFriction, mixedRestitution, vertex, PhysicsMath.Normalize(offset), index + 8);
             }
             Vector2 faceCenter = .5f * (a + b);
             return Vector2.Dot(center - faceCenter, fixture.Normals[face]) > radius ? null :
-                new(body, fixture, faceCenter, fixture.Normals[face], face);
+                new(body, mixedFriction, mixedRestitution, faceCenter, fixture.Normals[face], face);
         }
 
-        /// <summary>Native <c>b2Vec2::Normalize</c>: multiplies by the reciprocal length and leaves tiny vectors unchanged.</summary>
-        private static Vector2 Normalize(Vector2 value)
-        {
-            float length = MathF.Sqrt((value.X * value.X) + (value.Y * value.Y));
-            if (length < 1.1920929e-7f)
-            {
-                return value;
-            }
-            float inverse = 1 / length;
-            return new(value.X * inverse, value.Y * inverse);
-        }
 
         /// <summary>Restores the native polygon/circle feature-zero accumulated impulses.</summary>
         /// <param name="previous">Earlier contact for the same fixture pair.</param>

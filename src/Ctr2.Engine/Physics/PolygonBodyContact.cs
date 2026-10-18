@@ -27,14 +27,38 @@ namespace Ctr2.Engine.Physics
 
         internal override PhysicsBody Body => a;
         internal override PhysicsBody? OtherBody => b;
+
+        /// <summary>Whether one side is a terrain fixture's static identity frame.</summary>
+        internal bool Terrain
+        {
+            get;
+        }
+
+        /// <summary>Captures the first point's native world-manifold location and solved normal impulse.</summary>
+        /// <returns>The impact on the world-owned body.</returns>
+        internal PolygonImpact CaptureImpact()
+        {
+            Point point = points[0];
+            return new(a.Type == PhysicsBodyType.Static && Terrain ? b : a, WorldPoint(point), point.NormalImpulse);
+        }
+
+        /// <summary>Native <c>b2WorldManifold</c> point: the midpoint of both radius-offset surfaces.</summary>
+        private Vector2 WorldPoint(Point point)
+        {
+            (Vector2 Clip, Vector2 Normal, float Distance) geometry = Geometry(point);
+            Vector2 reference = geometry.Clip + ((Radius - geometry.Distance) * geometry.Normal);
+            Vector2 incident = geometry.Clip - (Radius * geometry.Normal);
+            return .5f * (faceB ? incident + reference : reference + incident);
+        }
         internal override int[] CaptureFeatures()
         {
             return [.. points.Select(p => p.Feature)];
         }
 
         private PolygonBodyContact(PhysicsBody a, PhysicsBody b, bool flip, Vector2 normal, Vector2 plane,
-            List<Point> points, float friction, float restitution)
+            List<Point> points, float friction, float restitution, bool terrain)
         {
+            Terrain = terrain;
             this.a = a;
             this.b = b;
             faceB = flip;
@@ -45,7 +69,8 @@ namespace Ctr2.Engine.Physics
             this.restitution = restitution;
         }
 
-        internal static PolygonBodyContact? Create(PhysicsBody a, ConvexPolygon shapeA, PhysicsBody b, ConvexPolygon shapeB, float friction, float restitution)
+        internal static PolygonBodyContact? Create(PhysicsBody a, ConvexPolygon shapeA, PhysicsBody b, ConvexPolygon shapeB, float friction, float restitution,
+            bool terrain = false)
         {
             Shape first = new(shapeA), second = new(shapeB);
             (float Separation, int Edge) = FindSeparation(first, a, second, b);
@@ -81,7 +106,7 @@ namespace Ctr2.Engine.Physics
                 new(ToWorld(incidentBody, incident.Vertices[incidentNext]), edge | (incidentNext << 8) | (1 << 16))];
             int next = (edge + 1) % reference.Vertices.Count;
             Vector2 v1 = reference.Vertices[edge], v2 = reference.Vertices[next];
-            Vector2 localTangent = Normalize(v2 - v1);
+            Vector2 localTangent = PhysicsMath.Normalize(v2 - v1);
             Vector2 localNormal = new(localTangent.Y, -localTangent.X);
             Vector2 plane = .5f * (v1 + v2);
             Vector2 tangent = PhysicsMath.Rotate(localTangent, referenceBody.Angle);
@@ -109,7 +134,7 @@ namespace Ctr2.Engine.Physics
                     points.Add(new(ToLocal(incidentBody, vertex.Position), flip ? FlipFeature(vertex.Feature) : vertex.Feature));
                 }
             }
-            return points.Count == 0 ? null : new(a, b, flip, localNormal, plane, points, friction, restitution);
+            return points.Count == 0 ? null : new(a, b, flip, localNormal, plane, points, friction, restitution, terrain);
         }
 
         internal override void Restore(PhysicsContact previous)
@@ -139,9 +164,7 @@ namespace Ctr2.Engine.Physics
                 (Vector2 Clip, Vector2 Normal, float Distance) geometry = Geometry(point);
                 normal = faceB ? -geometry.Normal : geometry.Normal;
                 tangent = new(normal.Y, -normal.X);
-                Vector2 reference = geometry.Clip + ((Radius - geometry.Distance) * geometry.Normal);
-                Vector2 incident = geometry.Clip - (Radius * geometry.Normal);
-                Vector2 world = .5f * (faceB ? incident + reference : reference + incident);
+                Vector2 world = WorldPoint(point);
                 point.ArmA = world - a.Position;
                 point.ArmB = world - b.Position;
                 float rnA = Cross(point.ArmA, normal), rnB = Cross(point.ArmB, normal);
@@ -391,10 +414,6 @@ namespace Ctr2.Engine.Physics
             return PhysicsMath.InverseRotate(world - body.Origin, body.Angle);
         }
 
-        private static Vector2 Normalize(Vector2 value)
-        {
-            return 1 / value.Length() * value;
-        }
 
         private static float Cross(Vector2 a, Vector2 b)
         {
@@ -430,7 +449,7 @@ namespace Ctr2.Engine.Physics
                 for (int i = 0; i < Vertices.Count; i++)
                 {
                     Vector2 first = Vertices[i], second = Vertices[(i + 1) % Vertices.Count], edge = second - first;
-                    Normals[i] = Normalize(new(edge.Y, -edge.X));
+                    Normals[i] = PhysicsMath.Normalize(new(edge.Y, -edge.X));
                     float triangle = .5f * Cross(first, second);
                     area += triangle;
                     center += triangle * (1f / 3) * (Vector2.Zero + first + second);

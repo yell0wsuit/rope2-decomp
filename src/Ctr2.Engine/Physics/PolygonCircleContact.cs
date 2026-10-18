@@ -48,13 +48,13 @@ namespace Ctr2.Engine.Physics
             if (u1 <= 0)
             {
                 return Vector2.DistanceSquared(center, first) > radius * radius ? null :
-                    new(polygon, circle, first, Normalize(center - first), friction, restitution);
+                    new(polygon, circle, first, PhysicsMath.Normalize(center - first), friction, restitution);
             }
 
             if (u2 <= 0)
             {
                 return Vector2.DistanceSquared(center, second) > radius * radius ? null :
-                    new(polygon, circle, second, Normalize(center - second), friction, restitution);
+                    new(polygon, circle, second, PhysicsMath.Normalize(center - second), friction, restitution);
             }
 
             Vector2 midpoint = .5f * (first + second);

@@ -54,7 +54,7 @@ namespace Ctr2.Engine.Physics
                 {
                     throw new ArgumentException("Invalid convex polygon vertex.", nameof(vertices));
                 }
-                normals[i] = Vector2.Normalize(new(edge.Y, -edge.X));
+                normals[i] = PhysicsMath.Normalize(new(edge.Y, -edge.X));
                 for (int j = 0; j < points.Length; j++)
                 {
                     if (j != i && j != (i + 1) % points.Length && Vector2.Dot(normals[i], points[j] - p) >= -1e-7f)

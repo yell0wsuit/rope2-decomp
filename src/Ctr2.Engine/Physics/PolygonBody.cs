@@ -51,6 +51,8 @@ namespace Ctr2.Engine.Physics
         {
             Angle = angle;
             Position = origin + PhysicsMath.Rotate(LocalCenter, angle);
+            // Native bodies cache the authored transform until their first synchronization.
+            TransformOrigin = origin;
         }
 
         private PhysicsBody(IReadOnlyList<ConvexPolygon> fixtures, float radius, float density, float gravityScale, PhysicsBodyType type, bool fixedRotation)

@@ -85,8 +85,9 @@ namespace Ctr2.Tests
             for (int tick = 0; tick < 180; tick++)
             {
                 world.Step();
-                Assert.Equal(polygon.Position, rope.AnchorA);
-                Assert.Equal(polygon.Position, spring.AnchorB);
+                // Native anchors rebuild the center from the cached origin, so they can differ by an ulp.
+                Assert.True(Vector2.Distance(polygon.Position, rope.AnchorA) <= 1e-6f);
+                Assert.True(Vector2.Distance(polygon.Position, spring.AnchorB) <= 1e-6f);
                 Assert.Equal(0, polygon.Angle);
                 Assert.Equal(0, polygon.AngularVelocity);
                 Assert.True(float.IsFinite(polygon.Position.Y));

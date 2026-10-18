@@ -18,7 +18,7 @@ namespace Ctr2.Engine.Physics
         protected override (Vector2 Normal, Vector2 Point) VelocityGeometry()
         {
             Vector2 delta = b.Position - a.Position;
-            Vector2 normal = delta.LengthSquared() > Epsilon * Epsilon ? Normalize(delta) : Vector2.UnitX;
+            Vector2 normal = delta.LengthSquared() > Epsilon * Epsilon ? PhysicsMath.Normalize(delta) : Vector2.UnitX;
             Vector2 pointA = a.Position + (a.Radius * normal);
             Vector2 pointB = b.Position - (b.Radius * normal);
             return (normal, .5f * (pointA + pointB));
@@ -27,7 +27,7 @@ namespace Ctr2.Engine.Physics
         protected override (Vector2 Normal, Vector2 Point, float Separation) PositionGeometry()
         {
             Vector2 delta = b.Position - a.Position;
-            Vector2 normal = Normalize(delta);
+            Vector2 normal = PhysicsMath.Normalize(delta);
             return (normal, .5f * (a.Position + b.Position), Vector2.Dot(delta, normal) - a.Radius - b.Radius);
         }
     }

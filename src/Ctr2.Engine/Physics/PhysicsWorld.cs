@@ -299,6 +299,12 @@ namespace Ctr2.Engine.Physics
             }
             List<PhysicsContact> touching = UpdateTerrainContacts();
             touching.AddRange(UpdateBodyContacts());
+            // Narrowphase used each body's cached transform; native solvers rebuild it from the sweep.
+            foreach (PhysicsBody body in bodies)
+            {
+                body.TransformOrigin = null;
+            }
+
             // Merge this traversal only. Earlier queued batches keep chronological order.
             contactEvents.Sort(eventStart, contactEvents.Count - eventStart, ContactEventOrder);
             List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands);
@@ -391,7 +397,7 @@ namespace Ctr2.Engine.Physics
             {
                 foreach (PhysicsContact contact in island)
                 {
-                    if (contact is PolygonContact polygon)
+                    if (contact is PolygonBodyContact { Terrain: true } polygon)
                     {
                         polygonImpacts.Add(polygon.CaptureImpact());
                     }
@@ -454,10 +460,15 @@ namespace Ctr2.Engine.Physics
             }
             foreach (PhysicsContact contact in active)
             {
-                contactEdges[contact.Body].Add(contact);
-                if (contact.OtherBody != null)
+                // Terrain frames are not world-owned and never propagate islands.
+                if (contactEdges.TryGetValue(contact.Body, out List<PhysicsContact>? edges))
                 {
-                    contactEdges[contact.OtherBody].Add(contact);
+                    edges.Add(contact);
+                }
+
+                if (contact.OtherBody != null && contactEdges.TryGetValue(contact.OtherBody, out List<PhysicsContact>? otherEdges))
+                {
+                    otherEdges.Add(contact);
                 }
             }
             foreach (List<PhysicsContact> edges in contactEdges.Values)
