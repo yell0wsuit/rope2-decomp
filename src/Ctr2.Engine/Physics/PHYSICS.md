@@ -2,8 +2,8 @@
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
-rope/soft-distance joints with rotating body-local anchors and circle/polygon contacts against
-static convex terrain.
+rope/soft-distance joints with rotating body-local anchors, discrete circle-circle contacts
+and circle/polygon contacts against static convex terrain.
 A native-style dynamic-tree broadphase owns fixture proxies and supported discrete terrain contacts.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
 
@@ -113,7 +113,7 @@ not cached into the next discrete step. A manifold disagreement also retains the
 safe transform rather than continuing through the fixture.
 
 This is an analytical circle/static-convex subset, not a port of Box2D's general
-GJK/separation-function TOI solver. Circle/circle impacts, polygon sweeps, native
+GJK/separation-function TOI solver. Circle/circle CCD, polygon sweeps, native TOI
 contact lifetime/order and arbitrary multi-body TOI islands remain unsupported.
 The switch can disable sweeps for isolated discrete fixture verification.
 
@@ -206,7 +206,7 @@ terrain and two independent bodies sharing a floor. These do not
 prove native broadphase/contact-order parity or original Om Nom movement.
 
 Character polygons use discrete contacts even when circle CCD is enabled. Polygon
-CCD, general dynamic-body collision, remaining gameplay adjustments and character
+CCD, contacts against moving polygon bodies, remaining gameplay adjustments and character
 star collection remain pending. The opt-in gameplay layer below adds feeding,
 first-entry arrival and completion without a general dynamic-contact solver.
 
@@ -223,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `CircleContactReference.json` | 1,800 native per-tick snapshots of static/dynamic circle impacts, oblique friction/spin, restitution, tangent/coincident centers, stacked contact islands, mixed joint/contact islands, joint refiltering and cached material changes. Exact circle/terrain candidate orientation/order/touching plus six body-state components. |
 | `ContactLifecycleReference.json` | 1,680 native per-tick snapshots: corner, bounce, centered/offset rotating compounds, late terrain and body removal/replacement. Exact contact order/identity/touching and proxy IDs; predicted bounds and six body-state components. |
 | `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
@@ -384,10 +385,57 @@ the two-point velocity solver retains the native matrix-product grouping and
 rounds inverse-matrix entries before multiplying. Algebraic simplification can
 change a later proxy-containment decision despite tiny body-state differences.
 
-General two-body contacts, filters, sensor callbacks, contact-connected dynamic
-islands, raycasts and tree rebuilding remain separate work. The analytical CCD
+Moving polygon contacts, general filters, sensor callbacks, raycasts and tree
+rebuilding remain separate work. The analytical CCD
 subset synchronizes its final transforms but does not reproduce native TOI proxy
 updates or callback timing. Windows behavioral equivalence remains unverified.
+
+## Discrete circle pairs and contact-connected islands
+
+Every supported circle fixture pair enters native candidate discovery unless both
+bodies are static, a joint blocks collisions or the fixtures belong to the same
+body. Candidate orientation follows the native proxy pair; fixture A can be static.
+`CaptureBodyContacts()` snapshots solid circle candidates in reverse creation order,
+using the same sequence as `CaptureTerrainContacts()`. Sensors retain candidate
+ownership but enter neither solid solving nor these solid-contact diagnostics.
+
+Circle manifolds accept tangent boundaries. Velocity initialization computes the
+radius-adjusted common contact midpoint and both center-of-mass arms, mixing
+friction geometrically and restitution by maximum. Material values are mixed at
+candidate creation and retained across empty-manifold updates; later fixture
+coefficient changes affect new circle candidates. Explicit native contact material
+reset APIs are not exposed. Friction solves before normal impulses; both linear
+and angular velocities change. Fixed-step warm starting retains both impulses only
+across consecutive touching updates. At coincident centers velocity geometry uses
+normal `(1,0)`, while positional normalization leaves a zero normal, as native does.
+The port does not invent an axis to split coincident bodies.
+
+Touching solid contacts connect islands. Each body scans contact edges in reverse
+candidate creation order before scanning joints in reverse creation order; LIFO
+stack processing determines visitation. Each constraint enters once. Static nodes
+do not propagate traversal, allowing independent islands to share terrain/static
+circles and stop position iterations independently. Velocity iterations solve
+joints before contacts; position iterations solve contacts before joints.
+
+All current joint APIs use native default `collideConnected = false`. Suppression
+is counted per body pair so removing one of multiple joints retains the block.
+Adding a blocking joint retires an existing circle candidate on the next update.
+Removing it does not touch proxies or force rediscovery: a previously rejected
+pair may remain absent until movement reinserts a proxy, matching native behavior.
+Body removal clears its candidates, proxies, attached joints and collision blocks.
+
+`CircleContactReference.json` covers ten independent native scenes, every completed
+tick through 180. Exact circle and terrain candidate labels, orientation, creation
+order and touching state are checked along with six finite body-state components
+at the existing 0.00002 tolerance. Boundary regressions also cover sensors, static
+pairs, removal, multi-joint suppression and shared-static convergence isolation.
+Fixture SHA-256: `5413839674e7599269c543df88e9a2a7104e209e8e1d04d1369c29624e96f647`.
+
+This checkpoint is discrete circle-circle solving. Contacts involving a polygon body and another body fixture, circle-pair
+continuous collision, sleeping, full filters and native
+sensor/gameplay callbacks remain outside this contract. Terrain added through
+`AddTerrain` retains its separately verified circle/polygon contact path. Original
+Windows runtime and cross-platform bitwise parity remain unverified.
 
 ## Running numerical verification
 
@@ -395,6 +443,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*CircleContactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContactLifecycleTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BroadPhaseTests'
 ```
@@ -415,8 +464,8 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are remaining joint APIs/limited-angle cases, general two-body contact
-solving and contact-connected dynamic islands, filters/sensor callbacks, distance/GJK and native
+Next gates are remaining joint APIs/limited-angle cases, circle/polygon and polygon/polygon
+contacts between moving bodies, filters/sensor callbacks, distance/GJK and native
 TOI islands. Then verify Windows game body construction, materials, fixtures,
 attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
@@ -489,7 +538,7 @@ floating-point tick; exact original timing/visual parity still needs runtime com
 
 ## Remaining acceptance work (broader engine)
 
-There is no general Box2D continuous solver, polygon CCD, sleeping, dynamic-body solid collision,
+There is no general Box2D continuous solver, polygon CCD, sleeping, moving-polygon solid collision,
 dynamic terrain, noncenter anchors, moving stars, hazards or broader intro logic.
 Broader consumption and completion mechanics beyond the opt-in forest slice,
 complex contact

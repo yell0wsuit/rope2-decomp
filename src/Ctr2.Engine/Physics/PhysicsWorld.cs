@@ -20,7 +20,7 @@ namespace Ctr2.Engine.Physics
         {
             get; internal set;
         }
-        /// <summary>Gets or sets whether this circle skips solid terrain contacts.</summary>
+        /// <summary>Gets or sets whether this body skips supported solid contacts.</summary>
         /// <value>True for rope material points and grab sensors.</value>
         public bool IsSensor
         {
@@ -284,7 +284,7 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>Always-awake Box2D 2.2.1 subset with local-anchor joints and circle/polygon contacts against static terrain.</summary>
+    /// <summary>Always-awake Box2D subset with local-anchor joints, circle pairs and circle/polygon terrain contacts.</summary>
     public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>
@@ -382,7 +382,12 @@ namespace Ctr2.Engine.Physics
         /// <returns>True if this call removed an active constraint.</returns>
         public bool Remove(PhysicsJoint joint)
         {
-            return joints.Remove(joint);
+            if (!joints.Remove(joint))
+            {
+                return false;
+            }
+            ChangeCollisionBlock(joint.A, joint.B, -1);
+            return true;
         }
 
         /// <summary>Removes an owned body and every attached constraint and cached terrain contact between steps.</summary>
@@ -395,7 +400,10 @@ namespace Ctr2.Engine.Physics
                 return false;
             }
             RemoveBodyProxies(body);
-            _ = joints.RemoveAll(j => j.A == body || j.B == body);
+            foreach (PhysicsJoint joint in joints.FindAll(j => j.A == body || j.B == body))
+            {
+                _ = Remove(joint);
+            }
             foreach ((PhysicsBody, TerrainFixture, int) key in new List<(PhysicsBody, TerrainFixture, int)>(contacts.Keys))
             {
                 if (key.Item1 == body)
@@ -422,8 +430,9 @@ namespace Ctr2.Engine.Physics
                     }
                 }
             }
-            List<List<PhysicsJoint>> islands = SolverOrder(out Dictionary<PhysicsBody, (int Island, int Order)>? bodyOrder);
-            List<List<PhysicsContact>> contactIslands = BuildContacts(islands, bodyOrder);
+            List<PhysicsContact> touching = UpdateTerrainContacts();
+            touching.AddRange(UpdateCircleContacts());
+            List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands);
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
             {
@@ -541,63 +550,75 @@ namespace Ctr2.Engine.Physics
             }
             PhysicsJoint joint = new(a, b, length, frequency, damping, anchorA, anchorB);
             joints.Add(joint);
+            ChangeCollisionBlock(a, b, 1);
             return joint;
         }
 
         private static bool ValidAnchor(Vector2 value) => float.IsFinite(value.X) && float.IsFinite(value.Y) &&
             MathF.Abs(value.X) <= 10000 && MathF.Abs(value.Y) <= 10000;
 
-        /// <summary>Builds Box2D's depth-first joint order, without traversing through static bodies.</summary>
-        /// <param name="bodyOrder">Dynamic-body island memberships and depth-first traversal ranks.</param>
-        /// <returns>The ordered constraints for all independent awake islands.</returns>
-        private List<List<PhysicsJoint>> SolverOrder(out Dictionary<PhysicsBody, (int Island, int Order)> bodyOrder)
+        /// <summary>Traverses solid contacts before joints, preserving native body-edge and LIFO order.</summary>
+        private List<List<PhysicsJoint>> SolverOrder(IReadOnlyList<PhysicsContact> active, out List<List<PhysicsContact>> contactIslands)
         {
-            bodyOrder = [];
-            Dictionary<PhysicsBody, List<PhysicsJoint>> edges = [];
+            Dictionary<PhysicsBody, List<PhysicsJoint>> jointEdges = [];
+            Dictionary<PhysicsBody, List<PhysicsContact>> contactEdges = [];
             foreach (PhysicsBody body in bodies)
             {
-                edges.Add(body, []);
+                jointEdges.Add(body, []);
+                contactEdges.Add(body, []);
             }
             foreach (PhysicsJoint joint in joints)
             {
-                edges[joint.A].Add(joint);
-                edges[joint.B].Add(joint);
+                jointEdges[joint.A].Add(joint);
+                jointEdges[joint.B].Add(joint);
+            }
+            foreach (PhysicsContact contact in active)
+            {
+                contactEdges[contact.Body].Add(contact);
+                if (contact.OtherBody != null)
+                    contactEdges[contact.OtherBody].Add(contact);
+            }
+            foreach (List<PhysicsContact> edges in contactEdges.Values)
+            {
+                edges.Sort((a, b) => b.CreationOrder.CompareTo(a.CreationOrder));
             }
             HashSet<PhysicsBody> visited = [];
-            HashSet<PhysicsJoint> seen = [];
+            HashSet<PhysicsJoint> seenJoints = [];
+            HashSet<PhysicsContact> seenContacts = [];
             List<List<PhysicsJoint>> islands = [];
+            contactIslands = [];
             for (int i = bodies.Count - 1; i >= 0; i--)
             {
                 PhysicsBody seed = bodies[i];
                 if (seed.Mass == 0 || !visited.Add(seed))
-                {
                     continue;
-                }
                 List<PhysicsJoint> ordered = [];
+                List<PhysicsContact> islandContacts = [];
                 islands.Add(ordered);
+                contactIslands.Add(islandContacts);
                 Stack<PhysicsBody> stack = new();
                 stack.Push(seed);
                 while (stack.TryPop(out PhysicsBody? body))
                 {
-                    if (body.Mass == 0)
+                    foreach (PhysicsContact contact in contactEdges[body])
                     {
-                        continue;
+                        if (!seenContacts.Add(contact))
+                            continue;
+                        islandContacts.Add(contact);
+                        PhysicsBody? other = contact.Body == body ? contact.OtherBody : contact.Body;
+                        if (other != null && other.Mass > 0 && visited.Add(other))
+                            stack.Push(other);
                     }
-                    bodyOrder.Add(body, (islands.Count - 1, bodyOrder.Count));
-                    List<PhysicsJoint> connected = edges[body];
+                    List<PhysicsJoint> connected = jointEdges[body];
                     for (int j = connected.Count - 1; j >= 0; j--)
                     {
                         PhysicsJoint joint = connected[j];
-                        if (!seen.Add(joint))
-                        {
+                        if (!seenJoints.Add(joint))
                             continue;
-                        }
                         ordered.Add(joint);
                         PhysicsBody other = joint.A == body ? joint.B : joint.A;
-                        if (visited.Add(other))
-                        {
+                        if (other.Mass > 0 && visited.Add(other))
                             stack.Push(other);
-                        }
                     }
                 }
             }

@@ -1,14 +1,16 @@
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>Shared static-terrain constraint operations for a dynamic circle or polygon fixture.</summary>
+    /// <summary>Shared operations for supported solid terrain and two-body constraints.</summary>
     internal abstract class PhysicsContact
     {
-        /// <summary>Gets the contacted dynamic body.</summary>
+        /// <summary>Gets the terrain-contact body or native fixture A's body, which may be static.</summary>
         /// <value>The world-owned body.</value>
         internal abstract PhysicsBody Body
         {
             get;
         }
+        /// <summary>Gets the second body for a circle pair, or null for implicit static terrain.</summary>
+        internal virtual PhysicsBody? OtherBody => null;
         /// <summary>Contact creation sequence retained while broadphase proxies overlap.</summary>
         internal long CreationOrder;
         /// <summary>Restores compatible accumulated impulses.</summary>

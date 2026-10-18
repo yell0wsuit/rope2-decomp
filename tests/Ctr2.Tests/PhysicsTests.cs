@@ -68,6 +68,11 @@ namespace Ctr2.Tests
                 bodies.Add(c);
                 _ = world.AddRope(a, c, .5f);
             }
+            // The independent contact-free oracle explicitly creates sensor fixtures.
+            foreach (PhysicsBody body in bodies)
+            {
+                body.IsSensor = true;
+            }
             string[][] samples = [.. File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "PhysicsReference.csv"))
                 .Select(line => line.Split(',')).Where(row => row[0] == scenario)];
             Assert.NotEmpty(samples);

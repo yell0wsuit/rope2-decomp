@@ -34,13 +34,10 @@ namespace Ctr2.Engine.Physics
             terrain.Add(fixture);
         }
 
-        /// <summary>Rebuilds supported manifolds and assigns contacts to independent dynamic-body islands.</summary>
-        /// <param name="islands">Independent joint groups, including free-body groups.</param>
-        /// <param name="bodyOrder">Dynamic-body group memberships and traversal ranks.</param>
-        /// <returns>Contact groups parallel to the joint groups.</returns>
-        private List<List<PhysicsContact>> BuildContacts(List<List<PhysicsJoint>> islands, Dictionary<PhysicsBody, (int Island, int Order)> bodyOrder)
+        /// <summary>Updates supported terrain manifolds before assembling contact-connected islands.</summary>
+        private List<PhysicsContact> UpdateTerrainContacts()
         {
-            List<List<PhysicsContact>> groups = [.. islands.Select(_ => new List<PhysicsContact>())];
+            List<PhysicsContact> active = [];
             foreach (var entry in contacts.ToArray())
             {
                 TerrainCandidate candidate = entry.Value;
@@ -61,17 +58,12 @@ namespace Ctr2.Engine.Physics
                         contact.Restore(candidate.Manifold);
                     }
                     contact.CreationOrder = candidate.CreationOrder;
-                    groups[bodyOrder[body].Island].Add(contact);
+                    active.Add(contact);
                 }
                 // Losing the manifold keeps candidate order, but clears warm-start impulses.
                 candidate.Manifold = contact;
             }
-            foreach (List<PhysicsContact> group in groups)
-            {
-                group.Sort((a, b) => bodyOrder[a.Body].Order != bodyOrder[b.Body].Order ?
-                    bodyOrder[a.Body].Order.CompareTo(bodyOrder[b.Body].Order) : b.CreationOrder.CompareTo(a.CreationOrder));
-            }
-            return groups;
+            return active;
         }
     }
 
