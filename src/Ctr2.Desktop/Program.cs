@@ -19,6 +19,10 @@ using SkiaSharp;
 
 try
 {
+    if (args.Length > 0 && args[0] == "audit-levels")
+    {
+        return LevelAuditCommand.Run(args);
+    }
     if (args.Length > 0 && args[0] == "play-level")
     {
         return ForestPlayCommand.Run(args);
@@ -268,6 +272,7 @@ try
 
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
+        "  audit-levels <cache>\n" +
         "  play-level <cache> <one-based pack> <one-based level> [--ticks N] [--cut tick:rope:segment:x:y[:impulseX:impulseY]] [preview options]\n" +
         "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [--cut tick:rope:segment:x:y] [preview options]\n" +
         "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +

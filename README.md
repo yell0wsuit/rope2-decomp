@@ -61,9 +61,15 @@ lock or camera movement is applied. Other mechanics report an unsupported-scope
 error. Falling/landing and airborne eating use source velocity
 history and terrain contacts. Static terrain impacts add procedural squash and rolling.
 Stand-up preparation applies the source center and angular impulses after its
-short squash/stretch animation. Selected costumes, native scenery/rope/star artwork,
-remaining particles, sound, saves and original-game parity
-remain pending. Scenery and stars still use the diagnostic drawing.
+short squash/stretch animation. Playable scenes use the Windows forest background
+and stationary star IDLE/collection animations. Stars loop with three staggered
+phases and the source container pulse; collection playback follows fixed ticks,
+including pause and restart. The wide background fits the logical scene height
+uniformly and uses its original resolution 2 image at either foreground density.
+Selected costumes, textured terrain, rope/holder artwork, emitted star particles,
+star glow blend overrides and periodic flare, sound, saves and original-game parity
+remain pending. Terrain and ropes still use diagnostic drawing; static and
+simulation previews retain their diagnostic presentation.
 
 `--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]`,
 `--width`, `--height`, `--resolution`, `--snapshot` and `--frames` support
@@ -79,7 +85,7 @@ original-game physics or visual parity:
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2 --ticks 600 --cut 0:0:0:519.25:343.5 --cut 0:1:0:138.66667:156.33333 --snapshot local/forest-win.png
 ```
 
-Pack 1/entry 1 also completed with 3/3 stars at tick 309 (feeding at tick 179)
+Pack 1/entry 1 also completed with 3/3 stars at tick 347 (feeding at tick 179)
 using `--ticks 600 --cut 30:0:0:400:138`. Leaf randomness is deterministic for
 repeatable diagnostics; native randomness and visual parity remain unverified.
 
@@ -146,6 +152,23 @@ Optional `--frame local/frame.json` previews one quad using a sidecar from the *
 These are illustrative values, not a shipped game quad. Sampling uses pixel rectangles; layout divides dimensions, offsets and the pre-cut canvas by density. The original resource manager uses `1.0` for 640×960 and `1.56` for 1200×1600, rather than their nominal width ratio. Windows landscape/UI variants retain an unknown density until their own metadata is traced. Viewport fitting uses uniform scaling, centered margins and inverse input mapping through the reused DX transform stack. Actual Windows gameplay screen/camera behavior still needs comparison against the original.
 
 ## Verification and next work
+
+Audit every entry in the imported Windows desktop list against the current
+forest session constructor:
+
+```sh
+dotnet run --project src/Ctr2.Desktop -- audit-levels cache/windows-alpha
+```
+
+The command emits JSON in authored pack/entry order, including object counts,
+location, whether construction succeeds, and the first failure for each entry.
+An unreadable or unsupported level is reported while later entries are still
+checked. An invalid index or master design fails the command. This measures
+session construction, not completion, asset rendering, or original-game parity.
+The supplied Windows 1.0.0.46 content has 168 desktop entries; currently only
+pack 1/entries 1 and 2 pass. Further work includes loader coverage, physical
+objects and general collision, moving stars, balloons, pumps, water, magnets,
+the other characters, level selection, progression, audio and saves.
 
 ```sh
 dotnet build Ctr2.slnx -c Release

@@ -23,6 +23,12 @@ namespace Ctr2.Assets
     public sealed record LevelDefinition(string FileName, int Width, int Height,
         IReadOnlyList<LevelElement> Settings, IReadOnlyList<LevelElement> Objects);
 
+    /// <summary>One level in authored Windows desktop order, with one-based pack and entry numbers.</summary>
+    /// <param name="Pack">Authored pack ID.</param>
+    /// <param name="Entry">One-based position within its pack.</param>
+    /// <param name="FileName">Validated flat XML filename.</param>
+    public sealed record WindowsLevelEntry(int Pack, int Entry, string FileName);
+
     /// <summary>Reads bounded local level XML and the original Windows desktop pack order.</summary>
     public static class LevelReader
     {
@@ -71,6 +77,21 @@ namespace Ctr2.Assets
             {
                 throw new InvalidDataException("Pack and level numbers start at one.");
             }
+            WindowsLevelEntry selected = LoadWindowsIndex(cache).SingleOrDefault(e => e.Pack == pack && e.Entry == level)
+                ?? throw new InvalidDataException("Desktop pack/level selection is out of range.");
+            return Read(ReadFile(Path.Combine(Path.GetFullPath(cache), "assets", "maps", selected.FileName))) with
+            {
+                FileName = selected.FileName
+            };
+        }
+
+        /// <summary>Lists every validated desktop entry without opening its level file.</summary>
+        /// <param name="cache">Imported Windows cache root.</param>
+        /// <returns>Entries in authored pack and file order.</returns>
+        /// <exception cref="InvalidDataException">The XML index, pack IDs or filenames are invalid.</exception>
+        /// <exception cref="IOException">The index cannot be read.</exception>
+        public static IReadOnlyList<WindowsLevelEntry> LoadWindowsIndex(string cache)
+        {
             string assets = Path.GetFullPath(Path.Combine(cache, "assets")), maps = Path.Combine(assets, "maps");
             foreach (string directory in new[] { Path.GetFullPath(cache), assets, maps })
             {
@@ -82,6 +103,7 @@ namespace Ctr2.Assets
                 throw new InvalidDataException("Expected a desktop filelist.");
             }
             Dictionary<int, string[]> packs = [];
+            List<WindowsLevelEntry> entries = [];
             foreach (XElement entry in index.Root.Elements())
             {
                 if (entry.Name != "pack" || !int.TryParse((string?)entry.Attribute("id"), NumberStyles.None,
@@ -101,16 +123,9 @@ namespace Ctr2.Assets
                 {
                     throw new InvalidDataException("Duplicate desktop pack ID.");
                 }
+                entries.AddRange(files.Select((file, i) => new WindowsLevelEntry(id, i + 1, file)));
             }
-            if (!packs.TryGetValue(pack, out string[]? selected) || level > selected.Length)
-            {
-                throw new InvalidDataException("Desktop pack/level selection is out of range.");
-            }
-            string fileName = selected[level - 1];
-            return Read(ReadFile(Path.Combine(maps, fileName))) with
-            {
-                FileName = fileName
-            };
+            return entries.AsReadOnly();
         }
 
         /// <summary>Loads the matching Windows master-design XML through the same bounded cache path checks.</summary>
