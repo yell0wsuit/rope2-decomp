@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <None Update="PrismaticReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ContinuousWorldReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ToiReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="QueryReference.json" CopyToOutputDirectory="PreserveNewest" />

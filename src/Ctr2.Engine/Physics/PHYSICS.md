@@ -1,11 +1,15 @@
 # Candy, character, cutting, terrain and star physics slice
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
-[the original license](BOX2D_LICENSE.txt). It implements always-awake static, kinematic and dynamic circle and compound polygon bodies with native velocity, impulse, force, teleport, type and mass controls,
-rope/soft-distance and revolute joints with rotating body-local anchors, discrete circle/circle and
-polygon/circle and polygon/polygon body contacts, and circle/polygon contacts against static convex terrain.
-A native-style dynamic-tree broadphase owns fixture proxies and supported discrete terrain contacts.
-It is not a complete Box2D replacement or proof of original-game runtime parity.
+[the original license](BOX2D_LICENSE.txt). It covers the Box2D surface the game uses:
+always-awake static, kinematic and dynamic circle and compound polygon bodies with native
+velocity, impulse, force, teleport, type and mass controls; rope, rigid and soft distance,
+revolute and prismatic joints; circle/circle, polygon/circle and polygon/polygon contacts,
+with static convex terrain as identity-frame static bodies; collision filters and sensors;
+a native dynamic-tree broadphase; native time-of-impact continuous collision; ray casts,
+AABB queries and point tests; and queued Begin/End events, world manifolds and PostSolve
+reports for the game's contact callbacks. Every native-trace fixture is bit-identical to
+the Android-profile oracle on its platform. It is still not proof of original-game runtime parity.
 
 Implementation research stays private and outside tracked files. Do not commit
 decompiled game code or reconstructed reference harnesses. Verification artifacts
@@ -243,6 +247,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `PrismaticReference.json` | 900 native ticks: banner limits/motor and runtime calls, rotated dynamic slider, equal limits, free slider, contacts with recreation and limit transitions. Exact limit states/candidates; anchors, reactions, motor force, translation, speed and six body-state components. |
 | `ToiReference.json` | 2,636 standalone native time-of-impact queries over circle/polygon sweeps. Exact states and times. |
 | `ContinuousWorldReference.json` | 500 native continuous ticks: tunneling, rotating polygons, kinematic sweepers, static circle bodies and impact bursts. Exact proxies/events/report identity/candidates; bodies, bounds and TOI impulses. |
 | `QueryReference.json` | Five snapshots of a moving mixed world: 32 ray casts per snapshot under all/closest/stop/filter callbacks, 8 AABB queries with early stops, 96-point tests per fixture and swept fixture bounds. Exact report order and labels; points, normals, fractions, bounds and body states. |
@@ -931,7 +936,7 @@ They now follow native arithmetic:
 
 With every native-trace comparison set to exact equality, every JSON fixture suite
 (broadphase, circle, polygon-circle, polygon-pair, contact lifecycle, filters, sensors,
-fixture sensors, revolute, body control, body type, contact report, distance joint, world query, time of impact, continuous world, joint anchor and joint topology) is
+fixture sensors, revolute, body control, body type, contact report, distance joint, prismatic, world query, time of impact, continuous world, joint anchor and joint topology) is
 bit-identical to the Android-profile native oracle for every compared tick on macOS
 arm64, where .NET and the clang-built oracle share the platform `sinf`/`cosf`. The
 committed tests keep their tolerances so they stay valid where the C runtime's
@@ -986,6 +991,27 @@ head-tail rope and stretch spring need `CollideConnected = true`.
 `9e7e872c9b1ef6e8cefb79b18b31050979467e3b1629fd10d36c4985a6d17302`. Native runtime length/frequency setters remain unported because the
 game never calls them.
 
+## Prismatic sliders
+
+`AddPrismatic(a, b, PhysicsPrismaticDefinition)` and the world-anchor/axis overload
+(native `b2PrismaticJointDef::Initialize`) add sliders that lock relative rotation.
+The local axis is normalized with native `Normalize`. Initialization, the 3x3
+limit/2x2 point solves, the motor clamp at `dt * maxForce`, warm starting and the
+position solve follow native 2.2.1 with its distinct groupings: velocity
+initialization measures `(cB - cA) + rB - rA`, the position solve `cB + rB - cA - rA`.
+Limit states, the equal-limit threshold of twice linear slop, and stale-state
+position correction match native. `LimitEnabled` and `SetLimits` clear the cached
+limit impulse only on change; motor setters always assign. `ReactionForce`,
+`ReactionTorque`, `MotorForce`, `Translation` and `Speed` are the native diagnostics.
+The game uses prismatic joints only for its promo banner (limits 0..2.675, motor -10
+at 30 N, connected collision, runtime motor speed and limit changes).
+
+`PrismaticReference.json` compares six independent native scenes through tick 150
+(900 snapshots): the banner's settings and runtime calls, a dynamic slider on a rotated
+axis with an offset compound, equal limits, a free slider, contacts with removal and
+recreation, and lower/upper transitions. It is bit-identical on the oracle platform.
+Fixture SHA-256: `122d0d8e32ff7c97f1fab21176566af4176c0725b3c1a25109b708cfc63f51a9`.
+
 ## Contact reports for gameplay callbacks
 
 The game's `ContactListener` forwards native `BeginContact` to its "pre-solve"
@@ -1016,6 +1042,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PrismaticJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContinuousWorldTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*TimeOfImpactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*WorldQueryTests'
@@ -1051,9 +1078,13 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are prismatic constraints. Synchronous callback/gameplay integration and
-sleeping remain separate verification work. Then verify Windows game body
-construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing
+The engine-level port of the game's Box2D usage is complete apart from sleeping.
+Gameplay and the promo banner disable sleeping, but `IntroScene` keeps Box2D's default,
+so the intro would need native sleep/wake islands. The game never creates its mouse
+joint, authors no bullets, keeps gravity at (0, 10) and leaves sub-stepping off, so
+those paths are deliberately unported. Next, game objects must build their bodies,
+fixtures, filters, sensors and joints from authored data through these APIs, and then
+physics-based gameplay must be verified against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
 are a separate acceptance gate. Presentation expansion follows those gates.
 
@@ -1123,8 +1154,9 @@ floating-point tick; exact original timing/visual parity still needs runtime com
 
 ## Remaining acceptance work (broader engine)
 
-There is no sleeping,
-dynamic terrain, noncenter anchors, moving stars, hazards or broader intro logic.
+There is no sleeping, moving stars, hazards or broader intro logic yet. Kinematic and
+static polygon bodies, noncenter anchors and every game joint type exist in the
+engine, but most game objects are not yet built on them.
 Broader consumption and completion mechanics beyond the opt-in forest slice,
 complex contact
 persistence/order, native triangle ordering and original recorded-input parity
