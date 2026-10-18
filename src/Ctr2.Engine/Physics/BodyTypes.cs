@@ -98,6 +98,7 @@ namespace Ctr2.Engine.Physics
                 Velocity = Vector2.Zero;
                 AngularVelocity = 0;
             }
+            SetAwake(true);
             Force = Vector2.Zero;
             Torque = 0;
             return true;

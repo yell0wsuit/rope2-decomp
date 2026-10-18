@@ -40,6 +40,19 @@ namespace Ctr2.Engine.Physics
             B = b;
             CollideConnected = collideConnected;
         }
+        /// <summary>Set once construction finishes; native creation does not wake bodies, runtime setters do.</summary>
+        private protected bool Constructed;
+
+        /// <summary>Wakes both bodies, as native runtime joint setters do.</summary>
+        private protected void Wake()
+        {
+            if (Constructed)
+            {
+                A.SetAwake(true);
+                B.SetAwake(true);
+            }
+        }
+
         internal abstract void Initialize(bool firstStep);
         internal abstract void SolveVelocity();
         internal abstract bool SolvePosition();

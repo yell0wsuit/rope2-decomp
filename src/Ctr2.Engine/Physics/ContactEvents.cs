@@ -178,21 +178,16 @@ namespace Ctr2.Engine.Physics
 
         private void RetireBodyContacts(PhysicsBody body)
         {
-            KeyValuePair<(int, int), BodyCandidate>[] bodyEntries = [.. bodyContacts.Where(c => c.Value.A.Body == body || c.Value.B.Body == body)];
-            KeyValuePair<(PhysicsBody, TerrainFixture, int), TerrainCandidate>[] terrainEntries = [.. contacts.Where(c => c.Value.Body == body)];
-            IEnumerable<(FixtureProxy A, FixtureProxy B, long CreationOrder, bool Touching)> retired = bodyEntries.Select(c => (c.Value.A, c.Value.B, c.Value.CreationOrder, c.Value.Touching))
-                .Concat(terrainEntries.Select(c => (c.Value.A, c.Value.B, c.Value.CreationOrder, c.Value.Touching)));
-            foreach ((FixtureProxy A, FixtureProxy B, long CreationOrder, bool Touching) in retired.OrderByDescending(c => c.CreationOrder))
+            // Native body contact edges are newest first; each destruction may end touching and wake its bodies.
+            foreach (ContactCandidate candidate in CandidatesNewestFirst().Where(c => c.A.Body == body || c.B.Body == body))
             {
-                RecordContactChange(A, B, CreationOrder, Touching, false, true);
+                DestroyCandidate(candidate);
             }
-
-            foreach (KeyValuePair<(int, int), BodyCandidate> entry in bodyEntries)
+            foreach (KeyValuePair<(int, int), BodyCandidate> entry in bodyContacts.Where(c => c.Value.A.Body == body || c.Value.B.Body == body).ToArray())
             {
                 _ = bodyContacts.Remove(entry.Key);
             }
-
-            foreach (KeyValuePair<(PhysicsBody, TerrainFixture, int), TerrainCandidate> entry in terrainEntries)
+            foreach (KeyValuePair<(PhysicsBody, TerrainFixture, int), TerrainCandidate> entry in contacts.Where(c => c.Value.Body == body).ToArray())
             {
                 _ = contacts.Remove(entry.Key);
             }

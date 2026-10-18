@@ -112,8 +112,8 @@ namespace Ctr2.Engine.Physics
                             continue;
                         }
                         PhysicsBody a = candidate.BodyA, b = candidate.BodyB;
-                        // At least one body must move, and only pairs involving a non-dynamic body are swept.
-                        if ((a.Type == PhysicsBodyType.Static && b.Type == PhysicsBodyType.Static) ||
+                        // At least one body must be awake and moving, and only pairs involving a non-dynamic body are swept.
+                        if ((!a.IsActiveMover && !b.IsActiveMover) ||
                             (a.Type == PhysicsBodyType.Dynamic && b.Type == PhysicsBodyType.Dynamic))
                         {
                             continue;
@@ -161,6 +161,8 @@ namespace Ctr2.Engine.Physics
                     bodyB.RestoreSweep(backupB);
                     continue;
                 }
+                bodyA.SetAwake(true);
+                bodyB.SetAwake(true);
                 List<PhysicsBody> islandBodies = [bodyA, bodyB];
                 List<ContactCandidate> islandContacts = [minContact];
                 foreach (PhysicsBody body in new[] { bodyA, bodyB })
@@ -200,6 +202,10 @@ namespace Ctr2.Engine.Physics
                         islandContacts.Add(candidate);
                         if (!islandBodies.Contains(other))
                         {
+                            if (other.Type != PhysicsBodyType.Static)
+                            {
+                                other.SetAwake(true);
+                            }
                             islandBodies.Add(other);
                         }
                     }

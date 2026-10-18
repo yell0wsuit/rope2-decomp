@@ -2,7 +2,7 @@
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It covers the Box2D surface the game uses:
-always-awake static, kinematic and dynamic circle and compound polygon bodies with native
+static, kinematic and dynamic circle and compound polygon bodies with native sleeping and waking with native
 velocity, impulse, force, teleport, type and mass controls; rope, rigid and soft distance,
 revolute and prismatic joints; circle/circle, polygon/circle and polygon/polygon contacts,
 with static convex terrain as identity-frame static bodies; collision filters and sensors;
@@ -247,6 +247,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `SleepReference.json` | 960 native ticks with sleeping allowed: settling stacks woken by new contacts, an intro-style teleported kinematic chain, every wake API and TOI wakes. Exact awake flags/proxy IDs/events/candidates; sleep timers, bounds and six body-state components. |
 | `PrismaticReference.json` | 900 native ticks: banner limits/motor and runtime calls, rotated dynamic slider, equal limits, free slider, contacts with recreation and limit transitions. Exact limit states/candidates; anchors, reactions, motor force, translation, speed and six body-state components. |
 | `ToiReference.json` | 2,636 standalone native time-of-impact queries over circle/polygon sweeps. Exact states and times. |
 | `ContinuousWorldReference.json` | 500 native continuous ticks: tunneling, rotating polygons, kinematic sweepers, static circle bodies and impact bursts. Exact proxies/events/report identity/candidates; bodies, bounds and TOI impulses. |
@@ -936,7 +937,7 @@ They now follow native arithmetic:
 
 With every native-trace comparison set to exact equality, every JSON fixture suite
 (broadphase, circle, polygon-circle, polygon-pair, contact lifecycle, filters, sensors,
-fixture sensors, revolute, body control, body type, contact report, distance joint, prismatic, world query, time of impact, continuous world, joint anchor and joint topology) is
+fixture sensors, revolute, body control, body type, contact report, distance joint, prismatic, sleep, world query, time of impact, continuous world, joint anchor and joint topology) is
 bit-identical to the Android-profile native oracle for every compared tick on macOS
 arm64, where .NET and the clang-built oracle share the platform `sinf`/`cosf`. The
 committed tests keep their tolerances so they stay valid where the C runtime's
@@ -1012,6 +1013,41 @@ axis with an offset compound, equal limits, a free slider, contacts with removal
 recreation, and lower/upper transitions. It is bit-identical on the oracle platform.
 Fixture SHA-256: `122d0d8e32ff7c97f1fab21176566af4176c0725b3c1a25109b708cfc63f51a9`.
 
+## Sleeping and waking
+
+`PhysicsWorld.AllowSleeping` defaults to false, matching every game world except the
+intro (`IntroScene` keeps Box2D's default of true). With it set, each island ends its
+solve with native sleep accounting: a non-static body accumulates the step time while
+below 0.01 m/s and 2 degrees/s (and while its `SleepingAllowed` is true), and the
+island sleeps once every member has slept 0.5 s and its position solve converged.
+Sleeping clears velocities and forces, and applies to every island member, including
+static bodies reached by contacts or joints, whose awake flag native toggles too.
+`SetAwake`, `IsAwake` and `SleepingAllowed` expose native body state.
+
+Sleeping bodies do not seed islands, integrate, synchronize proxies or take part in
+TOI. Contacts whose bodies are all asleep or static keep their manifold without being
+updated or overlap-tested, and still feed island building. Native wake sites are
+mirrored:
+
+- island propagation through touching contacts and joints
+- new contact pairs
+- destroying a contact that had manifold points
+- non-sensor touching transitions
+- joint removal (including during body removal)
+- TOI events
+- type changes
+- changed sensor flags
+- velocity, force and impulse setters
+- revolute and prismatic runtime setters
+- disabling `SleepingAllowed` or `AllowSleeping`
+
+Joint creation and `SetTransform` do not wake, so a sleeping intro chain stays put
+while its kinematic anchor is teleported, until a velocity setter wakes it.
+
+`SleepReference.json` compares four independent native scenes with sleeping allowed
+through tick 240 (960 snapshots). It is bit-identical on the oracle platform. Fixture
+SHA-256: `394f8c90c983e1e5616a290bd6457937dafad1e44312d08a5da012b201e9015f`.
+
 ## Contact reports for gameplay callbacks
 
 The game's `ContactListener` forwards native `BeginContact` to its "pre-solve"
@@ -1042,6 +1078,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SleepTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PrismaticJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContinuousWorldTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*TimeOfImpactTests'
@@ -1078,9 +1115,9 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-The engine-level port of the game's Box2D usage is complete apart from sleeping.
-Gameplay and the promo banner disable sleeping, but `IntroScene` keeps Box2D's default,
-so the intro would need native sleep/wake islands. The game never creates its mouse
+The engine-level port of the game's Box2D usage is complete, including the intro's
+sleep/wake behavior. The game only steps its worlds with dt 0.0167 (its zero `frameStep`
+pauses skip the step entirely), so variable dt ratios are not needed. The game never creates its mouse
 joint, authors no bullets, keeps gravity at (0, 10) and leaves sub-stepping off, so
 those paths are deliberately unported. Next, game objects must build their bodies,
 fixtures, filters, sensors and joints from authored data through these APIs, and then
@@ -1154,7 +1191,7 @@ floating-point tick; exact original timing/visual parity still needs runtime com
 
 ## Remaining acceptance work (broader engine)
 
-There is no sleeping, moving stars, hazards or broader intro logic yet. Kinematic and
+There are no moving stars, hazards or broader intro logic yet. Kinematic and
 static polygon bodies, noncenter anchors and every game joint type exist in the
 engine, but most game objects are not yet built on them.
 Broader consumption and completion mechanics beyond the opt-in forest slice,

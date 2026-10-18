@@ -43,10 +43,19 @@ namespace Ctr2.Engine.Physics
             foreach (KeyValuePair<(PhysicsBody, TerrainFixture, int), TerrainCandidate> entry in contacts.ToArray())
             {
                 TerrainCandidate candidate = entry.Value;
-                if (candidate.Body.Mass == 0 || !ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter) ||
-                    !broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
+                bool filtered = candidate.Body.Mass == 0 || !ShouldCollide(candidate.BodyProxy.Filter, candidate.TerrainProxy.Filter);
+                if (!filtered && !candidate.Body.IsActiveMover)
                 {
-                    RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, false, true);
+                    // Sleeping bodies keep their terrain manifolds without updating.
+                    if (candidate.Manifold != null && candidate.Enabled)
+                    {
+                        active.Add(candidate.Manifold);
+                    }
+                    continue;
+                }
+                if (filtered || !broadPhase.GetBounds(candidate.BodyProxy.Id).Overlaps(broadPhase.GetBounds(candidate.TerrainProxy.Id)))
+                {
+                    DestroyCandidate(candidate);
                     _ = contacts.Remove(entry.Key);
                     continue;
                 }

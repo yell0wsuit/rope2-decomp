@@ -78,6 +78,7 @@ namespace Ctr2.Engine.Physics
             {
                 if (value != field)
                 {
+                    Wake();
                     field = value;
                     impulse.Z = 0;
                 }
@@ -97,12 +98,23 @@ namespace Ctr2.Engine.Physics
         /// <summary>Whether the angular motor is enabled.</summary>
         public bool MotorEnabled
         {
-            get; set;
+            get;
+            set
+            {
+                Wake();
+                field = value;
+            }
         }
         /// <summary>Desired relative angular speed in radians per second.</summary>
         public float MotorSpeed
         {
-            get; set => field = Parameter(value);
+            get;
+            set
+            {
+                _ = Parameter(value);
+                Wake();
+                field = value;
+            }
         }
 
         /// <summary>Nonnegative torque bound in newton meters.</summary>
@@ -117,6 +129,7 @@ namespace Ctr2.Engine.Physics
                     throw new ArgumentOutOfRangeException(nameof(value));
                 }
 
+                Wake();
                 field = value;
             }
         }
@@ -150,6 +163,7 @@ namespace Ctr2.Engine.Physics
 
             if (lower != LowerAngle || upper != UpperAngle)
             {
+                Wake();
                 LowerAngle = lower;
                 UpperAngle = upper;
                 impulse.Z = 0;
@@ -171,6 +185,7 @@ namespace Ctr2.Engine.Physics
             MotorEnabled = definition.EnableMotor;
             MotorSpeed = definition.MotorSpeed;
             MaxMotorTorque = definition.MaxMotorTorque;
+            Constructed = true;
         }
         private Vector3 impulse;
         private float motorImpulse;

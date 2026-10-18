@@ -79,6 +79,7 @@ namespace Ctr2.Engine.Physics
             {
                 if (value != limitEnabled)
                 {
+                    Wake();
                     limitEnabled = value;
                     impulse.Z = 0;
                 }
@@ -97,19 +98,37 @@ namespace Ctr2.Engine.Physics
         /// <summary>Whether the motor is enabled.</summary>
         public bool MotorEnabled
         {
-            get; set;
+            get;
+            set
+            {
+                Wake();
+                field = value;
+            }
         }
         /// <summary>Desired translation speed in meters per second.</summary>
         public float MotorSpeed
         {
             get;
-            set => field = Parameter(value);
+            set
+            {
+                _ = Parameter(value);
+                Wake();
+                field = value;
+            }
         }
         /// <summary>Nonnegative maximum motor force in newtons.</summary>
         public float MaxMotorForce
         {
             get;
-            set => field = Parameter(value) < 0 ? throw new ArgumentOutOfRangeException(nameof(value)) : value;
+            set
+            {
+                if (Parameter(value) < 0)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+                Wake();
+                field = value;
+            }
         }
         /// <summary>Limit state from the last initialization.</summary>
         public PhysicsJointLimitState LimitState
@@ -154,6 +173,7 @@ namespace Ctr2.Engine.Physics
             MotorSpeed = definition.MotorSpeed;
             limitEnabled = definition.EnableLimit;
             MotorEnabled = definition.EnableMotor;
+            Constructed = true;
         }
 
         /// <summary>Changes ordered translation limits, clearing the cached limit impulse only when they change.</summary>
@@ -169,6 +189,7 @@ namespace Ctr2.Engine.Physics
             }
             if (lower != LowerTranslation || upper != UpperTranslation)
             {
+                Wake();
                 LowerTranslation = lower;
                 UpperTranslation = upper;
                 impulse.Z = 0;

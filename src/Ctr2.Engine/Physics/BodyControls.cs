@@ -20,6 +20,10 @@ namespace Ctr2.Engine.Physics
             Finite(velocity);
             if (Type != PhysicsBodyType.Static)
             {
+                if (Vector2.Dot(velocity, velocity) > 0)
+                {
+                    SetAwake(true);
+                }
                 Velocity = velocity;
             }
         }
@@ -32,6 +36,10 @@ namespace Ctr2.Engine.Physics
             Finite(velocity);
             if (Type != PhysicsBodyType.Static)
             {
+                if (velocity * velocity > 0)
+                {
+                    SetAwake(true);
+                }
                 AngularVelocity = velocity;
             }
         }
@@ -49,6 +57,7 @@ namespace Ctr2.Engine.Physics
                 return;
             }
 
+            SetAwake(true);
             Force += force;
             Torque += Cross(point - Position, force);
         }
@@ -61,6 +70,7 @@ namespace Ctr2.Engine.Physics
             Finite(force);
             if (Mass > 0)
             {
+                SetAwake(true);
                 Force += force;
             }
         }
@@ -73,6 +83,7 @@ namespace Ctr2.Engine.Physics
             Finite(torque);
             if (Mass > 0)
             {
+                SetAwake(true);
                 Torque += torque;
             }
         }
@@ -90,6 +101,7 @@ namespace Ctr2.Engine.Physics
                 return;
             }
 
+            SetAwake(true);
             Velocity += InverseMass * impulse;
             AngularVelocity += InverseInertia * Cross(point - Position, impulse);
         }
@@ -102,6 +114,7 @@ namespace Ctr2.Engine.Physics
             Finite(impulse);
             if (Mass > 0)
             {
+                SetAwake(true);
                 AngularVelocity += InverseInertia * impulse;
             }
         }

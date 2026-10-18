@@ -1,6 +1,7 @@
 // Altered C# subset of Box2D 2.2.1 by Erin Catto. See BOX2D_LICENSE.txt and PHYSICS.md.
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 
 namespace Ctr2.Engine.Physics
@@ -258,6 +259,8 @@ namespace Ctr2.Engine.Physics
             {
                 return false;
             }
+            joint.A.SetAwake(true);
+            joint.B.SetAwake(true);
             if (!joint.CollideConnected)
             {
                 ChangeCollisionBlock(joint.A, joint.B, -1);
@@ -303,7 +306,9 @@ namespace Ctr2.Engine.Physics
 
             // Merge this traversal only. Earlier queued batches keep chronological order.
             contactEvents.Sort(eventStart, contactEvents.Count - eventStart, ContactEventOrder);
-            List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands, out HashSet<PhysicsBody> islandStatics);
+            List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands, out HashSet<PhysicsBody> islandStatics,
+                out List<List<PhysicsBody>> bodyIslands);
+            HashSet<PhysicsBody> islandBodies = [.. bodyIslands.SelectMany(island => island)];
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
             {
@@ -311,12 +316,14 @@ namespace Ctr2.Engine.Physics
             }
             foreach (PhysicsBody body in bodies)
             {
-                // Island solves store sweep starts for continuous collision.
-                if (body.Type != PhysicsBodyType.Static || islandStatics.Contains(body))
+                // Sleeping bodies sit out the island solve entirely.
+                if (!islandBodies.Contains(body) && !islandStatics.Contains(body))
                 {
-                    body.Center0 = body.Position;
-                    body.Angle0 = body.Angle;
+                    continue;
                 }
+                // Island solves store sweep starts for continuous collision.
+                body.Center0 = body.Position;
+                body.Angle0 = body.Angle;
                 if (body.Mass > 0)
                 {
                     // Native grouping: h * (gravityScale * gravity + invMass * force), then h * invI * torque.
@@ -373,6 +380,7 @@ namespace Ctr2.Engine.Physics
             for (int islandIndex = 0; islandIndex < islands.Count; islandIndex++)
             {
                 List<PhysicsJoint> island = islands[islandIndex];
+                bool positionSolved = false;
                 for (int i = 0; i < 30; i++)
                 {
                     bool solved = true;
@@ -386,12 +394,14 @@ namespace Ctr2.Engine.Physics
                     }
                     if (solved)
                     {
+                        positionSolved = true;
                         break;
                     }
                 }
                 ReportPostSolve(contactIslands[islandIndex]);
+                SleepIsland(bodyIslands[islandIndex], positionSolved);
             }
-            SynchronizeBodyProxies(proxyStarts);
+            SynchronizeBodyProxies(proxyStarts, islandBodies);
             if (ContinuousPhysics)
             {
                 SolveToi();
@@ -506,7 +516,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Traverses solid contacts before joints, preserving native body-edge and LIFO order.</summary>
         /// <remarks>Dynamic and kinematic bodies seed and propagate islands; static bodies stop traversal.</remarks>
         private List<List<PhysicsJoint>> SolverOrder(IReadOnlyList<PhysicsContact> active, out List<List<PhysicsContact>> contactIslands,
-            out HashSet<PhysicsBody> islandStatics)
+            out HashSet<PhysicsBody> islandStatics, out List<List<PhysicsBody>> bodyIslands)
         {
             Dictionary<PhysicsBody, List<PhysicsJoint>> jointEdges = [];
             Dictionary<PhysicsBody, List<PhysicsContact>> contactEdges = [];
@@ -543,23 +553,41 @@ namespace Ctr2.Engine.Physics
             List<List<PhysicsJoint>> islands = [];
             contactIslands = [];
             // Native islands also add, but never propagate through, touching static world bodies.
-            islandStatics = [];
+            HashSet<PhysicsBody> statics = [];
+            islandStatics = statics;
+            bodyIslands = [];
             for (int i = bodies.Count - 1; i >= 0; i--)
             {
                 PhysicsBody seed = bodies[i];
-                if (seed.Type == PhysicsBodyType.Static || !visited.Add(seed))
+                if (seed.Type == PhysicsBodyType.Static || !seed.IsAwake || !visited.Add(seed))
                 {
                     continue;
                 }
 
                 List<PhysicsJoint> ordered = [];
                 List<PhysicsContact> islandContacts = [];
+                List<PhysicsBody> members = [];
+                HashSet<PhysicsBody> memberStatics = [];
+                // Native islands add, wake and later sleep static bodies too, once per island.
+                void AddIslandStatic(PhysicsBody body)
+                {
+                    _ = statics.Add(body);
+                    if (memberStatics.Add(body))
+                    {
+                        body.SetAwake(true);
+                        members.Add(body);
+                    }
+                }
                 islands.Add(ordered);
                 contactIslands.Add(islandContacts);
+                bodyIslands.Add(members);
                 Stack<PhysicsBody> stack = new();
                 stack.Push(seed);
                 while (stack.TryPop(out PhysicsBody? body))
                 {
+                    // Joining an island wakes the body.
+                    body.SetAwake(true);
+                    members.Add(body);
                     foreach (PhysicsContact contact in contactEdges[body])
                     {
                         if (!seenContacts.Add(contact))
@@ -571,7 +599,7 @@ namespace Ctr2.Engine.Physics
                         PhysicsBody? other = contact.Body == body ? contact.OtherBody : contact.Body;
                         if (other != null && other.Type == PhysicsBodyType.Static)
                         {
-                            _ = islandStatics.Add(other);
+                            AddIslandStatic(other);
                         }
                         else if (other != null && visited.Add(other))
                         {
@@ -591,7 +619,7 @@ namespace Ctr2.Engine.Physics
                         PhysicsBody other = joint.A == body ? joint.B : joint.A;
                         if (other.Type == PhysicsBodyType.Static)
                         {
-                            _ = islandStatics.Add(other);
+                            AddIslandStatic(other);
                         }
                         else if (visited.Add(other))
                         {

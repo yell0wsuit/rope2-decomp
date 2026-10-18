@@ -169,9 +169,19 @@ namespace Ctr2.Engine.Physics
                 BodyCandidate pair = entry.Value;
                 PhysicsBody a = pair.A.Body!, b = pair.B.Body!;
                 // SetBodyType refilters every contact of the changed body, so this matches native flagged filtering.
-                if ((a.Mass == 0 && b.Mass == 0) || JointBlocksCollision(a, b) || !ShouldCollide(pair.A.Filter, pair.B.Filter) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
+                bool filtered = (a.Mass == 0 && b.Mass == 0) || JointBlocksCollision(a, b) || !ShouldCollide(pair.A.Filter, pair.B.Filter);
+                if (!filtered && !a.IsActiveMover && !b.IsActiveMover)
                 {
-                    RecordContactChange(pair.A, pair.B, pair.CreationOrder, pair.Touching, false, true);
+                    // Sleeping pairs keep their manifold without updating.
+                    if (pair.Manifold != null && pair.Enabled)
+                    {
+                        active.Add(pair.Manifold);
+                    }
+                    continue;
+                }
+                if (filtered || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
+                {
+                    DestroyCandidate(pair);
                     _ = bodyContacts.Remove(entry.Key);
                     continue;
                 }
@@ -181,6 +191,17 @@ namespace Ctr2.Engine.Physics
                 }
             }
             return active;
+        }
+
+        /// <summary>Native contact destruction: emits a touching End and wakes both bodies when points existed.</summary>
+        private void DestroyCandidate(ContactCandidate candidate)
+        {
+            RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, false, true);
+            if (candidate.Manifold != null)
+            {
+                candidate.BodyA.SetAwake(true);
+                candidate.BodyB.SetAwake(true);
+            }
         }
 
         /// <summary>Computes a fresh solid manifold with zero impulses at the bodies' current transforms.</summary>
@@ -235,6 +256,11 @@ namespace Ctr2.Engine.Physics
             }
             // Losing the manifold keeps candidate order, but clears warm-start impulses.
             bool touching = sensor ? SensorOverlap(candidate.A, candidate.B) : next != null;
+            if (!sensor && touching != candidate.Touching)
+            {
+                candidate.BodyA.SetAwake(true);
+                candidate.BodyB.SetAwake(true);
+            }
             RecordContactChange(candidate.A, candidate.B, candidate.CreationOrder, candidate.Touching, touching, false, next);
             candidate.Touching = touching;
             candidate.Manifold = next;
@@ -316,6 +342,8 @@ namespace Ctr2.Engine.Physics
                     if (!bodyContacts.ContainsKey(bodyKey))
                     {
                         bodyContacts.Add(bodyKey, new(a, b, ++contactSequence));
+                        a.Body.SetAwake(true);
+                        b.Body.SetAwake(true);
                     }
 
                     continue;
@@ -333,6 +361,7 @@ namespace Ctr2.Engine.Physics
                 {
                     bool terrainFirst = b.Body.PolygonFixtures.Count == 0 || nativeA.Terrain != null;
                     contacts.Add(key, new(b, a, ++contactSequence, terrainFirst));
+                    b.Body.SetAwake(true);
                 }
             }
         }
@@ -356,12 +385,13 @@ namespace Ctr2.Engine.Physics
             return starts;
         }
 
-        private void SynchronizeBodyProxies(Dictionary<PhysicsBody, (Vector2 Origin, float Angle)> starts)
+        private void SynchronizeBodyProxies(Dictionary<PhysicsBody, (Vector2 Origin, float Angle)> starts, HashSet<PhysicsBody> islandBodies)
         {
             for (int bodyIndex = bodies.Count - 1; bodyIndex >= 0; bodyIndex--)
             {
                 PhysicsBody body = bodies[bodyIndex];
-                if (!starts.TryGetValue(body, out (Vector2 Origin, float Angle) start))
+                // Bodies that sat out every island did not move.
+                if (!islandBodies.Contains(body) || !starts.TryGetValue(body, out (Vector2 Origin, float Angle) start))
                 {
                     continue;
                 }

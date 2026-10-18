@@ -21,7 +21,12 @@ namespace Ctr2.Engine.Physics
         public void SetFixtureSensor(int fixture, bool isSensor)
         {
             ThrowIfLocked();
-            proxies[fixture].IsSensor = isSensor;
+            FixtureProxy proxy = proxies[fixture];
+            if (proxy.IsSensor != isSensor)
+            {
+                proxy.Body?.SetAwake(true);
+            }
+            proxy.IsSensor = isSensor;
         }
     }
 }
