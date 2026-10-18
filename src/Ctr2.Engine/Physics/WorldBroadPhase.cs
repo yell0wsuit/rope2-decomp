@@ -265,7 +265,8 @@ namespace Ctr2.Engine.Physics
             {
                 if (body.Mass > 0)
                 {
-                    starts.Add(body, (body.Origin, body.Angle));
+                    // Native rebuilds the start transform from the sweep, not the cached teleport transform.
+                    starts.Add(body, (body.ComputedOrigin, body.Angle));
                 }
             }
             return starts;

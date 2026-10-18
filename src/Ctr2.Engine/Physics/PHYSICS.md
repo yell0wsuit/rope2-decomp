@@ -1,7 +1,7 @@
 # Candy, character, cutting, terrain and star physics slice
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
-[the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
+[the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies with native velocity, impulse, force and teleport controls,
 rope/soft-distance and revolute joints with rotating body-local anchors, discrete circle/circle and
 polygon/circle and polygon/polygon body contacts, and circle/polygon contacts against static convex terrain.
 A native-style dynamic-tree broadphase owns fixture proxies and supported discrete terrain contacts.
@@ -223,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `BodyControlReference.json` | 900 native ticks: velocity setters, point/angular impulses, accumulated forces/torques, gravity-scale changes and teleports. Finite body states/proxy bounds, exact proxy IDs and pre-/post-step candidate/event metadata. |
 | `RevoluteReference.json` | 2,340 native ticks: free/motor hinges, lower/upper/equal/narrow limits, equal-width threshold neighbors, fixed rotation, offset COM, contacts and topology changes. Finite body/anchor/reaction/motor state and exact limit/candidate/event metadata. |
 | `FixtureSensorReference.json` | 720 native world ticks: mixed triangle/circle/polygon sensors, terrain initialization/toggles, body broadcasts, filters/joints and proxy reuse. Exact per-fixture flags/events/candidates/proxy IDs, finite bounds/body states and unchanged mass. |
 | `SensorEventsReference.json` | 1,170 native world ticks: sensor passages, mixed/compound pairs, terrain orientation, sensor/solid toggles, masks/joints and destruction/replacement. Exact ordered Begin/End snapshots, all fixture candidates/manifold counts and finite body states. |
@@ -804,12 +805,57 @@ APIs remain subsequent work. A configured initial rope-segment spring without a
 visible creation call is not treated as proof that such a joint exists at runtime.
 Authored gameplay joint construction remains a separate integration gate.
 
+## Body velocity, impulse, force and transform controls
+
+`PhysicsBody` exposes the native runtime controls the game calls on its bodies:
+`SetLinearVelocity`, `SetAngularVelocity`, `ApplyLinearImpulse(impulse, point)`,
+`ApplyAngularImpulse`, `ApplyForce(force, point)`, `ApplyForceToCenter`, `ApplyTorque`
+and a settable `GravityScale`. Static bodies ignore every velocity, impulse and force
+call, as native does. Point arms are measured from the center of mass. Impulses change
+velocity immediately. Forces and torques accumulate until the next step, integrate as
+`h * (gravityScale * gravity + invMass * force)` and `h * invI * torque` with native
+grouping, and clear after every step. Arguments must be finite; gravity scale is
+bounded to +/-1,000,000. Sleeping stays disabled, matching the game scene's
+`SetAllowSleeping(false)`, so wake side effects have no managed counterpart.
+
+`PhysicsWorld.SetTransform(body, origin, angle)` teleports an owned static or dynamic
+body by its authored origin. Velocities and existing manifolds are kept. Each fixture
+proxy moves through the tree in native fixture-list order with zero displacement, and
+new pairs are discovered immediately, so candidates exist before the next step and
+take their creation order from the teleport. `Origin` reads back exactly as given
+until the next position or angle write. The step's start transform and the
+end-of-step synchronization recompute it from the center of mass, as native
+`SynchronizeTransform` does.
+
+`BodyControlReference.json` compares five independent native scenes through tick 180
+(900 snapshots): velocity replacement with damping and a rope, compound and fixed-
+rotation impulses, center/point forces and torques beside terrain contacts,
+gravity-scale changes around a spring, and teleports into terrain/body overlap
+(including a static body, an in-place nudge and several teleports in one tick). Body
+states and proxy bounds use the unchanged 0.00002 tolerance. Proxy IDs, pre-step and
+post-step candidates, and events match exactly. A focused test confirms that a
+teleported origin reads back exactly, which plain recomputation does not guarantee.
+Fixture SHA-256: `e5edbb6ea6900b8ac494017b824ea8cf844c8e53ea1794ace13e1b478f4ceeea`.
+
+The CTR2 profile's zero AABB extension and unit displacement multiplier make proxy
+re-insertion knife-edge for a body in uniform motion. The fat box predicts exactly
+the next tight box, so the containment test is decided by last-bit rounding, in the
+native game as well. Managed float noise in that regime can shift one re-insertion
+by a step. The fixture scenes therefore avoid uniform sliding, and the knife edge
+remains a limit on proxy-ID parity during steady motion. Single-corner rocking
+contacts under sustained forcing likewise amplify the existing terrain-contact float
+noise about 1.2x per tick and are not used as acceptance scenes.
+
+The game's only mouse joint is guarded by a null check and is never created, so it is
+not ported. Body type changes (`SetType`) and mass resets remain separate work.
+
 ## Running numerical verification
 
 From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyControlTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RevoluteJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FixtureSensorTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SensorContactTests'
@@ -838,8 +884,8 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are missing distance/rope APIs (including zero-rest-length springs),
-prismatic constraints and native TOI/separation-function islands. Synchronous callback/gameplay integration and
+Next gates are body type changes and mass resets, missing distance/rope APIs (including zero-rest-length springs),
+prismatic constraints, world queries (ray casts, AABB queries, point tests) and native TOI/separation-function islands. Synchronous callback/gameplay integration and
 sleeping remain separate verification work. Then verify Windows game body
 construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons

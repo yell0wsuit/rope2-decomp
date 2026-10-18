@@ -12,7 +12,12 @@ namespace Ctr2.Engine.Physics
         /// <value>The current world-space center.</value>
         public Vector2 Position
         {
-            get; internal set;
+            get;
+            internal set
+            {
+                field = value;
+                TransformOrigin = null;
+            }
         }
         /// <summary>Gets the velocity in meters per second.</summary>
         /// <value>The current linear velocity.</value>
@@ -41,7 +46,12 @@ namespace Ctr2.Engine.Physics
         /// <value>The integrated circle angle.</value>
         public float Angle
         {
-            get; internal set;
+            get;
+            internal set
+            {
+                field = value;
+                TransformOrigin = null;
+            }
         }
         /// <summary>Gets the clockwise angular velocity in radians per second.</summary>
         /// <value>The velocity produced by friction impulses.</value>
@@ -93,11 +103,13 @@ namespace Ctr2.Engine.Physics
         /// <summary>Gets the inverse mass used by constraints.</summary>
         /// <value>Zero for static bodies.</value>
         internal float InverseMass => Mass > 0 ? 1 / Mass : 0;
-        /// <summary>Gets the multiplier applied to world gravity.</summary>
-        /// <value>The authored gravity scale.</value>
+        /// <summary>Gets or sets the multiplier applied to world gravity.</summary>
+        /// <value>A finite scale within +/-1,000,000; changes apply from the next step.</value>
+        /// <exception cref="ArgumentOutOfRangeException">The scale is nonfinite or out of range.</exception>
         public float GravityScale
         {
-            get; internal set;
+            get;
+            set => field = float.IsFinite(value) && MathF.Abs(value) <= 1000000 ? value : throw new ArgumentOutOfRangeException(nameof(value));
         }
         /// <summary>Gets the circle radius in meters, or zero for a compound polygon.</summary>
         /// <value>The authored radius, independent of visual dimensions.</value>
@@ -289,7 +301,9 @@ namespace Ctr2.Engine.Physics
             {
                 if (body.Mass > 0)
                 {
-                    body.Velocity += TimeStep * new Vector2(0, body.GravityScale * 10);
+                    // Native grouping: h * (gravityScale * gravity + invMass * force), then h * invI * torque.
+                    body.Velocity += TimeStep * ((body.GravityScale * new Vector2(0, 10)) + (body.InverseMass * body.Force));
+                    body.AngularVelocity += TimeStep * body.InverseInertia * body.Torque;
                     body.Velocity *= Math.Clamp(1 - (TimeStep * body.LinearDamping), 0, 1);
                     body.AngularVelocity *= Math.Clamp(1 - (TimeStep * body.AngularDamping), 0, 1);
                 }
@@ -374,6 +388,11 @@ namespace Ctr2.Engine.Physics
                 }
             }
             SynchronizeBodyProxies(proxyStarts);
+            foreach (PhysicsBody body in bodies)
+            {
+                body.Force = Vector2.Zero;
+                body.Torque = 0;
+            }
             stepped = true;
         }
 

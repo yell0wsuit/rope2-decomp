@@ -24,8 +24,14 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Gets the authored body origin in world meters.</summary>
-        /// <value>The center of mass minus its rotated local offset.</value>
-        public Vector2 Origin => Position - PhysicsMath.Rotate(LocalCenter, Angle);
+        /// <value>The exact teleported origin until the next position change, otherwise the center of mass minus its rotated local offset.</value>
+        public Vector2 Origin => TransformOrigin ?? ComputedOrigin;
+
+        /// <summary>Gets the origin recomputed from the center of mass, as native <c>SynchronizeTransform</c> does.</summary>
+        internal Vector2 ComputedOrigin => Position - PhysicsMath.Rotate(LocalCenter, Angle);
+
+        /// <summary>Native cached transform origin set by <c>SetTransform</c>; cleared by any position or angle write.</summary>
+        internal Vector2? TransformOrigin;
 
         /// <summary>Gets whether angular integration is disabled.</summary>
         /// <value>True for a fixed-rotation polygon.</value>
