@@ -19,7 +19,7 @@ namespace Ctr2.Engine.Physics
     /// <param name="Bounds">Stored predicted bounds in meters.</param>
     public readonly record struct PhysicsProxyState(int Fixture, int ProxyId, PhysicsAabb Bounds);
 
-    /// <summary>An immutable supported circle-pair diagnostic, ordered by native fixture orientation.</summary>
+    /// <summary>An immutable supported body-pair diagnostic, ordered by native fixture orientation.</summary>
     /// <param name="FirstFixture">Stable label of fixture A.</param>
     /// <param name="SecondFixture">Stable label of fixture B.</param>
     /// <param name="CreationOrder">Persistent candidate creation sequence.</param>
@@ -28,9 +28,9 @@ namespace Ctr2.Engine.Physics
 
     public sealed partial class PhysicsWorld
     {
-        /// <summary>Captures supported solid circle candidates in reverse creation order.</summary>
+        /// <summary>Captures supported solid body candidates in reverse creation order.</summary>
         public IReadOnlyList<PhysicsBodyContactState> CaptureBodyContacts() =>
-            Array.AsReadOnly(circleContacts.Values.Where(c => !c.A.Body!.IsSensor && !c.B.Body!.IsSensor)
+            Array.AsReadOnly(bodyContacts.Values.Where(c => !c.A.Body!.IsSensor && !c.B.Body!.IsSensor)
                 .OrderByDescending(c => c.CreationOrder)
                 .Select(c => new PhysicsBodyContactState(c.A.Label, c.B.Label, c.CreationOrder, c.Manifold != null)).ToArray());
 
@@ -48,7 +48,7 @@ namespace Ctr2.Engine.Physics
         private readonly PhysicsBroadPhase broadPhase = new();
         private readonly Dictionary<int, FixtureProxy> proxies = [];
         private readonly Dictionary<PhysicsBody, List<FixtureProxy>> bodyProxies = [];
-        private readonly Dictionary<(int, int), CircleCandidate> circleContacts = [];
+        private readonly Dictionary<(int, int), BodyCandidate> bodyContacts = [];
         private readonly Dictionary<(PhysicsBody, PhysicsBody), int> collisionBlocks = [];
         private int fixtureLabel;
         private bool newFixtures;
@@ -71,7 +71,7 @@ namespace Ctr2.Engine.Physics
             internal PhysicsContact? Manifold;
         }
 
-        private sealed class CircleCandidate(FixtureProxy a, FixtureProxy b, long order)
+        private sealed class BodyCandidate(FixtureProxy a, FixtureProxy b, long order)
         {
             internal readonly FixtureProxy A = a;
             internal readonly FixtureProxy B = b;
@@ -79,7 +79,7 @@ namespace Ctr2.Engine.Physics
             // Native contacts mix material once at candidate construction, including before first touch.
             internal readonly float Friction = MathF.Sqrt(a.Body!.Friction * b.Body!.Friction);
             internal readonly float Restitution = MathF.Max(a.Body!.Restitution, b.Body!.Restitution);
-            internal CircleContact? Manifold;
+            internal SinglePointContact? Manifold;
         }
 
         private bool JointBlocksCollision(PhysicsBody a, PhysicsBody b) => collisionBlocks.ContainsKey((a, b));
@@ -100,19 +100,21 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        private List<PhysicsContact> UpdateCircleContacts()
+        private List<PhysicsContact> UpdateBodyContacts()
         {
             List<PhysicsContact> active = [];
-            foreach (var entry in circleContacts.ToArray())
+            foreach (var entry in bodyContacts.ToArray())
             {
-                CircleCandidate pair = entry.Value;
+                BodyCandidate pair = entry.Value;
                 PhysicsBody a = pair.A.Body!, b = pair.B.Body!;
                 if (JointBlocksCollision(a, b) || !broadPhase.GetBounds(pair.A.Id).Overlaps(broadPhase.GetBounds(pair.B.Id)))
                 {
-                    circleContacts.Remove(entry.Key);
+                    bodyContacts.Remove(entry.Key);
                     continue;
                 }
-                CircleContact? next = a.IsSensor || b.IsSensor ? null : CircleContact.Create(a, b, pair.Friction, pair.Restitution);
+                SinglePointContact? next = a.IsSensor || b.IsSensor ? null : a.PolygonFixtures.Count == 0 ?
+                    CircleContact.Create(a, b, pair.Friction, pair.Restitution) :
+                    PolygonCircleContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, pair.Friction, pair.Restitution);
                 if (next != null)
                 {
                     if (pair.Manifold != null)
@@ -167,24 +169,27 @@ namespace Ctr2.Engine.Physics
                 proxies.Remove(fixtures[i].Label);
             }
             bodyProxies.Remove(body);
-            foreach (var entry in circleContacts.Where(c => c.Value.A.Body == body || c.Value.B.Body == body).ToArray())
+            foreach (var entry in bodyContacts.Where(c => c.Value.A.Body == body || c.Value.B.Body == body).ToArray())
             {
-                circleContacts.Remove(entry.Key);
+                bodyContacts.Remove(entry.Key);
             }
         }
 
-        private void FindNewTerrainContacts()
+        private void FindNewContacts()
         {
             foreach (BroadPhasePair pair in broadPhase.UpdatePairs())
             {
                 FixtureProxy a = proxies[pair.First], b = proxies[pair.Second];
                 if (a.Body != null && b.Body != null && a.Body != b.Body &&
-                    a.Body.PolygonFixtures.Count == 0 && b.Body.PolygonFixtures.Count == 0 &&
+                    (a.Body.PolygonFixtures.Count == 0 || b.Body.PolygonFixtures.Count == 0) &&
                     (a.Body.Mass > 0 || b.Body.Mass > 0) && !JointBlocksCollision(a.Body, b.Body))
                 {
-                    var circleKey = (a.Label, b.Label);
-                    if (!circleContacts.ContainsKey(circleKey))
-                        circleContacts.Add(circleKey, new(a, b, ++contactSequence));
+                    // The native factory swaps mixed pairs so the polygon is always fixture A.
+                    if (a.Body.PolygonFixtures.Count == 0 && b.Body.PolygonFixtures.Count > 0)
+                        (a, b) = (b, a);
+                    var bodyKey = (a.Label, b.Label);
+                    if (!bodyContacts.ContainsKey(bodyKey))
+                        bodyContacts.Add(bodyKey, new(a, b, ++contactSequence));
                     continue;
                 }
                 if (a.Terrain == null && b.Terrain != null)
@@ -207,7 +212,7 @@ namespace Ctr2.Engine.Physics
         {
             if (newFixtures)
             {
-                FindNewTerrainContacts();
+                FindNewContacts();
                 newFixtures = false;
             }
             Dictionary<PhysicsBody, (Vector2, float)> starts = [];
@@ -240,7 +245,7 @@ namespace Ctr2.Engine.Physics
                     broadPhase.MoveProxy(proxy.Id, PhysicsAabb.Combine(previous, current), origin - start.Origin);
                 }
             }
-            FindNewTerrainContacts();
+            FindNewContacts();
         }
 
         private static PhysicsAabb BodyBounds(PhysicsBody body, int index, Vector2 origin, float angle) =>

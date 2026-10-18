@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
+    <None Update="PolygonCircleReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="CircleContactReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ContactLifecycleReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BroadPhaseReference.json" CopyToOutputDirectory="PreserveNewest" />

@@ -9,7 +9,7 @@ namespace Ctr2.Engine.Physics
         {
             get;
         }
-        /// <summary>Gets the second body for a circle pair, or null for implicit static terrain.</summary>
+        /// <summary>Gets fixture B's body for a body pair, or null for implicit static terrain.</summary>
         internal virtual PhysicsBody? OtherBody => null;
         /// <summary>Contact creation sequence retained while broadphase proxies overlap.</summary>
         internal long CreationOrder;

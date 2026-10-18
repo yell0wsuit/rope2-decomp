@@ -284,7 +284,7 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>Always-awake Box2D subset with local-anchor joints, circle pairs and circle/polygon terrain contacts.</summary>
+    /// <summary>Always-awake Box2D subset with local-anchor joints, circle and polygon-circle pairs, and terrain contacts.</summary>
     public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>
@@ -431,7 +431,7 @@ namespace Ctr2.Engine.Physics
                 }
             }
             List<PhysicsContact> touching = UpdateTerrainContacts();
-            touching.AddRange(UpdateCircleContacts());
+            touching.AddRange(UpdateBodyContacts());
             List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands);
             List<PhysicsJoint> ordered = [];
             foreach (List<PhysicsJoint> island in islands)
