@@ -2,7 +2,7 @@
 
 This is an altered C# subset of Erin Catto's Box2D 2.2.1. See
 [the original license](BOX2D_LICENSE.txt). It implements always-awake circle and compound polygon bodies,
-rope/soft-distance joints with rotating body-local anchors, discrete circle/circle and
+rope/soft-distance and revolute joints with rotating body-local anchors, discrete circle/circle and
 polygon/circle and polygon/polygon body contacts, and circle/polygon contacts against static convex terrain.
 A native-style dynamic-tree broadphase owns fixture proxies and supported discrete terrain contacts.
 It is not a complete Box2D replacement or proof of original-game runtime parity.
@@ -223,6 +223,7 @@ compilation nor game assets.
 
 | Fixture | Scenarios and columns |
 | --- | --- |
+| `RevoluteReference.json` | 2,340 native ticks: free/motor hinges, lower/upper/equal/narrow limits, equal-width threshold neighbors, fixed rotation, offset COM, contacts and topology changes. Finite body/anchor/reaction/motor state and exact limit/candidate/event metadata. |
 | `FixtureSensorReference.json` | 720 native world ticks: mixed triangle/circle/polygon sensors, terrain initialization/toggles, body broadcasts, filters/joints and proxy reuse. Exact per-fixture flags/events/candidates/proxy IDs, finite bounds/body states and unchanged mass. |
 | `SensorEventsReference.json` | 1,170 native world ticks: sensor passages, mixed/compound pairs, terrain orientation, sensor/solid toggles, masks/joints and destruction/replacement. Exact ordered Begin/End snapshots, all fixture candidates/manifold counts and finite body states. |
 | `GjkReference.json` | 1,752 native standalone distance queries: fresh/warm caches, circle/segment/polygon hulls, transforms, radii on/off, near-threshold gaps and cached triangle jumps. Witnesses/distance/metric, exact iterations/simplex support IDs/order and overlap. |
@@ -319,12 +320,13 @@ steps at `0.0167f` with 15 velocity and 30 ordinary position iterations. Native 
 position solving uses its separate 20-iteration limit. These policies must be kept
 distinct from constructor defaults and the ordinary step's iteration counts.
 
-Windows behavioral equivalence remains unknown. Static artifact identity confirms
-the supplied Windows executable and ARM Android library, but available deep native
-analysis providers were unavailable during this audit. Windows assets continue to
-use Windows metadata; the behavioral evidence above is Android-only. Original-runtime
-traces or Windows instruction-level analysis remain necessary before claiming
-cross-build or bitwise parity.
+The project uses the shared Windows/Android game code as its behavior reference,
+as confirmed by the user. The supplied Android reconstruction and audited native
+numerical profile therefore guide the Windows port too; separate Windows disassembly
+is not an acceptance gate. Windows assets still use their own metadata and resource
+IDs. Synthetic source-oracle comparisons verify their specified inputs; complete
+authored-input trajectory acceptance remains necessary before declaring the port's
+physics complete.
 
 ## Broadphase verification
 
@@ -394,7 +396,7 @@ change a later proxy-containment decision despite tiny body-state differences.
 
 Custom filter callbacks, synchronous contact callbacks, raycasts and tree rebuilding remain separate work. The analytical CCD
 subset synchronizes its final transforms but does not reproduce native TOI proxy
-updates or callback timing. Windows behavioral equivalence remains unverified.
+updates or callback timing. Complete authored-input trajectory coverage remains pending.
 
 ## Discrete circle pairs and contact-connected islands
 
@@ -423,7 +425,8 @@ do not propagate traversal, allowing independent islands to share terrain/static
 circles and stop position iterations independently. Velocity iterations solve
 joints before contacts; position iterations solve contacts before joints.
 
-All current joint APIs use native default `collideConnected = false`. Suppression
+Rope/spring APIs use native default `collideConnected = false`; revolute definitions
+can explicitly allow collisions. Suppression
 is counted per body pair so removing one of multiple joints retains the block.
 Adding a blocking joint retires an existing circle candidate on the next update.
 Removing it does not touch proxies or force rediscovery: a previously rejected
@@ -474,8 +477,8 @@ Fixture SHA-256: `b861c5a5d962c82385b0a0094d3b5ff30e5528059b21b3f9ffe3745a045543
 
 Continuous body-pair collision, sleeping, custom filter callbacks and synchronous
 native/gameplay callback integration remain separate work. Terrain
-added through `AddTerrain` retains its separately verified paths. Original Windows
-runtime and cross-platform bitwise parity remain unverified.
+added through `AddTerrain` retains its separately verified paths. Complete authored
+trajectory coverage remains pending beyond these source-oracle fixtures.
 
 ## Discrete polygon-polygon body contacts
 
@@ -517,7 +520,7 @@ alternatives, including terrain contacts. They did not exercise the all-fail bra
 or a fallback with a nonzero cached second impulse; those remain source-reviewed
 rather than numerically covered. Fixture SHA-256:
 `b556c7f355b8a735918cb66a396787cc45b4888bb366002965860d66bf28a5eb`.
-Original Windows runtime equivalence remains unverified.
+Complete authored-input trajectory coverage remains pending.
 
 ## Fixture collision filters
 
@@ -619,8 +622,8 @@ SHA-256: `dac725265d6cc252ec20253cd03adfcc1d57cd63df4cb439b0b07ffe78c764c9`.
 
 The world now routes sensor narrowphase through this GJK query as described below.
 Solid-contact geometry and existing gameplay overlap helpers retain their paths.
-Native TOI/separation functions and original Android/Windows runtime parity remain
-separate acceptance work.
+Native TOI/separation functions and complete authored-input trajectory comparisons
+remain separate acceptance work.
 
 ## Sensor touching and queued contact transitions
 
@@ -730,12 +733,84 @@ snapshots, no-touch setter behavior, pair-specific diagnostics and sensor exclus
 from primary/additional analytical sweep contacts. Fixture SHA-256:
 `c939a65759435f9ffbfc89c6003ce7b319b23f3b4f35de4aa39c1352f5ab1dd8`.
 
+## Revolute hinges, angular limits and motors
+
+`AddRevolute(a, b, PhysicsRevoluteDefinition)` joins body-origin local anchors and
+stores an explicit reference angle. The world-anchor overload derives both local
+anchors and the current relative reference angle. `AddCircle` now accepts an
+optional finite initial angle, default zero, for authored hinge configurations.
+The common `PhysicsJoint` abstraction keeps native mixed joint/contact traversal;
+existing rope/spring equations moved unchanged into their owned implementation.
+Their public anchor/reaction/length APIs remain available. Revolute joints have
+no length parameter; reading the inherited compatibility `Length` throws.
+
+The hinge solves native 2x2 point constraints and coupled 3x3 point/angular limits.
+Lower/upper unilateral constraints use the reduced 2x2 solve when the accumulated
+angular impulse would cross its permitted sign. Scalar determinant/cross/dot
+arithmetic, initialization-versus-position matrix multiplication order and warm
+angular sum grouping are retained. Position solving corrects angular limits first,
+then rebuilds rotating anchor arms for point correction, with the original
+uncorrected-error convergence checks. Joint angular slop uses the audited one
+degree expression; maximum angular correction retains the stock eight degrees.
+
+`LimitEnabled` and `SetLimits(lower, upper)` clear the cached limit impulse only
+when their values change. `LimitState` remains the most recent initialization's
+state until another step. Limits narrower than twice angular slop use native
+equal-limit behavior and target the lower endpoint. Entering Equal during
+initialization does not invent an extra cache reset. Fixed rotation bypasses the
+angular motor/limit while retaining point correction.
+
+`MotorEnabled`, `MotorSpeed` and `MaxMotorTorque` retain the native motor accumulator
+until velocity initialization/solving handles it. Torque clamps use fixed-step
+duration times maximum torque. `MotorTorque` reports that accumulator per second;
+`ReactionTorque` reports only the angular limit component. `ReactionForce`, world
+anchors, relative `Angle` and `Speed` are available independently. All bodies remain
+awake. Scalar parameters are finite within +/-1,000,000 (torque nonnegative), local
+anchors within +/-10,000 meters, and limits ordered. Invalid creation/setters reject
+before world ownership or prior parameter/cache values change.
+
+A revolute definition's `CollideConnected` defaults false. An allowed hinge does
+not override another blocking joint between the same bodies. Removing an allowed
+hinge does not decrement the block count; generic joint/body removal keeps native
+candidate/filter ownership and existing no-forced-rediscovery behavior.
+
+`RevoluteReference.json` compares thirteen independent native scenes through tick 180
+(2,340 snapshots): free pendulum, motor reversal/torque changes, lower/upper/equal/
+narrow limits, fixed rotation, offset compound COM, contacts and mixed joint removal/
+recreation. Three further scenes place the limit width one float below, exactly at
+and one float above twice angular slop, the last starting exactly on its upper bound. Six finite body components plus anchors, reaction force/torque, motor
+torque, relative angle/speed use the unchanged 0.00002 tolerance. Limit state and
+ordered candidate/event metadata match exactly. Boundary regressions cover native
+immediate setter cache behavior, world-anchor construction, invalid/foreign/retired
+ownership, and multiple blocking joints alongside a colliding hinge. Mixed-scene
+secondary ropes explicitly use native definition anchors (-1,0)/(1,0), rather than
+the center-anchor convenience API.
+
+Private native instrumentation produced byte-identical fixture output. All four
+limit states, fixed rotation, lower/upper/equal positional branches, motor solve/
+disabled/equal/fixed categories, full 3x3 limit alternatives and both reduced 2x2
+unilateral clamps were observed, along with the strict equal-width threshold and an
+exact-bound initialization. This does not establish every exact threshold,
+singular 3x3, variable-timestep or disabled-warmstart case. Same-value motor setter
+semantics have focused managed/source checks; the native fixture exercises changed
+motor setter calls. Fixture SHA-256:
+`cd3fee7e64235ff19952ea73c609b6e658d0b2c779674156ba83438581d0a5bb`.
+
+The bounded game-source usage audit found revolute joints in Pin, Helicopter,
+Thrower, Frog's tongue and intro objects; prismatic joints in PromoBanner. Submitted
+distance joints also include zero-rest-length banner springs and data-driven
+stretch frequencies. Prismatic and missing distance/rope runtime/zero-rest-length
+APIs remain subsequent work. A configured initial rope-segment spring without a
+visible creation call is not treated as proof that such a joint exists at runtime.
+Authored gameplay joint construction remains a separate integration gate.
+
 ## Running numerical verification
 
 From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RevoluteJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FixtureSensorTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SensorContactTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PhysicsDistanceTests'
@@ -763,8 +838,8 @@ complete or proven 1:1 replacement for the game's physics. The audited numerical
 profile and synthetic comparisons still leave control-flow and runtime differences
 to verify.
 
-Next gates are remaining joint APIs/limited-angle cases and native
-TOI/separation-function islands. Synchronous callback/gameplay integration and
+Next gates are missing distance/rope APIs (including zero-rest-length springs),
+prismatic constraints and native TOI/separation-function islands. Synchronous callback/gameplay integration and
 sleeping remain separate verification work. Then verify Windows game body
 construction, materials, fixtures, attachments and physics-based gameplay against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
