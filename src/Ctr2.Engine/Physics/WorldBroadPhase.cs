@@ -26,8 +26,22 @@ namespace Ctr2.Engine.Physics
     /// <param name="Touching">Whether the latest update produced a solid manifold.</param>
     public readonly record struct PhysicsBodyContactState(int FirstFixture, int SecondFixture, long CreationOrder, bool Touching);
 
+    /// <summary>An immutable feature ID for one point of a touching body-pair manifold.</summary>
+    /// <param name="FirstFixture">Native fixture A's stable label.</param>
+    /// <param name="SecondFixture">Native fixture B's stable label.</param>
+    /// <param name="Point">Native manifold point index.</param>
+    /// <param name="Feature">Packed native contact feature ID.</param>
+    public readonly record struct PhysicsContactFeatureState(int FirstFixture, int SecondFixture, int Point, int Feature);
+
     public sealed partial class PhysicsWorld
     {
+        /// <summary>Captures native feature IDs in reverse candidate creation order, then manifold point order.</summary>
+        public IReadOnlyList<PhysicsContactFeatureState> CaptureBodyContactFeatures() =>
+            Array.AsReadOnly(bodyContacts.Values.Where(c => c.Manifold != null && !c.A.Body!.IsSensor && !c.B.Body!.IsSensor)
+                .OrderByDescending(c => c.CreationOrder)
+                .SelectMany(c => c.Manifold!.CaptureFeatures().Select((feature, index) =>
+                    new PhysicsContactFeatureState(c.A.Label, c.B.Label, index, feature))).ToArray());
+
         /// <summary>Captures supported solid body candidates in reverse creation order.</summary>
         public IReadOnlyList<PhysicsBodyContactState> CaptureBodyContacts() =>
             Array.AsReadOnly(bodyContacts.Values.Where(c => !c.A.Body!.IsSensor && !c.B.Body!.IsSensor)
@@ -79,7 +93,7 @@ namespace Ctr2.Engine.Physics
             // Native contacts mix material once at candidate construction, including before first touch.
             internal readonly float Friction = MathF.Sqrt(a.Body!.Friction * b.Body!.Friction);
             internal readonly float Restitution = MathF.Max(a.Body!.Restitution, b.Body!.Restitution);
-            internal SinglePointContact? Manifold;
+            internal PhysicsContact? Manifold;
         }
 
         private bool JointBlocksCollision(PhysicsBody a, PhysicsBody b) => collisionBlocks.ContainsKey((a, b));
@@ -112,9 +126,11 @@ namespace Ctr2.Engine.Physics
                     bodyContacts.Remove(entry.Key);
                     continue;
                 }
-                SinglePointContact? next = a.IsSensor || b.IsSensor ? null : a.PolygonFixtures.Count == 0 ?
+                PhysicsContact? next = a.IsSensor || b.IsSensor ? null : a.PolygonFixtures.Count == 0 ?
                     CircleContact.Create(a, b, pair.Friction, pair.Restitution) :
-                    PolygonCircleContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, pair.Friction, pair.Restitution);
+                    b.PolygonFixtures.Count == 0 ?
+                    PolygonCircleContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, pair.Friction, pair.Restitution) :
+                    PolygonBodyContact.Create(a, a.PolygonFixtures[pair.A.LocalIndex], b, b.PolygonFixtures[pair.B.LocalIndex], pair.Friction, pair.Restitution);
                 if (next != null)
                 {
                     if (pair.Manifold != null)
@@ -181,7 +197,6 @@ namespace Ctr2.Engine.Physics
             {
                 FixtureProxy a = proxies[pair.First], b = proxies[pair.Second];
                 if (a.Body != null && b.Body != null && a.Body != b.Body &&
-                    (a.Body.PolygonFixtures.Count == 0 || b.Body.PolygonFixtures.Count == 0) &&
                     (a.Body.Mass > 0 || b.Body.Mass > 0) && !JointBlocksCollision(a.Body, b.Body))
                 {
                     // The native factory swaps mixed pairs so the polygon is always fixture A.

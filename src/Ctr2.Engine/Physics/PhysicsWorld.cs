@@ -284,7 +284,7 @@ namespace Ctr2.Engine.Physics
         }
     }
 
-    /// <summary>Always-awake Box2D subset with local-anchor joints, circle and polygon-circle pairs, and terrain contacts.</summary>
+    /// <summary>Always-awake Box2D subset with local-anchor joints, circle and polygon body pairs, and terrain contacts.</summary>
     public sealed partial class PhysicsWorld
     {
         /// <summary>Original game fixed timestep in seconds.</summary>

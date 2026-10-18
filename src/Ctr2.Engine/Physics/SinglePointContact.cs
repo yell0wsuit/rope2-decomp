@@ -24,6 +24,7 @@ namespace Ctr2.Engine.Physics
 
         internal override PhysicsBody Body => a;
         internal override PhysicsBody? OtherBody => b;
+        internal override int[] CaptureFeatures() => [0];
 
         protected SinglePointContact(PhysicsBody first, PhysicsBody second, float mixedFriction, float mixedRestitution)
         {

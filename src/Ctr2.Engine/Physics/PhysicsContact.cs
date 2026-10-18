@@ -11,6 +11,8 @@ namespace Ctr2.Engine.Physics
         }
         /// <summary>Gets fixture B's body for a body pair, or null for implicit static terrain.</summary>
         internal virtual PhysicsBody? OtherBody => null;
+        /// <summary>Snapshots native feature IDs in manifold point order.</summary>
+        internal virtual int[] CaptureFeatures() => [];
         /// <summary>Contact creation sequence retained while broadphase proxies overlap.</summary>
         internal long CreationOrder;
         /// <summary>Restores compatible accumulated impulses.</summary>

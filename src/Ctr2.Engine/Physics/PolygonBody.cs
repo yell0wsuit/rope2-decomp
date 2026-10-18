@@ -101,7 +101,7 @@ namespace Ctr2.Engine.Physics
         /// <param name="compound">Whether to create cyclic triangle fixtures instead of one convex fixture.</param>
         /// <returns>The owned dynamic body with its mass-weighted center.</returns>
         /// <exception cref="ArgumentException">Body data, mass or fixture budgets are invalid.</exception>
-        /// <remarks>Polygon CCD and body-to-body polygon/polygon contacts are not implemented in this subset.</remarks>
+        /// <remarks>Polygon contacts are discrete; polygon CCD is not implemented in this subset.</remarks>
         public PhysicsBody AddPolygon(ConvexPolygon shape, Vector2 origin, float density, float gravityScale, float angle = 0, bool fixedRotation = false, bool compound = true)
         {
             ArgumentNullException.ThrowIfNull(shape);
