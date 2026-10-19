@@ -1151,10 +1151,11 @@ physics-based gameplay must be verified against authored input traces. Passing
 synthetic fixtures is evidence for those scenarios; original-game trace comparisons
 are a separate acceptance gate. Presentation expansion follows those gates.
 
-## Opt-in forest gameplay
+## Opt-in gameplay
 
-`CandySimulation(..., play: true)` adds a bounded ordinary dry-forest slice with
-one candy and one Om Nom. Other mechanics and multiple protagonists/candies fail
+`CandySimulation(..., play: true)` adds a bounded dry-level slice with one candy
+and one Om Nom. As in the original scene, gameplay does not depend on the authored
+location, which only selects presentation. Other mechanics and multiple protagonists/candies fail
 explicitly. The desktop host selects first-entry arrival only for pack 1/entry 1;
 other negative spawns still fail. Diagnostics remain opt-out
 and retain their numerical fixture behavior.
@@ -1186,9 +1187,9 @@ costume substitutions, particles/audio and native contact ordering remain pendin
 complete native dynamic-contact graph. The original fade completion queues
 destruction; this subset retires after the completed fixed tick reaches 0.2 seconds.
 
-## First forest arrival and swipe hint
+## First-level arrival and swipe hint
 
-The first desktop forest entry preserves its authored negative character position
+The first production level (desktop pack 1/entry 1) preserves its authored negative character position
 and ordinary dynamic-body fall. Source initialization starts idle and suppresses
 the ordinary greeting. No separate camera trajectory, delay or input lock is
 invented. Its 30-leaf background burst runs solely in logical presentation units:
@@ -1220,7 +1221,7 @@ floating-point tick; exact original timing/visual parity still needs runtime com
 There are no moving stars, hazards or broader intro logic yet. Kinematic and
 static polygon bodies, noncenter anchors and every game joint type exist in the
 engine, but most game objects are not yet built on them.
-Broader consumption and completion mechanics beyond the opt-in forest slice,
+Broader consumption and completion mechanics beyond the opt-in gameplay slice,
 complex contact
 persistence/order, native triangle ordering and original recorded-input parity
 need further verification. The rope draws physical polylines without native

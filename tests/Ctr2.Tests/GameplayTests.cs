@@ -185,6 +185,20 @@ namespace Ctr2.Tests
             _ = Assert.Throws<InvalidDataException>(() => Create(objects));
         }
 
+        /// <summary>Location selects presentation only; supported gameplay starts in any authored location.</summary>
+        /// <param name="location">Authored game design location.</param>
+        [Theory]
+        [InlineData("canyon")]
+        [InlineData("ventilation")]
+        public void GameplayIsIndependentOfLocation(string location)
+        {
+            string design = CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "</layer></map>");
+            CandySimulation scene = new(LevelReader.Read($"<map><layer name='settings'><map width='320' height='480'/><gameDesign location='{location}'/></layer><layer name='Objects'><candy id='c' x='100' y='100'/><omnom x='100' y='100'/></layer></map>"),
+                LevelReader.Read(design), play: true);
+            scene.Step();
+            _ = Assert.Single(scene.Gameplay!.Consumptions);
+        }
+
         /// <summary>Ordinary dry scenes use the source margin plus 150 logical units for loss.</summary>
         [Fact]
         public void OutOfBoundsCandyFailsAndFreshConstructionResets()

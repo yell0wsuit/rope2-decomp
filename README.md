@@ -2,7 +2,7 @@
 
 An early C# port using selected framework code from [CutTheRopeDX](https://github.com/yell0wsuit/cuttherope-dx). PC comes first; a web host is planned later.
 
-**Current build: local asset import, Windows resource metadata extraction, desktop previews and an early playable ordinary forest slice. Full game behavior and presentation are still in progress.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
+**Current build: local asset import, Windows resource metadata extraction, desktop previews and an early playable gameplay slice. Full game behavior and presentation are still in progress.** The reused framework subset consists of DX's matrix stack and adapted Flash easing math; full framework, input and host extraction will follow the vertical slice. See [provenance](src/Ctr2.Engine/Framework/PROVENANCE.md).
 
 ## Your game assets
 
@@ -37,7 +37,7 @@ dotnet run --project src/Ctr2.Desktop -- preview cache/windows/assets/omnom_640_
 
 For offscreen verification, add `--width 640 --height 960 --snapshot local/atlas.png`. Create the `local/` directory first; snapshots do not overwrite existing files. `--frames 3` runs a bounded desktop presentation smoke test.
 
-## Play a forest level
+## Play a level
 
 After importing a full Windows package, start with pack 1, entry 1 or 2:
 
@@ -51,8 +51,9 @@ input; press Space to resume. The display reports collected stars and the result
 Restart restores the initial physics, stars, animation, input and replay clock.
 
 This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
-a swipe hint and static terrain in a dry forest level. Physical candy contact starts
-eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
+a swipe hint and static terrain in a dry level. Gameplay is independent of the
+authored location; currently only pack 1/entries 1 and 2 use nothing but supported
+mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
 leaf burst. The authored swipe hint appears after its delay; an early pointer
@@ -61,7 +62,7 @@ lock or camera movement is applied. Other mechanics report an unsupported-scope
 error. Falling/landing and airborne eating use source velocity
 history and terrain contacts. Static terrain impacts add procedural squash and rolling.
 Stand-up preparation applies the source center and angular impulses after its
-short squash/stretch animation. Playable scenes use the Windows forest background
+short squash/stretch animation. Forest-location scenes use the Windows forest background (other locations' backgrounds are pending)
 and stationary star IDLE/collection animations. Stars loop with three staggered
 phases and the source container pulse; collection playback follows fixed ticks,
 including pause and restart. The wide background fits the logical scene height

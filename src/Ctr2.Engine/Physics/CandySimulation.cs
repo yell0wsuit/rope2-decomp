@@ -176,7 +176,7 @@ namespace Ctr2.Engine.Physics
             LoadStars(layout, design);
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
-            Gameplay = play ? new LevelGameplay(this, layout, level, firstLevelArrival) : null;
+            Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival) : null;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>

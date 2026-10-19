@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 
-using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
@@ -66,7 +65,7 @@ namespace Ctr2.Engine.Physics
     /// <param name="Character">Authored character index.</param>
     public sealed record CandyConsumption(int Tick, int Candy, int Character);
 
-    /// <summary>Opt-in gameplay state for one ordinary dry forest candy and character.</summary>
+    /// <summary>Opt-in gameplay state for one candy and character in a dry level of any location.</summary>
     public sealed partial class LevelGameplay
     {
         private readonly CandySimulation simulation;
@@ -75,14 +74,13 @@ namespace Ctr2.Engine.Physics
         private float eatingTime;
         private float chewingTime;
 
-        internal LevelGameplay(CandySimulation simulation, LevelLayout layout, LevelDefinition level, bool firstLevelArrival)
+        internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
                 layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "tutorial_swipe")) ||
-                (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)) ||
-                level.Settings.Any(s => s.Kind == "gameDesign" && s.Attributes.GetValueOrDefault("location", "forest") != "forest"))
+                (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
-                throw new InvalidDataException("Play supports one candy and one Om Nom in a dry forest level; negative spawn requires the first forest entry and other mechanics are pending.");
+                throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
             }
             this.simulation = simulation;
             canvas = layout.Size;
