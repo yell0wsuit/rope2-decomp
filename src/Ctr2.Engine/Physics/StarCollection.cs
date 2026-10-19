@@ -77,7 +77,7 @@ namespace Ctr2.Engine.Physics
         /// <remarks>Sensor contacts use current transforms rather than a swept path; rope material points cannot collect stars.</remarks>
         private void CollectStars()
         {
-            if (Gameplay != null && Gameplay.CandyState != ForestCandyState.Active)
+            if (Gameplay != null && Gameplay.CandyState != CandyState.Active)
             {
                 return;
             }

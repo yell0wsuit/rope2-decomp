@@ -17,12 +17,12 @@ using Xunit;
 namespace Ctr2.Tests
 {
     /// <summary>Checks state-driven character playback and candy fade with generated cache assets.</summary>
-    public sealed class ForestPlayPreviewTests
+    public sealed class PlayLevelPreviewTests
     {
         /// <summary>Rendering cannot advance game callbacks; fixed ticks complete feeding and restart restores candy.</summary>
         /// <param name="ticks">Fixed ticks to advance before the command renders its status.</param>
         /// <param name="result">Expected command result at that tick.</param>
-        /// <param name="pack">First forest entry selects arrival; another pack keeps ordinary play.</param>
+        /// <param name="pack">The first production level selects arrival; another pack keeps ordinary play.</param>
         [Theory]
         [InlineData(0, "Running", 1)]
         [InlineData(0, "Running", 2)]
@@ -63,7 +63,7 @@ namespace Ctr2.Tests
                 File.WriteAllBytes(Path.Combine(assets, "character.pb"), AnimationPreviewTests.Message([(1, 2), (7, 8f), (8, 8f), (9, part),
                     .. names.Select((name, i) => (10, (object)AnimationPreviewTests.Message((1, i), (2, name))))]));
                 using LevelPreview preview = LevelPreview.Load(root, pack, 1, 2, play: true).Preview;
-                ForestSession session = preview.Session!;
+                GameSession session = preview.Session!;
                 Assert.Equal(pack == 1, session.Simulation.Gameplay!.ArrivalLeaves != null);
                 using SKBitmap bitmap = new(640, 960);
                 using SKCanvas canvas = new(bitmap);
@@ -76,7 +76,7 @@ namespace Ctr2.Tests
                 }
                 session.Step();
                 preview.Draw(canvas, 640, 960, 1000);
-                Assert.Equal(ForestResult.Running, session.Simulation.Gameplay!.Result);
+                Assert.Equal(LevelResult.Running, session.Simulation.Gameplay!.Result);
                 string snapshot = Path.Combine(root, "play.png");
                 ProcessStartInfo start = new("dotnet")
                 {
@@ -101,7 +101,7 @@ namespace Ctr2.Tests
                 {
                     session.Step();
                 }
-                Assert.Equal(ForestResult.Won, session.Simulation.Gameplay.Result);
+                Assert.Equal(LevelResult.Won, session.Simulation.Gameplay.Result);
                 using (LevelPreview batched = LevelPreview.Load(root, pack, 1, 2, play: true).Preview)
                 {
                     batched.Session!.AdvanceTo(1);
@@ -115,7 +115,7 @@ namespace Ctr2.Tests
                 preview.Draw(canvas, 640, 960, 0);
                 Assert.Equal(SKColors.Red, bitmap.GetPixel(200, 200));
                 Assert.NotEqual(SKColors.Lime, bitmap.GetPixel(190, 300));
-                Assert.Equal(ForestResult.Running, session.Simulation.Gameplay!.Result);
+                Assert.Equal(LevelResult.Running, session.Simulation.Gameplay!.Result);
                 File.WriteAllText(Path.Combine(maps, "test.xml"), "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90'/></layer></map>");
                 using LevelPreview standing = LevelPreview.Load(root, 2, 1, 2, play: true).Preview;
                 for (int i = 0; i < 7; i++)
@@ -123,7 +123,7 @@ namespace Ctr2.Tests
                     standing.Session!.Step();
                 }
 
-                Assert.Equal(ForestCharacterState.StandUp, standing.Session!.Simulation.Gameplay!.CharacterState);
+                Assert.Equal(CharacterState.StandUp, standing.Session!.Simulation.Gameplay!.CharacterState);
                 standing.Draw(canvas, 640, 960, 0);
                 // Native fixed art translation lies inside scale; procedural root position lies outside.
                 Assert.Equal(SKColors.Lime, bitmap.GetPixel(218, 203));

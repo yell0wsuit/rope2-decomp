@@ -8,7 +8,7 @@ using Xunit;
 namespace Ctr2.Tests
 {
     /// <summary>Checks source motion windows and falling/landing through actual terrain simulation.</summary>
-    public sealed class ForestMotionTests
+    public sealed class CharacterMotionTests
     {
         /// <summary>Builds invented motion scenarios with a stationary candy and ordinary floor material.</summary>
         internal static CandySimulation Create(string objects, bool sensorTerrain = false)
@@ -84,12 +84,12 @@ namespace Ctr2.Tests
             for (int i = 0; i < 180; i++)
             {
                 scene.Step();
-                fell |= scene.Gameplay!.CharacterState == ForestCharacterState.Falling;
+                fell |= scene.Gameplay!.CharacterState == CharacterState.Falling;
             }
             Assert.True(fell);
-            Assert.Equal(ForestCharacterState.Idle, scene.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.Idle, scene.Gameplay!.CharacterState);
             Assert.Equal("IDLE", scene.Gameplay.Scene);
-            Assert.Equal(ForestResult.Running, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Running, scene.Gameplay.Result);
         }
 
         /// <summary>Hard landings react to the actual solved static-terrain impulse.</summary>
@@ -130,7 +130,7 @@ namespace Ctr2.Tests
                 scene.Step();
             }
 
-            ForestGameplay game = scene.Gameplay!;
+            LevelGameplay game = scene.Gameplay!;
             Assert.True(game.ProcedureActive);
             int started = game.SceneStartedAt;
             int revision = game.SceneRevision;
@@ -153,7 +153,7 @@ namespace Ctr2.Tests
             Assert.Equal(Vector2.One, game.CharacterScale);
             Assert.Equal(Vector2.Zero, game.CharacterOffset);
             game.SceneFinished(child, revision);
-            Assert.Equal(ForestResult.Running, game.Result);
+            Assert.Equal(LevelResult.Running, game.Result);
         }
 
         /// <summary>The source long angular window deliberately excludes the newest 29 samples.</summary>
@@ -188,7 +188,7 @@ namespace Ctr2.Tests
             {
                 scene.Step();
             }
-            Assert.Equal(ForestCharacterState.Falling, scene.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.Falling, scene.Gameplay!.CharacterState);
         }
 
         /// <summary>Airborne open-mouth consumption follows the distinct falling chewing callbacks.</summary>
@@ -200,16 +200,16 @@ namespace Ctr2.Tests
             for (int i = 0; i < 100 && scene.Gameplay!.Consumptions.Count == 0; i++)
             {
                 scene.Step();
-                opened |= scene.Gameplay!.CharacterState == ForestCharacterState.FallingMouthOpen;
+                opened |= scene.Gameplay!.CharacterState == CharacterState.FallingMouthOpen;
             }
             Assert.True(opened);
             Assert.NotEmpty(scene.Gameplay!.Consumptions);
-            Assert.Equal(ForestCharacterState.FallingChewing, scene.Gameplay.CharacterState);
+            Assert.Equal(CharacterState.FallingChewing, scene.Gameplay.CharacterState);
             Assert.Equal("FALLING_MOUTH_CLOSE", scene.Gameplay.Scene);
             scene.Gameplay.SceneFinished(scene.Gameplay.Scene, scene.Gameplay.SceneRevision);
             Assert.Equal("FALLING_CHEWING", scene.Gameplay.Scene);
             scene.Gameplay.SceneFinished(scene.Gameplay.Scene, scene.Gameplay.SceneRevision);
-            Assert.Equal(ForestResult.Won, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Won, scene.Gameplay.Result);
         }
 
         /// <summary>A missed nearby candy closes the airborne mouth; stale open-scene callbacks do nothing.</summary>
@@ -218,20 +218,20 @@ namespace Ctr2.Tests
         {
             CandySimulation scene = Create("<candy id='c' x='155' y='200'/><omnom x='100' y='0' gravityScale='1'/>");
             int openRevision = -1;
-            for (int i = 0; i < 100 && scene.Gameplay!.CharacterState != ForestCharacterState.FallingMouthClose; i++)
+            for (int i = 0; i < 100 && scene.Gameplay!.CharacterState != CharacterState.FallingMouthClose; i++)
             {
                 scene.Step();
-                if (scene.Gameplay!.CharacterState == ForestCharacterState.FallingMouthOpen)
+                if (scene.Gameplay!.CharacterState == CharacterState.FallingMouthOpen)
                 {
                     openRevision = scene.Gameplay.SceneRevision;
                 }
             }
             Assert.True(openRevision >= 0);
-            Assert.Equal(ForestCharacterState.FallingMouthClose, scene.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.FallingMouthClose, scene.Gameplay!.CharacterState);
             scene.Gameplay.SceneFinished("FALLING_MOUTH_OPEN", openRevision);
             Assert.Equal("FALLING_MOUTH_CLOSE", scene.Gameplay.Scene);
             scene.Gameplay.SceneFinished(scene.Gameplay.Scene, scene.Gameplay.SceneRevision);
-            Assert.Equal(ForestCharacterState.Falling, scene.Gameplay.CharacterState);
+            Assert.Equal(CharacterState.Falling, scene.Gameplay.CharacterState);
             Assert.Equal("FALLING", scene.Gameplay.Scene);
         }
 
@@ -244,18 +244,18 @@ namespace Ctr2.Tests
             {
                 scene.Step();
             }
-            Assert.Equal(ForestCharacterState.FallingChewing, scene.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.FallingChewing, scene.Gameplay!.CharacterState);
             scene.Gameplay.SceneFinished(scene.Gameplay.Scene, scene.Gameplay.SceneRevision);
             int airborneRevision = scene.Gameplay.SceneRevision;
-            for (int i = 0; i < 100 && scene.Gameplay.CharacterState != ForestCharacterState.Chewing; i++)
+            for (int i = 0; i < 100 && scene.Gameplay.CharacterState != CharacterState.Chewing; i++)
             {
                 scene.Step();
             }
-            Assert.Equal(ForestCharacterState.Chewing, scene.Gameplay.CharacterState);
+            Assert.Equal(CharacterState.Chewing, scene.Gameplay.CharacterState);
             Assert.Equal("CHEWING", scene.Gameplay.Scene);
-            Assert.Equal(ForestResult.Running, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Running, scene.Gameplay.Result);
             scene.Gameplay.SceneFinished("FALLING_CHEWING", airborneRevision);
-            Assert.Equal(ForestResult.Running, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Running, scene.Gameplay.Result);
         }
 
         /// <summary>Restart discards airborne state and its accumulated velocity history.</summary>
@@ -264,15 +264,15 @@ namespace Ctr2.Tests
         {
             LevelDefinition level = LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='300' y='0'/><omnom x='100' y='0' gravityScale='1'/></layer></map>");
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "</layer></map>"));
-            ForestSession session = new(level, design);
+            GameSession session = new(level, design);
             for (int i = 0; i < 30; i++)
             {
                 session.Step();
             }
-            Assert.Equal(ForestCharacterState.Falling, session.Simulation.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.Falling, session.Simulation.Gameplay!.CharacterState);
             session.Restart();
             session.Step();
-            Assert.Equal(ForestCharacterState.Idle, session.Simulation.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.Idle, session.Simulation.Gameplay!.CharacterState);
             Assert.Equal("IDLE", session.Simulation.Gameplay.Scene);
         }
     }

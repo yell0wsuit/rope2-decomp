@@ -9,12 +9,12 @@ using Xunit;
 namespace Ctr2.Tests
 {
     /// <summary>Checks source stand-up thresholds and impulses through fixed simulation ticks.</summary>
-    public sealed class ForestStandingTests
+    public sealed class StandingTests
     {
         private static CandySimulation Create(float angle, bool chewing = false)
         {
             string candy = chewing ? "<candy id='c' x='100' y='300'/>" : "<candy id='c' x='300' y='0'/>";
-            return ForestMotionTests.Create(candy + FormattableString.Invariant($"<omnom x='100' y='{(chewing ? 300 : 100)}' angle='{angle}' gravityScale='0'/>"));
+            return CharacterMotionTests.Create(candy + FormattableString.Invariant($"<omnom x='100' y='{(chewing ? 300 : 100)}' angle='{angle}' gravityScale='0'/>"));
         }
 
         /// <summary>Angles are truncated to integer degrees before applying the strict 60-degree threshold.</summary>
@@ -67,7 +67,7 @@ namespace Ctr2.Tests
             scene.Gameplay.SceneFinished("IDLE", oldRevision);
             Assert.Equal("STAND_UP", scene.Gameplay.Scene);
             scene.Gameplay.SceneFinished("STAND_UP", scene.Gameplay.SceneRevision);
-            Assert.Equal(ForestCharacterState.Idle, scene.Gameplay.CharacterState);
+            Assert.Equal(CharacterState.Idle, scene.Gameplay.CharacterState);
             float velocity = body.Velocity.Y;
             scene.Gameplay.SceneFinished("STAND_UP", scene.Gameplay.SceneRevision);
             Assert.Equal(velocity, body.Velocity.Y);
@@ -77,7 +77,7 @@ namespace Ctr2.Tests
         [Fact]
         public void FixedRotationKeepsAngleDuringStandImpulse()
         {
-            CandySimulation scene = ForestMotionTests.Create("<candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90' gravityScale='0' fixedRotation='true'/>");
+            CandySimulation scene = CharacterMotionTests.Create("<candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90' gravityScale='0' fixedRotation='true'/>");
             float angle = scene.Characters[0].Angle;
             for (int i = 0; i < 10; i++)
             {
@@ -94,10 +94,10 @@ namespace Ctr2.Tests
         [Fact]
         public void MovingTiltDoesNotStartStanding()
         {
-            CandySimulation scene = ForestMotionTests.Create("<candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90' gravityScale='1'/>");
+            CandySimulation scene = CharacterMotionTests.Create("<candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90' gravityScale='1'/>");
             scene.Step();
             Assert.False(scene.Gameplay!.ProcedureActive);
-            Assert.Equal(ForestCharacterState.Idle, scene.Gameplay.CharacterState);
+            Assert.Equal(CharacterState.Idle, scene.Gameplay.CharacterState);
         }
 
         /// <summary>Preparation peaks at .1 seconds and remains independent of pause and restart.</summary>
@@ -108,13 +108,13 @@ namespace Ctr2.Tests
         {
             LevelDefinition level = LevelReader.Read(FormattableString.Invariant($"<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='300' y='0' gravityScale='0'/><omnom x='100' y='100' angle='{angle}' gravityScale='0'/></layer></map>"));
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "</layer></map>"));
-            ForestSession session = new(level, design);
+            GameSession session = new(level, design);
             for (int i = 0; i < 7; i++)
             {
                 session.Step();
             }
 
-            ForestGameplay oldGame = session.Simulation.Gameplay!;
+            LevelGameplay oldGame = session.Simulation.Gameplay!;
             Assert.True(oldGame.ProcedureActive);
             float weight = 1 - (((6 * PhysicsWorld.TimeStep) - .1f) / .05f);
             Assert.InRange(Vector2.Distance(Vector2.Lerp(Vector2.One, new(.85f, 1.3f), weight), oldGame.CharacterScale), 0, .00001f);
@@ -150,7 +150,7 @@ namespace Ctr2.Tests
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("gravityScale=\"0.7\"", "gravityScale=\"152\"").Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "</layer></map>"));
             CandySimulation scene = new(level, design, play: true);
             scene.Step();
-            Assert.Equal(ForestCharacterState.StandUp, scene.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.StandUp, scene.Gameplay!.CharacterState);
             for (int i = 0; i < 20 && scene.Gameplay.Consumptions.Count == 0; i++)
             {
                 scene.Step();
@@ -182,14 +182,14 @@ namespace Ctr2.Tests
             CandySimulation scene = Create(90, chewing: true);
             scene.Step();
             Assert.Equal("StandUpChewing", scene.Gameplay!.CharacterState.ToString());
-            for (int i = 0; i < 180 && scene.Gameplay.Result == ForestResult.Running; i++)
+            for (int i = 0; i < 180 && scene.Gameplay.Result == LevelResult.Running; i++)
             {
                 scene.Step();
             }
 
-            Assert.Equal(ForestResult.Won, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Won, scene.Gameplay.Result);
             _ = Assert.Single(scene.Gameplay.Consumptions);
-            Assert.Equal(ForestCandyState.Removed, scene.Gameplay.CandyState);
+            Assert.Equal(CandyState.Removed, scene.Gameplay.CandyState);
             Assert.InRange(scene.Gameplay.FinishedAt!.Value, 168, 169);
         }
     }

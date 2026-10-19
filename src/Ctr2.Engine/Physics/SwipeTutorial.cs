@@ -4,7 +4,7 @@ using System.Numerics;
 namespace Ctr2.Engine.Physics
 {
     /// <summary>Fixed-tick timing and dismissal for one nonphysical swipe hint.</summary>
-    public sealed class ForestSwipeTutorial(Vector2 position, float angle, float delay)
+    public sealed class SwipeTutorial(Vector2 position, float angle, float delay)
     {
         private readonly float wait = float.IsFinite(delay) && delay >= 0 && delay <= 36000 ? delay : throw new ArgumentOutOfRangeException(nameof(delay));
         private float elapsed;

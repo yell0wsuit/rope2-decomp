@@ -25,7 +25,7 @@ try
     }
     if (args.Length > 0 && args[0] == "play-level")
     {
-        return ForestPlayCommand.Run(args);
+        return PlayLevelCommand.Run(args);
     }
     AtlasFrame? selectedFrame = null;
 
@@ -279,7 +279,7 @@ try
         "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-resource <cache> <resource ID> <resolution enum> <quad index> [preview options]\n" +
         "  preview <cached PNG> [--width N] [--height N] [--snapshot new.png] [--frames N] [--frame metadata.json]\n" +
-        "Supply a dump from your own Windows game. Ordinary forest play is available; full game mechanics and presentation remain pending.");
+        "Supply a dump from your own Windows game. Early play of supported levels is available; full game mechanics and presentation remain pending.");
     return args.Length == 0 || args is ["--help"] ? 0 : 1;
 }
 

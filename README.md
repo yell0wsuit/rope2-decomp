@@ -154,7 +154,7 @@ These are illustrative values, not a shipped game quad. Sampling uses pixel rect
 ## Verification and next work
 
 Audit every entry in the imported Windows desktop list against the current
-forest session constructor:
+gameplay session constructor:
 
 ```sh
 dotnet run --project src/Ctr2.Desktop -- audit-levels cache/windows-alpha

@@ -45,19 +45,19 @@ namespace Ctr2.Tests
                 using JsonDocument report = JsonDocument.Parse(await output);
                 JsonElement json = report.RootElement;
                 Assert.Equal(5, json.GetProperty("LevelCount").GetInt32());
-                Assert.True(json.GetProperty("StartableForestLevels").GetInt32() == 2, json.ToString());
+                Assert.True(json.GetProperty("StartableLevels").GetInt32() == 2, json.ToString());
                 JsonElement levels = json.GetProperty("Levels");
                 Assert.Equal("b.xml", levels[0].GetProperty("FileName").GetString());
-                Assert.False(levels[0].GetProperty("CanStartForestSession").GetBoolean());
+                Assert.False(levels[0].GetProperty("CanStartSession").GetBoolean());
                 Assert.Equal(1, levels[0].GetProperty("Objects").GetProperty("balloon").GetInt32());
                 Assert.NotEmpty(levels[0].GetProperty("Reason").GetString()!);
                 Assert.Equal("missing.xml", levels[1].GetProperty("FileName").GetString());
-                Assert.False(levels[1].GetProperty("CanStartForestSession").GetBoolean());
+                Assert.False(levels[1].GetProperty("CanStartSession").GetBoolean());
                 Assert.Equal("a.xml", levels[2].GetProperty("FileName").GetString());
                 Assert.Equal(3, levels[2].GetProperty("Entry").GetInt32());
-                Assert.True(levels[2].GetProperty("CanStartForestSession").GetBoolean());
-                Assert.False(levels[3].GetProperty("CanStartForestSession").GetBoolean());
-                Assert.True(levels[4].GetProperty("CanStartForestSession").GetBoolean());
+                Assert.True(levels[2].GetProperty("CanStartSession").GetBoolean());
+                Assert.False(levels[3].GetProperty("CanStartSession").GetBoolean());
+                Assert.True(levels[4].GetProperty("CanStartSession").GetBoolean());
                 Assert.Contains("completion", json.GetProperty("Scope").GetString()!, StringComparison.OrdinalIgnoreCase);
             }
             finally { Directory.Delete(root, true); }

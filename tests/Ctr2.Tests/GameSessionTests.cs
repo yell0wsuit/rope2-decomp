@@ -9,9 +9,9 @@ using Xunit;
 namespace Ctr2.Tests
 {
     /// <summary>Checks playable session time/input ownership across pause, restart and completion.</summary>
-    public sealed class ForestSessionTests
+    public sealed class GameSessionTests
     {
-        internal static ForestSession Create()
+        internal static GameSession Create()
         {
             LevelDefinition level = LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='100' y='100'/><omnom x='100' y='100'/></layer></map>");
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "</layer></map>").Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"").Replace("gravityScale='0.7'", "gravityScale='0'"));
@@ -22,7 +22,7 @@ namespace Ctr2.Tests
         [Fact]
         public void RestartReplacesStateAndInputAndRebasesHostClock()
         {
-            ForestSession session = Create();
+            GameSession session = Create();
             CandySimulation original = session.Simulation;
             RopeInput originalInput = session.Input;
             session.AdvanceTo(.1);
@@ -45,7 +45,7 @@ namespace Ctr2.Tests
         [Fact]
         public void PauseCancelsInputAndDoesNotAccumulateCatchup()
         {
-            ForestSession session = Create();
+            GameSession session = Create();
             session.AdvanceTo(.1);
             int tick = session.Simulation.Tick;
             session.Paused = true;
@@ -63,19 +63,19 @@ namespace Ctr2.Tests
         [Fact]
         public void TerminalSessionStopsTicksAndRestartRestoresRunning()
         {
-            ForestSession session = Create();
+            GameSession session = Create();
             for (int i = 0; i < 180; i++)
             {
                 session.Step();
             }
-            Assert.Equal(ForestResult.Won, session.Simulation.Gameplay!.Result);
+            Assert.Equal(LevelResult.Won, session.Simulation.Gameplay!.Result);
             int tick = session.Simulation.Tick;
             session.AdvanceTo(100);
             session.Step();
             Assert.Equal(tick, session.Simulation.Tick);
             session.Restart();
             Assert.False(session.Paused);
-            Assert.Equal(ForestResult.Running, session.Simulation.Gameplay!.Result);
+            Assert.Equal(LevelResult.Running, session.Simulation.Gameplay!.Result);
             Assert.Equal(0, session.Simulation.Tick);
         }
 
@@ -87,7 +87,7 @@ namespace Ctr2.Tests
         [InlineData(double.PositiveInfinity)]
         public void InvalidHostTimeIsRejected(double seconds)
         {
-            ForestSession session = Create();
+            GameSession session = Create();
             _ = Assert.Throws<ArgumentOutOfRangeException>(() => session.AdvanceTo(seconds));
         }
 
@@ -95,7 +95,7 @@ namespace Ctr2.Tests
         [Fact]
         public void BackwardTimeAfterRestartIsRejected()
         {
-            ForestSession session = Create();
+            GameSession session = Create();
             session.AdvanceTo(1);
             session.Restart();
             _ = Assert.Throws<ArgumentOutOfRangeException>(() => session.AdvanceTo(.5));

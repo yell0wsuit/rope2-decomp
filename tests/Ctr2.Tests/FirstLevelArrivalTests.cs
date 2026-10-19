@@ -9,14 +9,14 @@ using Xunit;
 namespace Ctr2.Tests
 {
     /// <summary>Checks explicit first-entry arrival selection and deterministic nonphysical leaf presentation.</summary>
-    public sealed class ForestArrivalTests
+    public sealed class FirstLevelArrivalTests
     {
-        internal static ForestSession Create(bool arrival, int y = -97)
+        internal static GameSession Create(bool arrival, int y = -97)
         {
             LevelDefinition level = LevelReader.Read($"<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='280' y='0'/><omnom x='100' y='{y}' gravityScale='1'/><tutorial_swipe x='150' y='70' delay='3' angle='1'/><polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/></layer></map>");
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"")
                 .Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "<polygon id='wood' body_type='static' friction='0.4' restitution='0' isSensor='false'/></layer></map>"));
-            return new(level, design, forestArrival: arrival);
+            return new(level, design, firstLevelArrival: arrival);
         }
 
         /// <summary>Only explicitly selected first-entry arrival permits its authored off-screen character.</summary>
@@ -24,20 +24,20 @@ namespace Ctr2.Tests
         public void ExplicitArrivalFallsFromAuthoredNegativeSpawn()
         {
             _ = Assert.Throws<System.IO.InvalidDataException>(() => Create(false));
-            ForestSession session = Create(true);
+            GameSession session = Create(true);
             Assert.Equal(new Vector2(1, -.97f), session.Simulation.Characters[0].Origin);
             Assert.Equal(30, session.Simulation.Gameplay!.ArrivalLeaves!.Particles.Count);
             session.Step();
-            Assert.Equal(ForestResult.Running, session.Simulation.Gameplay.Result);
+            Assert.Equal(LevelResult.Running, session.Simulation.Gameplay.Result);
             bool fell = false;
             for (int i = 0; i < 180; i++)
             {
                 session.Step();
-                fell |= session.Simulation.Gameplay.CharacterState == ForestCharacterState.Falling;
+                fell |= session.Simulation.Gameplay.CharacterState == CharacterState.Falling;
             }
             Assert.True(fell);
-            Assert.Equal(ForestCharacterState.Idle, session.Simulation.Gameplay.CharacterState);
-            Assert.Equal(ForestResult.Running, session.Simulation.Gameplay.Result);
+            Assert.Equal(CharacterState.Idle, session.Simulation.Gameplay.CharacterState);
+            Assert.Equal(LevelResult.Running, session.Simulation.Gameplay.Result);
         }
 
         /// <summary>Arrival leaves expire after a bounded lifetime and retain immutable initial snapshots.</summary>
@@ -70,7 +70,7 @@ namespace Ctr2.Tests
         [Fact]
         public void PresentationIsDeterministicAndDoesNotChangePhysics()
         {
-            ForestSession arrival = Create(true, 0), ordinary = Create(false, 0);
+            GameSession arrival = Create(true, 0), ordinary = Create(false, 0);
             ForestLeaf[] initial = [.. arrival.Simulation.Gameplay!.ArrivalLeaves!.Particles];
             for (int i = 0; i < 60; i++)
             {
@@ -81,7 +81,7 @@ namespace Ctr2.Tests
             }
             arrival.Restart();
             Assert.Equal(initial, arrival.Simulation.Gameplay!.ArrivalLeaves!.Particles.ToArray());
-            ForestSession batched = Create(true, 0);
+            GameSession batched = Create(true, 0);
             batched.AdvanceTo(60 * (double)PhysicsWorld.TimeStep);
             for (int i = 0; i < 60; i++)
             {
@@ -95,14 +95,14 @@ namespace Ctr2.Tests
         [Fact]
         public void SwipeHintDelayAndDismissalMatchSource()
         {
-            ForestSwipeTutorial early = new(new(100, 200), 1, .1f);
+            SwipeTutorial early = new(new(100, 200), 1, .1f);
             early.TouchDown();
             for (int i = 0; i < 60; i++)
             {
                 early.Step();
             }
             Assert.Equal(0, early.Opacity);
-            ForestSwipeTutorial active = new(new(100, 200), 1, .1f);
+            SwipeTutorial active = new(new(100, 200), 1, .1f);
             for (int i = 0; i < 5; i++)
             {
                 active.Step();

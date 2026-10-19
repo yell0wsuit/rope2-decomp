@@ -16,8 +16,8 @@ namespace Ctr2.Engine.Physics
         private readonly PhysicsWorld world = new();
         /// <summary>Authored rope chains in grab order.</summary>
         private readonly List<RopeChain> ropes = [];
-        /// <summary>Gets optional ordinary forest gameplay state; null retains diagnostic behavior.</summary>
-        public ForestGameplay? Gameplay
+        /// <summary>Gets optional gameplay state; null retains diagnostic behavior.</summary>
+        public LevelGameplay? Gameplay
         {
             get;
         }
@@ -61,11 +61,11 @@ namespace Ctr2.Engine.Physics
         /// <summary>Creates a center-attachment simulation using a parsed level and matching master design.</summary>
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
-        /// <param name="play">Whether to enable the supported ordinary forest gameplay slice.</param>
-        /// <param name="forestArrival">Whether the host selected the first production forest entry.</param>
+        /// <param name="play">Whether to enable the supported gameplay slice.</param>
+        /// <param name="firstLevelArrival">Whether the host selected the first production level, which has a special arrival.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
         /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
-        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool forestArrival = false)
+        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool firstLevelArrival = false)
         {
             LevelLayout layout = LevelLayout.Create(level);
             CharacterDefinitions = PolygonBodyDefinition.LoadCharacters(level, design);
@@ -176,7 +176,7 @@ namespace Ctr2.Engine.Physics
             LoadStars(layout, design);
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
-            Gameplay = play ? new ForestGameplay(this, layout, level, forestArrival) : null;
+            Gameplay = play ? new LevelGameplay(this, layout, level, firstLevelArrival) : null;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>

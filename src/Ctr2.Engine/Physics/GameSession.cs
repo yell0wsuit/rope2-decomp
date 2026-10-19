@@ -4,24 +4,24 @@ using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>Owns one ordinary forest simulation and its pause/restart/input clock.</summary>
-    public sealed class ForestSession
+    /// <summary>Owns one gameplay simulation and its pause/restart/input clock.</summary>
+    public sealed class GameSession
     {
         private readonly LevelDefinition level;
         private readonly LevelDefinition design;
-        private readonly bool forestArrival;
+        private readonly bool firstLevelArrival;
         private SimulationClock clock = new();
         private double hostTime;
         private double activeTime;
         private bool rebase;
         private bool paused;
         /// <summary>Creates a supported session from immutable authored level and design definitions.</summary>
-        public ForestSession(LevelDefinition level, LevelDefinition design, bool forestArrival = false)
+        public GameSession(LevelDefinition level, LevelDefinition design, bool firstLevelArrival = false)
         {
             this.level = level;
             this.design = design;
-            this.forestArrival = forestArrival;
-            Simulation = new(level, design, play: true, forestArrival: forestArrival);
+            this.firstLevelArrival = firstLevelArrival;
+            Simulation = new(level, design, play: true, firstLevelArrival: firstLevelArrival);
             Input = new(Simulation, LevelLayout.Create(level).Size);
         }
         /// <summary>Gets the current simulation, replaced on restart.</summary>
@@ -56,7 +56,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Restores the initial level and cancels held and queued input.</summary>
         public void Restart()
         {
-            CandySimulation replacement = new(level, design, play: true, forestArrival: forestArrival);
+            CandySimulation replacement = new(level, design, play: true, firstLevelArrival: firstLevelArrival);
             Input.Cancel();
             Simulation = replacement;
             Input = new(Simulation, LevelLayout.Create(level).Size);
@@ -68,7 +68,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Advances one tick when active.</summary>
         public void Step()
         {
-            if (Paused || Simulation.Gameplay!.Result != ForestResult.Running)
+            if (Paused || Simulation.Gameplay!.Result != LevelResult.Running)
             {
                 Input.Cancel();
                 return;
@@ -77,7 +77,7 @@ namespace Ctr2.Engine.Physics
             Input.ApplyPending();
             Simulation.Step();
             Stepped?.Invoke();
-            if (Simulation.Gameplay.Result != ForestResult.Running)
+            if (Simulation.Gameplay.Result != LevelResult.Running)
             {
                 Input.Cancel();
             }
@@ -96,7 +96,7 @@ namespace Ctr2.Engine.Physics
                 rebase = false;
                 return;
             }
-            if (Paused || Simulation.Gameplay!.Result != ForestResult.Running)
+            if (Paused || Simulation.Gameplay!.Result != LevelResult.Running)
             {
                 return;
             }

@@ -9,8 +9,8 @@ using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>Result of the supported ordinary forest session.</summary>
-    public enum ForestResult
+    /// <summary>Result of a supported gameplay session.</summary>
+    public enum LevelResult
     {
         /// <summary>The level is still active.</summary>
         Running,
@@ -21,7 +21,7 @@ namespace Ctr2.Engine.Physics
     }
 
     /// <summary>Lifecycle of the single supported candy.</summary>
-    public enum ForestCandyState
+    public enum CandyState
     {
         /// <summary>Can collect stars and be eaten.</summary>
         Active,
@@ -32,7 +32,7 @@ namespace Ctr2.Engine.Physics
     }
 
     /// <summary>Supported character presentation states.</summary>
-    public enum ForestCharacterState
+    public enum CharacterState
     {
         /// <summary>Ordinary idle pose.</summary>
         Idle,
@@ -67,7 +67,7 @@ namespace Ctr2.Engine.Physics
     public sealed record CandyConsumption(int Tick, int Candy, int Character);
 
     /// <summary>Opt-in gameplay state for one ordinary dry forest candy and character.</summary>
-    public sealed partial class ForestGameplay
+    public sealed partial class LevelGameplay
     {
         private readonly CandySimulation simulation;
         private readonly Vector2 canvas;
@@ -75,11 +75,11 @@ namespace Ctr2.Engine.Physics
         private float eatingTime;
         private float chewingTime;
 
-        internal ForestGameplay(CandySimulation simulation, LevelLayout layout, LevelDefinition level, bool forestArrival)
+        internal LevelGameplay(CandySimulation simulation, LevelLayout layout, LevelDefinition level, bool firstLevelArrival)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
                 layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "tutorial_swipe")) ||
-                (!forestArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)) ||
+                (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)) ||
                 level.Settings.Any(s => s.Kind == "gameDesign" && s.Attributes.GetValueOrDefault("location", "forest") != "forest"))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry forest level; negative spawn requires the first forest entry and other mechanics are pending.");
@@ -87,11 +87,11 @@ namespace Ctr2.Engine.Physics
             this.simulation = simulation;
             canvas = layout.Size;
             Consumptions = consumptions.AsReadOnly();
-            ArrivalLeaves = forestArrival ? new ForestLeafBurst((simulation.Characters[0].Origin * 200) + new Vector2(0, 20)) : null;
+            ArrivalLeaves = firstLevelArrival ? new ForestLeafBurst((simulation.Characters[0].Origin * 200) + new Vector2(0, 20)) : null;
             PlacedLevelObject[] hints = [.. layout.Objects.Where(o => o.Source.Kind == "tutorial_swipe")];
             if (hints.Length > 1)
             {
-                throw new InvalidDataException("Multiple swipe hints are outside the supported forest slice.");
+                throw new InvalidDataException("Multiple swipe hints are outside the supported gameplay slice.");
             }
             if (hints.Length == 1)
             {
@@ -104,17 +104,17 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Gets the current level result.</summary>
-        public ForestResult Result
+        public LevelResult Result
         {
             get; private set;
         }
         /// <summary>Gets the candy lifecycle phase.</summary>
-        public ForestCandyState CandyState
+        public CandyState CandyState
         {
             get; private set;
         }
         /// <summary>Gets the supported character pose state.</summary>
-        public ForestCharacterState CharacterState
+        public CharacterState CharacterState
         {
             get; private set;
         }
@@ -141,14 +141,14 @@ namespace Ctr2.Engine.Physics
             get; private set;
         }
         /// <summary>Gets the opacity during the original short candy disappearance.</summary>
-        public float CandyOpacity => CandyState == ForestCandyState.Active ? 1 : CandyState == ForestCandyState.Removed ? 0 : Math.Clamp(1 - (eatingTime / .2f), 0, 1);
+        public float CandyOpacity => CandyState == CandyState.Active ? 1 : CandyState == CandyState.Removed ? 0 : Math.Clamp(1 - (eatingTime / .2f), 0, 1);
         /// <summary>Gets the optional first-entry leaf burst; it never participates in physics.</summary>
         public ForestLeafBurst? ArrivalLeaves
         {
             get;
         }
         /// <summary>Gets the optional nonphysical swipe hint and its fixed-tick timing.</summary>
-        public ForestSwipeTutorial? SwipeTutorial
+        public SwipeTutorial? SwipeTutorial
         {
             get;
         }
@@ -160,7 +160,7 @@ namespace Ctr2.Engine.Physics
 
         internal void BeforeStep()
         {
-            if (Result != ForestResult.Running || CandyState != ForestCandyState.Active || CharacterState == ForestCharacterState.Fail)
+            if (Result != LevelResult.Running || CandyState != CandyState.Active || CharacterState == CharacterState.Fail)
             {
                 return;
             }
@@ -168,9 +168,9 @@ namespace Ctr2.Engine.Physics
             if (character.PolygonFixtures.Any(f => f.OverlapsCircle(candy.Position, candy.Radius, character.Origin, character.Angle)))
             {
                 consumptions.Add(new(simulation.Tick, 0, 0));
-                CandyState = ForestCandyState.Eating;
-                bool airborne = CharacterState == ForestCharacterState.FallingMouthOpen;
-                CharacterState = airborne ? ForestCharacterState.FallingChewing : ForestCharacterState.Chewing;
+                CandyState = CandyState.Eating;
+                bool airborne = CharacterState == CharacterState.FallingMouthOpen;
+                CharacterState = airborne ? CharacterState.FallingChewing : CharacterState.Chewing;
                 candy.IsSensor = true;
                 candy.GravityScale = 0;
                 candy.Velocity = 5 * (character.Origin - candy.Position);
@@ -180,7 +180,7 @@ namespace Ctr2.Engine.Physics
 
         internal void AfterStep()
         {
-            if (Result != ForestResult.Running)
+            if (Result != LevelResult.Running)
             {
                 return;
             }
@@ -193,18 +193,18 @@ namespace Ctr2.Engine.Physics
             collidedWithTerrain |= simulation.CharacterTouchesTerrain();
             if (Outside(character.Origin, 70))
             {
-                CharacterState = ForestCharacterState.Fail;
+                CharacterState = CharacterState.Fail;
                 SetScene("FAIL");
-                Finish(ForestResult.Lost);
+                Finish(LevelResult.Lost);
                 return;
             }
-            if (CandyState == ForestCandyState.Eating)
+            if (CandyState == CandyState.Eating)
             {
                 eatingTime += PhysicsWorld.TimeStep;
                 if (eatingTime >= .2f)
                 {
                     simulation.RetireCandy();
-                    CandyState = ForestCandyState.Removed;
+                    CandyState = CandyState.Removed;
                 }
             }
             if (consumptions.Count > 0)
@@ -212,44 +212,44 @@ namespace Ctr2.Engine.Physics
                 chewingTime += PhysicsWorld.TimeStep;
                 if (chewingTime >= 2.8f)
                 {
-                    Finish(ForestResult.Won);
+                    Finish(LevelResult.Won);
                 }
                 UpdateAirborneState();
                 UpdateStandingState();
                 return;
             }
-            if (CharacterState == ForestCharacterState.Fail)
+            if (CharacterState == CharacterState.Fail)
             {
                 return;
             }
-            if (CandyState == ForestCandyState.Active && Outside(candy.Origin, 40))
+            if (CandyState == CandyState.Active && Outside(candy.Origin, 40))
             {
                 simulation.RetireCandy();
-                CandyState = ForestCandyState.Removed;
-                CharacterState = ForestCharacterState.Fail;
+                CandyState = CandyState.Removed;
+                CharacterState = CharacterState.Fail;
                 SetScene("FAIL");
             }
             else
             {
                 float distance = Vector2.Distance(character.Position, candy.Position) * 200;
-                if (CharacterState == ForestCharacterState.Idle && distance < 150)
+                if (CharacterState == CharacterState.Idle && distance < 150)
                 {
-                    CharacterState = ForestCharacterState.MouthOpen;
+                    CharacterState = CharacterState.MouthOpen;
                     SetScene("MOUTH_OPEN");
                 }
-                else if (CharacterState == ForestCharacterState.MouthOpen && distance > 170)
+                else if (CharacterState == CharacterState.MouthOpen && distance > 170)
                 {
-                    CharacterState = ForestCharacterState.Idle;
+                    CharacterState = CharacterState.Idle;
                     SetScene("MOUTH_CLOSE");
                 }
-                else if (CharacterState == ForestCharacterState.Falling && distance < 150)
+                else if (CharacterState == CharacterState.Falling && distance < 150)
                 {
-                    CharacterState = ForestCharacterState.FallingMouthOpen;
+                    CharacterState = CharacterState.FallingMouthOpen;
                     SetScene("FALLING_MOUTH_OPEN");
                 }
-                else if (CharacterState == ForestCharacterState.FallingMouthOpen && distance > 170)
+                else if (CharacterState == CharacterState.FallingMouthOpen && distance > 170)
                 {
-                    CharacterState = ForestCharacterState.FallingMouthClose;
+                    CharacterState = CharacterState.FallingMouthClose;
                     SetScene("FALLING_MOUTH_CLOSE");
                 }
                 UpdateAirborneState();
@@ -262,20 +262,20 @@ namespace Ctr2.Engine.Physics
         /// <param name="revision">Scene revision captured when playback began.</param>
         public void SceneFinished(string scene, int revision)
         {
-            if (Result != ForestResult.Running || Scene != scene || SceneRevision != revision || ProcedureActive || CharacterState == ForestCharacterState.StandUpChewing)
+            if (Result != LevelResult.Running || Scene != scene || SceneRevision != revision || ProcedureActive || CharacterState == CharacterState.StandUpChewing)
             {
                 return;
             }
-            if (CharacterState == ForestCharacterState.Fail)
+            if (CharacterState == CharacterState.Fail)
             {
-                Finish(ForestResult.Lost);
+                Finish(LevelResult.Lost);
             }
-            else if (CharacterState == ForestCharacterState.StandUp && scene == "STAND_UP")
+            else if (CharacterState == CharacterState.StandUp && scene == "STAND_UP")
             {
-                CharacterState = ForestCharacterState.Idle;
+                CharacterState = CharacterState.Idle;
                 SetScene("IDLE");
             }
-            else if (CharacterState == ForestCharacterState.FallingChewing)
+            else if (CharacterState == CharacterState.FallingChewing)
             {
                 if (scene == "FALLING_MOUTH_CLOSE")
                 {
@@ -283,16 +283,16 @@ namespace Ctr2.Engine.Physics
                 }
                 else if (scene == "FALLING_CHEWING")
                 {
-                    Finish(ForestResult.Won);
+                    Finish(LevelResult.Won);
                 }
             }
-            else if (CharacterState == ForestCharacterState.FallingMouthClose && scene == "FALLING_MOUTH_CLOSE")
+            else if (CharacterState == CharacterState.FallingMouthClose && scene == "FALLING_MOUTH_CLOSE")
             {
-                CharacterState = ForestCharacterState.Falling;
+                CharacterState = CharacterState.Falling;
                 collidedWithTerrain = false;
                 SetScene("FALLING");
             }
-            else if (CharacterState == ForestCharacterState.Chewing)
+            else if (CharacterState == CharacterState.Chewing)
             {
                 if (scene == "MOUTH_CLOSE")
                 {
@@ -300,7 +300,7 @@ namespace Ctr2.Engine.Physics
                 }
                 else if (scene == "CHEWING")
                 {
-                    Finish(ForestResult.Won);
+                    Finish(LevelResult.Won);
                 }
             }
             else if (scene == "MOUTH_CLOSE")
@@ -315,13 +315,13 @@ namespace Ctr2.Engine.Physics
 
         private void SetScene(string scene)
         {
-            procedure = ForestProcedure.None;
+            procedure = CharacterProcedure.None;
             Scene = scene;
             SceneRevision++;
             SceneStartedAt = simulation.Tick;
         }
 
-        private void Finish(ForestResult result)
+        private void Finish(LevelResult result)
         {
             Result = result;
             FinishedAt = simulation.Tick;

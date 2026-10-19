@@ -9,8 +9,8 @@ using Xunit;
 
 namespace Ctr2.Tests
 {
-    /// <summary>Exercises single-candy forest gameplay through real simulation steps and invented geometry.</summary>
-    public sealed class ForestGameplayTests
+    /// <summary>Exercises single-candy gameplay through real simulation steps and invented geometry.</summary>
+    public sealed class GameplayTests
     {
         /// <summary>Builds a stationary invented scene without original assets.</summary>
         internal static CandySimulation Create(string objects = "<candy id='c' x='100' y='100'/><omnom x='100' y='100'/>", bool play = true)
@@ -28,30 +28,30 @@ namespace Ctr2.Tests
         public void ContactStartsEatingBeforeIntegrationAndCompletesOnceAfterChewing()
         {
             CandySimulation scene = Create();
-            ForestGameplay game = scene.Gameplay!;
+            LevelGameplay game = scene.Gameplay!;
             scene.Step();
             Assert.Equal(new CandyConsumption(0, 0, 0), Assert.Single(game.Consumptions));
-            Assert.Equal(ForestResult.Running, game.Result);
-            Assert.Equal(ForestCharacterState.Chewing, game.CharacterState);
-            Assert.Equal(ForestCandyState.Eating, game.CandyState);
+            Assert.Equal(LevelResult.Running, game.Result);
+            Assert.Equal(CharacterState.Chewing, game.CharacterState);
+            Assert.Equal(CandyState.Eating, game.CandyState);
             Assert.True(scene.Candies[0].IsSensor);
             Assert.Equal(0, scene.Candies[0].GravityScale);
             for (int i = 1; i < 11; i++)
             {
                 scene.Step();
             }
-            Assert.Equal(ForestCandyState.Eating, game.CandyState);
+            Assert.Equal(CandyState.Eating, game.CandyState);
             scene.Step();
-            Assert.Equal(ForestCandyState.Removed, game.CandyState);
+            Assert.Equal(CandyState.Removed, game.CandyState);
             Vector2 removedAt = scene.Candies[0].Position;
             for (int i = 12; i < 167; i++)
             {
                 scene.Step();
             }
             Assert.Equal(removedAt, scene.Candies[0].Position);
-            Assert.Equal(ForestResult.Running, game.Result);
+            Assert.Equal(LevelResult.Running, game.Result);
             scene.Step();
-            Assert.Equal(ForestResult.Won, game.Result);
+            Assert.Equal(LevelResult.Won, game.Result);
             int? finished = game.FinishedAt;
             for (int i = 0; i < 20; i++)
             {
@@ -90,11 +90,11 @@ namespace Ctr2.Tests
         {
             CandySimulation scene = Create("<candy id='c' x='100' y='530'/><omnom x='100' y='530' gravityScale='100'/>");
             scene.Step();
-            Assert.Equal(ForestCharacterState.Chewing, scene.Gameplay!.CharacterState);
+            Assert.Equal(CharacterState.Chewing, scene.Gameplay!.CharacterState);
             scene.Step();
-            Assert.Equal(ForestResult.Lost, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Lost, scene.Gameplay.Result);
             scene.Gameplay.SceneFinished(scene.Gameplay.Scene, scene.Gameplay.SceneRevision);
-            Assert.Equal(ForestResult.Lost, scene.Gameplay.Result);
+            Assert.Equal(LevelResult.Lost, scene.Gameplay.Result);
         }
 
         /// <summary>Primary animation callbacks advance chewing and win once while stale callbacks are ignored.</summary>
@@ -103,16 +103,16 @@ namespace Ctr2.Tests
         {
             CandySimulation scene = Create();
             scene.Step();
-            ForestGameplay game = scene.Gameplay!;
+            LevelGameplay game = scene.Gameplay!;
             int oldRevision = game.SceneRevision;
             game.SceneFinished("MOUTH_CLOSE", oldRevision - 1);
             Assert.Equal("MOUTH_CLOSE", game.Scene);
             game.SceneFinished("MOUTH_CLOSE", oldRevision);
             Assert.Equal("CHEWING", game.Scene);
             game.SceneFinished("MOUTH_CLOSE", oldRevision);
-            Assert.Equal(ForestResult.Running, game.Result);
+            Assert.Equal(LevelResult.Running, game.Result);
             game.SceneFinished("CHEWING", game.SceneRevision);
-            Assert.Equal(ForestResult.Won, game.Result);
+            Assert.Equal(LevelResult.Won, game.Result);
             int? finished = game.FinishedAt;
             scene.Step();
             game.SceneFinished("CHEWING", game.SceneRevision);
@@ -131,7 +131,7 @@ namespace Ctr2.Tests
                 scene.Step();
             }
             Assert.Equal(collectedAtContact, scene.StarCollections.Count);
-            Assert.Equal(ForestCandyState.Removed, scene.Gameplay!.CandyState);
+            Assert.Equal(CandyState.Removed, scene.Gameplay!.CandyState);
         }
 
         /// <summary>Body destruction detaches both intact and cut rope tails without invalid solver references.</summary>
@@ -149,7 +149,7 @@ namespace Ctr2.Tests
             {
                 scene.Step();
             }
-            Assert.Equal(ForestCandyState.Removed, scene.Gameplay!.CandyState);
+            Assert.Equal(CandyState.Removed, scene.Gameplay!.CandyState);
             Assert.True(scene.IsReleased(0));
             Assert.DoesNotContain(scene.RopeSegments(0).SelectMany(p => p), p => p == scene.Candies[0].Position * 200);
         }
@@ -166,9 +166,9 @@ namespace Ctr2.Tests
 
         /// <summary>Mouth animation uses source opening/closing distances with hysteresis.</summary>
         [Theory]
-        [InlineData(170, ForestCharacterState.MouthOpen)]
-        [InlineData(190, ForestCharacterState.Idle)]
-        public void MouthUsesSourceDistanceThreshold(int candyX, ForestCharacterState expected)
+        [InlineData(170, CharacterState.MouthOpen)]
+        [InlineData(190, CharacterState.Idle)]
+        public void MouthUsesSourceDistanceThreshold(int candyX, CharacterState expected)
         {
             CandySimulation scene = Create($"<candy id='c' x='{candyX}' y='100'/><omnom x='100' y='100'/>");
             scene.Step();
@@ -191,13 +191,13 @@ namespace Ctr2.Tests
         {
             CandySimulation lost = Create("<candy id='c' x='100' y='576'/><omnom x='100' y='100'/>");
             lost.Step();
-            Assert.Equal(ForestCharacterState.Fail, lost.Gameplay!.CharacterState);
-            Assert.Equal(ForestResult.Running, lost.Gameplay.Result);
+            Assert.Equal(CharacterState.Fail, lost.Gameplay!.CharacterState);
+            Assert.Equal(LevelResult.Running, lost.Gameplay.Result);
             lost.Gameplay.SceneFinished(lost.Gameplay.Scene, lost.Gameplay.SceneRevision);
-            Assert.Equal(ForestResult.Lost, lost.Gameplay!.Result);
+            Assert.Equal(LevelResult.Lost, lost.Gameplay!.Result);
             CandySimulation fresh = Create("<candy id='c' x='170' y='100'/><omnom x='100' y='100'/>");
             Assert.Equal(0, fresh.Tick);
-            Assert.Equal(ForestResult.Running, fresh.Gameplay!.Result);
+            Assert.Equal(LevelResult.Running, fresh.Gameplay!.Result);
             Assert.Empty(fresh.Gameplay.Consumptions);
         }
     }

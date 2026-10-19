@@ -11,7 +11,7 @@ using SkiaSharp;
 
 namespace Ctr2.Desktop
 {
-    /// <summary>Draws diagnostic geometry or supported forest gameplay with imported Windows artwork.</summary>
+    /// <summary>Draws diagnostic geometry or supported gameplay with imported Windows artwork.</summary>
     /// <remarks>Static and simulation previews retain diagnostic scenery; playable sessions own native background and star resources.</remarks>
     /// <param name="layout">Initial logical scene geometry.</param>
     public sealed class LevelPreview(LevelLayout layout) : IDisposable
@@ -27,7 +27,7 @@ namespace Ctr2.Desktop
         private int sceneRevision = -1;
         private CandySimulation? animatedSimulation;
         /// <summary>Gets the optional playable session with pause and restart ownership.</summary>
-        public ForestSession? Session
+        public GameSession? Session
         {
             get; private set;
         }
@@ -55,7 +55,7 @@ namespace Ctr2.Desktop
         /// <param name="level">One-based desktop level entry.</param>
         /// <param name="resolution">Known image density enum, independent of map coordinates.</param>
         /// <param name="simulate">Whether to load master-design candy/rope physics and classic candy artwork.</param>
-        /// <param name="play">Whether to enable ordinary forest gameplay and session controls.</param>
+        /// <param name="play">Whether to enable supported gameplay and session controls.</param>
         /// <returns>The parsed level and a preview owning its decoded character assets.</returns>
         /// <exception cref="System.IO.InvalidDataException">The level, resource or animation is invalid.</exception>
         /// <exception cref="System.IO.IOException">A cache file cannot be read.</exception>
@@ -71,7 +71,7 @@ namespace Ctr2.Desktop
                 }
                 if (play)
                 {
-                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), forestArrival: pack == 1 && level == 1);
+                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), firstLevelArrival: pack == 1 && level == 1);
                     if (preview.Session.Simulation.Gameplay!.ArrivalLeaves != null)
                     {
                         preview.forestLeaves = new ForestLeafSprites(cache, resolution);
@@ -233,7 +233,7 @@ namespace Ctr2.Desktop
                             Matrix4x4.CreateScale(scale.X, scale.Y, 1) * Matrix4x4.CreateTranslation(offset.X, offset.Y, 0) *
                             Matrix4x4.CreateRotationZ(angle) * Matrix4x4.CreateTranslation(position.X, position.Y, 0);
                         double poseTime = seconds;
-                        if (Simulation?.Gameplay is ForestGameplay game)
+                        if (Simulation?.Gameplay is LevelGameplay game)
                         {
                             SyncGameAnimation();
                             poseTime = (Simulation.Tick - game.SceneStartedAt) * (double)PhysicsWorld.TimeStep;
@@ -253,7 +253,7 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(point.X, point.Y, placed.Source.Kind == "grab" ? 6 : 12, paint);
                     }
                 }
-                if (Simulation?.Gameplay?.SwipeTutorial is ForestSwipeTutorial hint && hint.Opacity > 0)
+                if (Simulation?.Gameplay?.SwipeTutorial is SwipeTutorial hint && hint.Opacity > 0)
                 {
                     Vector2 origin = (-swipeTutorial!.CanvasSize / 2) + new Vector2(90, 0);
                     Matrix4x4 transformHint = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
@@ -270,7 +270,7 @@ namespace Ctr2.Desktop
 
         private void SyncGameAnimation()
         {
-            ForestGameplay game = Simulation!.Gameplay!;
+            LevelGameplay game = Simulation!.Gameplay!;
             if (animatedSimulation != Simulation || sceneRevision != game.SceneRevision)
             {
                 omnom!.SelectScene(game.Scene);
@@ -282,7 +282,7 @@ namespace Ctr2.Desktop
         private void UpdateGameAnimation()
         {
             SyncGameAnimation();
-            ForestGameplay game = Simulation!.Gameplay!;
+            LevelGameplay game = Simulation!.Gameplay!;
             if ((Simulation.Tick - game.SceneStartedAt) * (double)PhysicsWorld.TimeStep >= omnom!.Duration)
             {
                 game.SceneFinished(game.Scene, game.SceneRevision);

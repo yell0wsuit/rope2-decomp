@@ -13,8 +13,8 @@ using SkiaSharp;
 
 namespace Ctr2.Desktop
 {
-    /// <summary>Hosts the ordinary forest slice using the existing desktop renderer.</summary>
-    internal static class ForestPlayCommand
+    /// <summary>Hosts the supported gameplay slice using the existing desktop renderer.</summary>
+    internal static class PlayLevelCommand
     {
         internal static int Run(string[] args)
         {
@@ -69,7 +69,7 @@ namespace Ctr2.Desktop
             }
             using LevelPreview preview = LevelPreview.Load(args[1], int.Parse(args[2], CultureInfo.InvariantCulture),
                 int.Parse(args[3], CultureInfo.InvariantCulture), resolution, play: true).Preview;
-            ForestSession session = preview.Session!;
+            GameSession session = preview.Session!;
             Queue<RopeCut> replay = new(cuts.OrderBy(c => c.Tick));
             session.Stepping += () =>
             {
@@ -82,8 +82,8 @@ namespace Ctr2.Desktop
                     }
                 }
             };
-            Console.WriteLine("Forest play: swipe to cut; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
-            for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == ForestResult.Running; i++)
+            Console.WriteLine("Play: swipe to cut; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
+            for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == LevelResult.Running; i++)
             {
                 session.Step();
             }
@@ -126,7 +126,7 @@ namespace Ctr2.Desktop
                     {
                         session.Paused = true;
                     }
-                    if (!session.Paused && session.Simulation.Gameplay!.Result == ForestResult.Running)
+                    if (!session.Paused && session.Simulation.Gameplay!.Result == LevelResult.Running)
                     {
                         if ((SDL.EventType)evt.Type == SDL.EventType.MouseButtonDown && evt.Button.Button == 1 && evt.Button.Which != uint.MaxValue)
                         {
@@ -134,9 +134,9 @@ namespace Ctr2.Desktop
                         }
                         new SdlRopeInput(session.Input).Handle(evt, windowWidth, windowHeight, pixelWidth, pixelHeight);
                     }
-                }, title: "Cut the Rope 2 — forest play");
+                }, title: "Cut the Rope 2 — play");
             }
-            ForestGameplay game = session.Simulation.Gameplay!;
+            LevelGameplay game = session.Simulation.Gameplay!;
             Console.WriteLine($"Result: {game.Result}; tick {session.Simulation.Tick}; stars {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}; candy {game.CandyState}.");
             foreach (CandyConsumption eaten in game.Consumptions)
             {
@@ -164,7 +164,7 @@ namespace Ctr2.Desktop
                 : new(tick, rope, segment, point, impulse);
         }
 
-        private static void DrawStatus(SKCanvas canvas, int width, ForestSession session)
+        private static void DrawStatus(SKCanvas canvas, int width, GameSession session)
         {
             using SKPaint panel = new()
             {
@@ -180,9 +180,9 @@ namespace Ctr2.Desktop
             canvas.DrawRect(0, 0, width, 66, panel);
             string status = session.Paused ? "Paused" : session.Simulation.Gameplay!.Result switch
             {
-                ForestResult.Won => "Level complete",
-                ForestResult.Lost => "Try again",
-                ForestResult.Running => "Feed Om Nom",
+                LevelResult.Won => "Level complete",
+                LevelResult.Lost => "Try again",
+                LevelResult.Running => "Feed Om Nom",
                 _ => "Feed Om Nom"
             };
             canvas.DrawText($"{status}   Stars: {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}", 12, 27, SKTextAlign.Left, font, text);

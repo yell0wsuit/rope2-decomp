@@ -34,7 +34,7 @@ namespace Ctr2.Desktop
                     LevelDefinition level = LevelReader.LoadWindows(cache, entry.Pack, entry.Entry);
                     objects = level.Objects.GroupBy(o => o.Kind).OrderBy(g => g.Key, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count());
                     location = level.Settings.FirstOrDefault(s => s.Kind == "gameDesign")?.Attributes.GetValueOrDefault("location");
-                    _ = new ForestSession(level, design, forestArrival: entry.Pack == 1 && entry.Entry == 1);
+                    _ = new GameSession(level, design, firstLevelArrival: entry.Pack == 1 && entry.Entry == 1);
                     supported = true;
                     startable++;
                 }
@@ -49,16 +49,16 @@ namespace Ctr2.Desktop
                     entry.FileName,
                     Location = location,
                     Objects = objects,
-                    CanStartForestSession = supported,
+                    CanStartSession = supported,
                     Reason = reason
                 });
             }
             Console.WriteLine(JsonSerializer.Serialize(new
             {
-                SchemaVersion = 1,
+                SchemaVersion = 2,
                 Scope = "Session construction only; level completion, rendered assets, original-game parity and unsupported attributes are not verified.",
                 LevelCount = index.Count,
-                StartableForestLevels = startable,
+                StartableLevels = startable,
                 Levels = results
             }, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
