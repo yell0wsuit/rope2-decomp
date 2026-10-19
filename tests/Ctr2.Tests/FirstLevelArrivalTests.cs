@@ -11,9 +11,9 @@ namespace Ctr2.Tests
     /// <summary>Checks explicit first-entry arrival selection and deterministic nonphysical leaf presentation.</summary>
     public sealed class FirstLevelArrivalTests
     {
-        internal static GameSession Create(bool arrival, int y = -97)
+        internal static GameSession Create(bool arrival, int y = -97, string hint = "<tutorial_swipe x='150' y='70' delay='3' angle='1'/>")
         {
-            LevelDefinition level = LevelReader.Read($"<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='280' y='0'/><omnom x='100' y='{y}' gravityScale='1'/><tutorial_swipe x='150' y='70' delay='3' angle='1'/><polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/></layer></map>");
+            LevelDefinition level = LevelReader.Read($"<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='280' y='0'/><omnom x='100' y='{y}' gravityScale='1'/>{hint}<polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/></layer></map>");
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"")
                 .Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "<polygon id='wood' body_type='static' friction='0.4' restitution='0' isSensor='false'/></layer></map>"));
             return new(level, design, firstLevelArrival: arrival);
@@ -91,18 +91,29 @@ namespace Ctr2.Tests
             Assert.Null(ordinary.Simulation.Gameplay!.ArrivalLeaves);
         }
 
+        /// <summary>Tap and swipe hints share the source's finger hint; only swipes carry an angle, and one hint is supported.</summary>
+        [Fact]
+        public void TapAndSwipeHintsShareTheFingerHint()
+        {
+            TutorialFinger tap = Create(true, hint: "<tutorial_tap x='150' y='70' delay='0.5'/>").Simulation.Gameplay!.Tutorial!;
+            Assert.False(tap.Swipe);
+            Assert.Equal(new Vector2(300, 140), tap.Position);
+            Assert.True(Create(true).Simulation.Gameplay!.Tutorial!.Swipe);
+            _ = Assert.Throws<System.IO.InvalidDataException>(() => Create(true, hint: "<tutorial_tap x='1' y='1' delay='1'/><tutorial_swipe x='2' y='2' delay='1' angle='0'/>"));
+        }
+
         /// <summary>Swipe hints use the authored delay and fade only after an active touch.</summary>
         [Fact]
         public void SwipeHintDelayAndDismissalMatchSource()
         {
-            SwipeTutorial early = new(new(100, 200), 1, .1f);
+            TutorialFinger early = new(new(100, 200), 1, .1f, true);
             early.TouchDown();
             for (int i = 0; i < 60; i++)
             {
                 early.Step();
             }
             Assert.Equal(0, early.Opacity);
-            SwipeTutorial active = new(new(100, 200), 1, .1f);
+            TutorialFinger active = new(new(100, 200), 1, .1f, true);
             for (int i = 0; i < 5; i++)
             {
                 active.Step();

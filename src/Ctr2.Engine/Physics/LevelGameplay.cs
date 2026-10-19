@@ -77,7 +77,7 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "tutorial_swipe")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "tutorial_swipe" or "tutorial_tap")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
@@ -86,7 +86,7 @@ namespace Ctr2.Engine.Physics
             canvas = layout.Size;
             Consumptions = consumptions.AsReadOnly();
             ArrivalLeaves = firstLevelArrival ? new ForestLeafBurst((simulation.Characters[0].Origin * 200) + new Vector2(0, 20)) : null;
-            PlacedLevelObject[] hints = [.. layout.Objects.Where(o => o.Source.Kind == "tutorial_swipe")];
+            PlacedLevelObject[] hints = [.. layout.Objects.Where(o => o.Source.Kind is "tutorial_swipe" or "tutorial_tap")];
             if (hints.Length > 1)
             {
                 throw new InvalidDataException("Multiple swipe hints are outside the supported gameplay slice.");
@@ -97,7 +97,7 @@ namespace Ctr2.Engine.Physics
                 {
                     throw new InvalidDataException("Invalid swipe hint delay.");
                 }
-                SwipeTutorial = new(hints[0].Position!.Value, hints[0].Angle, delay);
+                Tutorial = new(hints[0].Position!.Value, hints[0].Angle, delay, hints[0].Source.Kind == "tutorial_swipe");
             }
         }
 
@@ -145,15 +145,15 @@ namespace Ctr2.Engine.Physics
         {
             get;
         }
-        /// <summary>Gets the optional nonphysical swipe hint and its fixed-tick timing.</summary>
-        public SwipeTutorial? SwipeTutorial
+        /// <summary>Gets the optional nonphysical tap or swipe hint and its fixed-tick timing.</summary>
+        public TutorialFinger? Tutorial
         {
             get;
         }
         /// <summary>Notifies the authored hint of a primary pointer press.</summary>
         public void NotifyTouchDown()
         {
-            SwipeTutorial?.TouchDown();
+            Tutorial?.TouchDown();
         }
 
         internal void BeforeStep()
@@ -183,7 +183,7 @@ namespace Ctr2.Engine.Physics
                 return;
             }
             ArrivalLeaves?.Step();
-            SwipeTutorial?.Step();
+            Tutorial?.Step();
             PhysicsBody candy = simulation.Candies[0], character = simulation.Characters[0];
             ProcessImpacts();
             AdvanceProcedure();

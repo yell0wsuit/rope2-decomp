@@ -22,7 +22,7 @@ namespace Ctr2.Desktop
         /// <summary>Optional classic candy atlas for the simulation preview.</summary>
         private CandySprite? candy;
         private ForestLeafSprites? forestLeaves;
-        private AnimationPreview? swipeTutorial;
+        private AnimationPreview? tutorial;
         private ForestBackground? background;
         private StarSprites? stars;
         private int sceneRevision = -1;
@@ -77,9 +77,9 @@ namespace Ctr2.Desktop
                     {
                         preview.forestLeaves = new ForestLeafSprites(cache, resolution);
                     }
-                    if (preview.Session.Simulation.Gameplay.SwipeTutorial != null)
+                    if (preview.Session.Simulation.Gameplay.Tutorial is TutorialFinger finger)
                     {
-                        preview.swipeTutorial = AnimationPreview.Load(cache, 104, "SWIPE_LOOP", resolution);
+                        preview.tutorial = AnimationPreview.Load(cache, 104, finger.Swipe ? "SWIPE_LOOP" : "TAP", resolution);
                     }
                     foreach (string scene in new[] { "IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING", "STAND_UP" })
                     {
@@ -269,7 +269,7 @@ namespace Ctr2.Desktop
                 int characterIndex = 0;
                 foreach (PlacedLevelObject placed in Layout.Objects)
                 {
-                    if (Session != null && placed.Source.Kind == "tutorial_swipe")
+                    if (Session != null && placed.Source.Kind is "tutorial_swipe" or "tutorial_tap")
                     {
                         continue;
                     }
@@ -338,13 +338,14 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(point.X, point.Y, placed.Source.Kind == "grab" ? 6 : 12, paint);
                     }
                 }
-                if (Simulation?.Gameplay?.SwipeTutorial is SwipeTutorial hint && hint.Opacity > 0)
+                if (Simulation?.Gameplay?.Tutorial is TutorialFinger hint && hint.Opacity > 0)
                 {
-                    Vector2 origin = (-swipeTutorial!.CanvasSize / 2) + new Vector2(90, 0);
+                    // A swipe finger is shifted 90 units along its rotated axis; a tap finger is centered on the hint.
+                    Vector2 origin = (-tutorial!.CanvasSize / 2) + new Vector2(hint.Swipe ? 90 : 0, 0);
                     Matrix4x4 transformHint = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
-                        Matrix4x4.CreateRotationZ(hint.Angle * MathF.PI / 180) * Matrix4x4.CreateTranslation(hint.Position.X, hint.Position.Y, 0);
-                    double time = swipeTutorial.Duration > 0 ? hint.AnimationSeconds % swipeTutorial.Duration : 0;
-                    swipeTutorial.DrawTransformed(canvas, transformHint, time, hint.Opacity);
+                        Matrix4x4.CreateRotationZ(hint.Swipe ? hint.Angle * MathF.PI / 180 : 0) * Matrix4x4.CreateTranslation(hint.Position.X, hint.Position.Y, 0);
+                    double time = tutorial.Duration > 0 ? hint.AnimationSeconds % tutorial.Duration : 0;
+                    tutorial.DrawTransformed(canvas, transformHint, time, hint.Opacity);
                 }
             }
             finally
@@ -388,7 +389,7 @@ namespace Ctr2.Desktop
                 omnom?.Dispose();
                 candy?.Dispose();
                 forestLeaves?.Dispose();
-                swipeTutorial?.Dispose();
+                tutorial?.Dispose();
                 stars?.Dispose();
                 background?.Dispose();
                 disposed = true;

@@ -1392,7 +1392,7 @@ costume substitutions, particles/audio and native contact ordering remain pendin
 complete native dynamic-contact graph. The original fade completion queues
 destruction; this subset retires after the completed fixed tick reaches 0.2 seconds.
 
-## First-level arrival and swipe hint
+## First-level arrival and tutorial hints
 
 The first production level (desktop pack 1/entry 1) preserves its authored negative character position
 and ordinary dynamic-body fall. Source initialization starts idle and suppresses
@@ -1411,13 +1411,15 @@ Leaves use trimmed dimensions about their centers, preserving original particle
 layout. Native random sequences, exact color/blend rounding and original runtime
 presentation remain unverified.
 
-One authored `tutorial_swipe` is supported independently of arrival. Position
-doubles into logical units and angle remains authored degrees. Delay expires on
-fixed ticks, then Windows animation 104 `SWIPE_LOOP` repeats. Primary pointer down
+One authored `tutorial_swipe` or `tutorial_tap` is supported independently of
+arrival; both are the source's `TutorialFinger`. Position doubles into logical
+units. A swipe keeps its authored degree angle and shifts the finger 90 units along
+it; a tap ignores the angle and stays centered. Delay expires on fixed ticks, then
+Windows animation 104 repeats `SWIPE_LOOP` or `TAP`. The hint never consumes a touch. Primary pointer down
 before the delay removes the hint; afterward it fades over 0.4 seconds. Accepted
 scheduled replay cuts apply the same dismissal notification. This replays accepted
 cuts, not all original raw touch events. Pause freezes hint/particle timing, and
-restart restores the delay. Other tutorial kinds and multiple hints fail explicitly.
+restart restores the delay. Tutorial sensors and multiple hints fail explicitly.
 Delay accumulation and subtracting the native remaining delay may differ by one
 floating-point tick; exact original timing/visual parity still needs runtime comparison.
 
