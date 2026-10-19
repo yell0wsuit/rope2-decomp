@@ -78,6 +78,28 @@ namespace Ctr2.Engine.Physics
             Normals = Array.AsReadOnly(normals);
         }
 
+        /// <summary>Creates a triangle fixture like native <c>b2PolygonShape::Set</c>, without rejecting slivers.</summary>
+        /// <param name="a">First vertex in meters.</param>
+        /// <param name="b">Second vertex in meters.</param>
+        /// <param name="c">Third vertex in meters.</param>
+        /// <returns>The triangle with normalized edge normals; the scene keeps near-degenerate ears as fixtures.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">A vertex is nonfinite or out of range.</exception>
+        internal static ConvexPolygon Triangle(Vector2 a, Vector2 b, Vector2 c)
+        {
+            Vector2[] points = [a, b, c];
+            Vector2[] normals = new Vector2[3];
+            for (int i = 0; i < 3; i++)
+            {
+                if (!ValidPoint(points[i]))
+                {
+                    throw new ArgumentOutOfRangeException(nameof(a));
+                }
+                Vector2 edge = points[(i + 1) % 3] - points[i];
+                normals[i] = PhysicsMath.Normalize(new(edge.Y, -edge.X));
+            }
+            return new(points, normals);
+        }
+
         /// <summary>Creates a centered axis-aligned box like native <c>SetAsBox</c>, with exact axis normals.</summary>
         /// <param name="halfWidth">Positive half width in meters.</param>
         /// <param name="halfHeight">Positive half height in meters.</param>

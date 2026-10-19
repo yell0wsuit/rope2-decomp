@@ -114,8 +114,9 @@ meters, swapped to counterclockwise order and placed with the static body's
 rotation and translation. Ears that collapse to zero meter-space area are clipped
 without a fixture, whereas the original keeps them as zero-area Box2D fixtures.
 Translation and authored polygon rotation apply to both drawing and collision.
-Authored material sensors remain visual-only in the current gameplay importer;
-the engine now supports explicit terrain sensor fixtures as described below.
+`TerrainGeometry` now serves drawing only; scene collision comes from the design
+body factory's polygon branch (below), which keeps zero-area ears as fixtures, builds
+sensor materials as sensor fixtures and supports dynamic polygon materials.
 
 Geometry validates finite coordinates, duplicate edges, nonadjacent intersections,
 and zero area. Paths are bounded to 512 sampled vertices,
@@ -210,6 +211,12 @@ before shifting to the original origin, avoiding cancellation from subtracting
 large origin moments. Zero density still yields the geometric centroid. Convex
 circle overlap includes the polygon skin and sensor-distance epsilon, handles
 rounded vertices, and supports rotated body origins.
+
+The scene builds Om Nom like its initializer: the Om Nom master design, the authored
+attributes and a forced `normalizeShape=true`, passed through the design body
+factory's polygon branch, so its fixtures are the smoothed path's ear-clipped
+triangles at the round-tripped editor origin. `PolygonBodyDefinition` below keeps
+the validated authored data but no longer builds the scene body.
 
 `PolygonBodyDefinition.LoadCharacters` merges the Om Nom polygon master with its
 placement and includes the implicit local zero. The original Om Nom initializer
@@ -1220,20 +1227,20 @@ pin) is bit-identical under exact comparison on macOS arm64. Fixture SHA-256:
 ## Scene construction order
 
 `CandySimulation` creates bodies the way the scene loader does: one pass over the
-authored objects in document order (terrain polygons, candy, grabs, Om Nom, stars
-and circle/rectangle shapes), then the grab ropes and their material points in a
+authored objects in document order (candy, grabs, Om Nom, stars, frogs, balloons
+and circle/rectangle/polygon shapes), then pins, the grab ropes and their material points in a
 post-pass. Proxy IDs, body traversal and contact creation order therefore follow
 the source. Candy, grab and rope-point bodies come from their master designs through
 the design body factory; the master loader's tag becomes `shapeType`, and absent
 fields read zero or false. Candy and grab placement angles are ignored, as in the
-source. Authored `circle*`/`rectangle*` shapes are exposed as `Shapes` and drawn
-diagnostically until their artwork is ported. Om Nom keeps its dedicated compound
-polygon path, and static terrain polygons keep theirs.
+source. Authored `circle*`/`rectangle*`/`polygon*` shapes are exposed as `Shapes` and drawn
+diagnostically until their artwork is ported. As in the game, a shape whose body is
+static is land: Om Nom's terrain checks and landing impacts count contacts with it.
 
 ## Design body factory
 
 `BodyFactory` ports the scene's shared body factory for one-fixture circle and
-rectangle designs. `MaterializedDesign` merges like the scene loader: the
+rectangle designs and compound polygon designs. `MaterializedDesign` merges like the scene loader: the
 material's master design for `*_materialized` tags, then `shapeType` from the tag
 prefix, then the authored attributes. Absent numbers read zero and absent flags
 read false, exactly as the game's string accessors do: an absent `gravityScale`
@@ -1246,8 +1253,20 @@ oracle within 44 ticks. Filters use category `1 << filter.category`; `collideWit
 `all`, `like me` and `not like me` give mask 65535, the category, or its
 complement; each `filter.excludeCategories` entry clears its bit.
 
-Out of scope and rejected explicitly: polygon shapes (static terrain keeps its
-dedicated path), bullets (deliberately unported), dynamic bodies without positive
+Polygons follow the native branch: the editor position is the body position scaled
+back by 200, `SmoothCyclePath` smooths the authored `polygon` path with
+`smoothFactor` (default 1) and `normalizeShape`, and the body origin is the editor
+position divided by 200 again in double precision. The body keeps the authored
+angle. Each ear-clipped triangle, scaled to meters, has its last two vertices swapped
+when `b2Cross(v1 - v0, v2 - v1)` is negative and becomes one fixture through
+`b2PolygonShape::Set` semantics, slivers included. `SmoothCyclePath` reproduces the
+periodic chord-parameter Akima spline, its float/double mix and the original ear
+clipper bit for bit, including the closing-edge lookup that reads the first erased
+tail tuple. `SmoothPathReference.txt` stores the smooth and triangle point bits of
+twelve invented paths from a private native reconstruction; the same reconstruction
+matched every authored level polygon and the Om Nom master.
+
+Out of scope and rejected explicitly: bullets (deliberately unported), dynamic bodies without positive
 density, static bodies with an initial velocity (native islands would feed it to
 contact solving), and numbers the C++ stream would only partly parse.
 
@@ -1272,6 +1291,7 @@ dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FrogTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PinTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RopeTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyFactoryTests'
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SmoothCyclePathTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SleepTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PrismaticJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContinuousWorldTests'

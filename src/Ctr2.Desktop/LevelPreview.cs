@@ -170,6 +170,33 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(origin.X, origin.Y, body.Radius * 200, paint);
                         continue;
                     }
+                    if (shape.Kind.StartsWith("polygon", StringComparison.Ordinal))
+                    {
+                        // Static polygons are drawn as terrain above; moving ones draw their triangle fixtures.
+                        if (body.Type != PhysicsBodyType.Static)
+                        {
+                            foreach (ConvexPolygon fixture in body.PolygonFixtures)
+                            {
+                                using SKPathBuilder triangle = new();
+                                for (int i = 0; i < fixture.Vertices.Count; i++)
+                                {
+                                    Vector2 point = origin + (Vector2.Transform(fixture.Vertices[i], Matrix3x2.CreateRotation(body.Angle)) * 200);
+                                    if (i == 0)
+                                    {
+                                        triangle.MoveTo(point.X, point.Y);
+                                    }
+                                    else
+                                    {
+                                        triangle.LineTo(point.X, point.Y);
+                                    }
+                                }
+                                triangle.Close();
+                                using SKPath outline = triangle.Detach();
+                                canvas.DrawPath(outline, paint);
+                            }
+                        }
+                        continue;
+                    }
                     float halfWidth = float.Parse(shape.Design["width"], CultureInfo.InvariantCulture);
                     float halfHeight = float.Parse(shape.Design["height"], CultureInfo.InvariantCulture);
                     int restore = canvas.Save();

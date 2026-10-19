@@ -232,7 +232,8 @@ namespace Ctr2.Engine.Physics
                     CircleContact.Create(a, b, candidate.Friction, candidate.Restitution) :
                     b.PolygonFixtures.Count == 0 ?
                     PolygonCircleContact.Create(a, a.PolygonFixtures[candidate.A.LocalIndex], b, candidate.Friction, candidate.Restitution) :
-                    PolygonBodyContact.Create(a, a.PolygonFixtures[candidate.A.LocalIndex], b, b.PolygonFixtures[candidate.B.LocalIndex], candidate.Friction, candidate.Restitution);
+                    PolygonBodyContact.Create(a, a.PolygonFixtures[candidate.A.LocalIndex], b, b.PolygonFixtures[candidate.B.LocalIndex], candidate.Friction, candidate.Restitution,
+                        a.Land || b.Land);
             }
             if (next != null)
             {

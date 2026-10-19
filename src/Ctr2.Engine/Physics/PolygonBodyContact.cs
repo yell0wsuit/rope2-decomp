@@ -28,7 +28,7 @@ namespace Ctr2.Engine.Physics
         internal override PhysicsBody Body => a;
         internal override PhysicsBody? OtherBody => b;
 
-        /// <summary>Whether one side is a terrain fixture's static identity frame.</summary>
+        /// <summary>Whether one side is a terrain fixture's static identity frame or a land body.</summary>
         internal bool Terrain
         {
             get;

@@ -3,6 +3,7 @@
   <ItemGroup>
     <None Update="SleepReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BodyFactoryReference.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="SmoothPathReference.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Update="RopeReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PinReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="FrogReference.json" CopyToOutputDirectory="PreserveNewest" />

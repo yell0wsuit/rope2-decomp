@@ -52,7 +52,8 @@ namespace Ctr2.Engine.Physics
     {
         internal bool TouchesTerrain(PhysicsBody body)
         {
-            return contacts.Values.Any(c => c.Body == body);
+            return contacts.Values.Any(c => c.Body == body) ||
+                bodyContacts.Values.Any(c => (c.A.Body == body && c.B.Body!.Land) || (c.B.Body == body && c.A.Body!.Land));
         }
     }
 }

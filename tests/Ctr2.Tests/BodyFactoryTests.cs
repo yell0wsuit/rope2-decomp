@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Numerics;
 using System.Text.Json;
 
 using Ctr2.Assets;
@@ -178,12 +179,42 @@ namespace Ctr2.Tests
             }, master));
         }
 
+        /// <summary>Builds polygons from the smoothed path's triangles: the origin round-trips the editor position, each
+        /// triangle becomes one counterclockwise fixture, and the material applies to every fixture.</summary>
+        [Fact]
+        public void PolygonDesignsBuildTriangleFixtures()
+        {
+            PhysicsWorld world = new();
+            Dictionary<string, string> design = Wood(false, ("shapeType", "polygon"), ("x", "80.7"), ("y", "210.3"), ("angle", "12"),
+                ("polygon", "50,0,50,40,25,15,0,40,"), ("smoothFactor", "2"));
+            PhysicsBody body = BodyFactory.Create(world, design);
+            SmoothCyclePath path = new(new((float)((float)(80.7f + 80.7f) / 200 * 200.0), (float)((float)(210.3f + 210.3f) / 200 * 200.0)),
+                design["polygon"], false, 2);
+            Assert.Equal(path.BodyOrigin, body.Origin);
+            Assert.Equal((float)(12 * 3.14159265 / 180.0), body.Angle);
+            Assert.Equal(path.TrianglePoints().Count / 3, body.PolygonFixtures.Count);
+            foreach (ConvexPolygon fixture in body.PolygonFixtures)
+            {
+                Vector2 a = fixture.Vertices[0], b = fixture.Vertices[1], c = fixture.Vertices[2];
+                Assert.True(((b.X - a.X) * (c.Y - b.Y)) - ((b.Y - a.Y) * (c.X - b.X)) >= 0);
+            }
+            Assert.Equal((PhysicsBodyType.Static, .3f), (body.Type, body.Friction));
+            Assert.All(world.GetFixtureLabels(body), label => Assert.Equal(new PhysicsCollisionFilter(1 << 14, ushort.MaxValue, 0), world.GetFixtureFilter(label)));
+
+            // Om Nom-style dynamic polygons normalize the path about the mean of every vertex, including the implicit origin.
+            Dictionary<string, string> normalized = Wood(true, ("shapeType", "polygon"), ("polygon", "30,0,30,30,0,30,"), ("normalizeShape", "true"));
+            PhysicsBody square = BodyFactory.Create(world, normalized);
+            Assert.Equal(Vector2.Zero, square.Origin);
+            Assert.InRange(square.LocalCenter.Length(), 0, 1e-6f);
+            Assert.Equal(2, square.PolygonFixtures.Count);
+        }
+
         /// <summary>Designs outside the ported factory scope fail before creating a misleading body.</summary>
         /// <param name="key">Overridden key.</param>
         /// <param name="value">Unsupported value.</param>
         [Theory]
         [InlineData("bullet", "true")]
-        [InlineData("shapeType", "polygon")]
+        [InlineData("shapeType", "triangle")]
         [InlineData("density", "0")]
         [InlineData("radius", "1e2x")]
         [InlineData("filter.category", "1.5")]

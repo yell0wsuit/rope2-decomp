@@ -152,7 +152,7 @@ namespace Ctr2.Engine.Physics
         /// <param name="value">Logical vector.</param>
         /// <param name="angle">Clockwise radians.</param>
         /// <returns>The rotated vector; the table quantizes the angle to 1/1024 of a turn.</returns>
-        private static Vector2 TableRotate(Vector2 value, float angle)
+        internal static Vector2 TableRotate(Vector2 value, float angle)
         {
             int index = (int)((float)(angle * 1024.0) / 3.14159265 / 2.0) & 0x3FF;
             float cosine = Cosines[index], sine = Sines[index];

@@ -11,7 +11,7 @@ namespace Ctr2.Engine.Physics
 {
     /// <summary>Builds physics bodies from merged design dictionaries, like the scene's shared body factory.</summary>
     /// <remarks>Absent numbers read zero and absent flags read false, so an absent <c>gravityScale</c> means no gravity
-    /// and an absent <c>body_type</c> means static. Polygon shapes and bullets are outside this factory's scope.</remarks>
+    /// and an absent <c>body_type</c> means static. Bullets are outside this factory's scope.</remarks>
     public static class BodyFactory
     {
         /// <summary>Merges a materialized shape's material design, its tag-derived shape type and its authored attributes.</summary>
@@ -79,7 +79,7 @@ namespace Ctr2.Engine.Physics
             return Create(world, design, new(x / 200, y / 200), angle);
         }
 
-        /// <summary>Creates a circle or rectangle body with one fixture at an explicit origin and angle.</summary>
+        /// <summary>Creates a circle, rectangle or compound polygon body at an explicit origin and angle.</summary>
         /// <param name="world">Owning world.</param>
         /// <param name="design">Merged design dictionary.</param>
         /// <param name="position">Body origin in meters.</param>
@@ -128,8 +128,11 @@ namespace Ctr2.Engine.Physics
                         body = world.AddPolygon(ConvexPolygon.Box((float)(w / 2.0), (float)(h / 2.0)), position, density, gravityScale, angle,
                             fixedRotation, compound: false, type);
                         break;
+                    case "polygon":
+                        body = CreatePolygon(world, design, position, angle, type, density, gravityScale, fixedRotation);
+                        break;
                     default:
-                        throw new InvalidDataException("Design body factory supports circle and rectangle shapes only.");
+                        throw new InvalidDataException("Design body factory supports circle, rectangle and polygon shapes only.");
                 }
                 body.LinearDamping = Number(design, "linearDamping");
                 body.AngularDamping = Number(design, "angularDamping");
@@ -156,6 +159,39 @@ namespace Ctr2.Engine.Physics
                 body.SetAngularVelocity(angularVelocity);
             }
             return body;
+        }
+
+        /// <summary>Builds a compound polygon body like the native polygon branch: smoothed path, ear-clipped triangles, one fixture each.</summary>
+        /// <remarks>The editor position is the body position scaled back to logical units, and the body origin is that position
+        /// scaled to meters again; each triangle is wound counterclockwise before it becomes a fixture, slivers included.</remarks>
+        private static PhysicsBody CreatePolygon(PhysicsWorld world, IReadOnlyDictionary<string, string> design, Vector2 position, float angle,
+            PhysicsBodyType type, float density, float gravityScale, bool fixedRotation)
+        {
+            int smoothFactor = design.TryGetValue("smoothFactor", out string? text) && !string.IsNullOrWhiteSpace(text)
+                ? int.TryParse(text, NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite, CultureInfo.InvariantCulture, out int value) ? value
+                : throw new InvalidDataException("Invalid polygon smooth factor: " + text) : 1;
+            Vector2 editor = new((float)(position.X * 200.0), (float)(position.Y * 200.0));
+            SmoothCyclePath path = new(editor, design.GetValueOrDefault("polygon", ""), design.GetValueOrDefault("normalizeShape") == "true", smoothFactor);
+            IReadOnlyList<Vector2> points = path.TrianglePoints();
+            List<ConvexPolygon> fixtures = [];
+            for (int i = 0; i + 2 < points.Count; i += 3)
+            {
+                Vector2 a = Meters(points[i]), b = Meters(points[i + 1]), c = Meters(points[i + 2]);
+                Vector2 first = b - a, second = c - b;
+                if ((first.X * second.Y) - (first.Y * second.X) < 0)
+                {
+                    (b, c) = (c, b);
+                }
+                fixtures.Add(ConvexPolygon.Triangle(a, b, c));
+            }
+            return fixtures.Count == 0
+                ? throw new InvalidDataException("Polygon design produced no triangles.")
+                : world.AddPolygonFixtures(fixtures, path.BodyOrigin, density, gravityScale, angle, fixedRotation, type);
+        }
+
+        private static Vector2 Meters(Vector2 value)
+        {
+            return new((float)(value.X / 200.0), (float)(value.Y / 200.0));
         }
 
         /// <summary>Builds the fixture filter from the authored category, collide-with mode and excluded categories.</summary>

@@ -83,17 +83,17 @@ cadence. A terminal result freezes session ticks. Restart replays scheduled cuts
 from tick zero. As with previews, snapshot output must be a new file.
 
 The supported Windows pack 1/entry 2 replay below collected 3/3 stars and completed
-at tick 312 (feeding at tick 182). This verifies the port's current slice, not
+at tick 313 (feeding at tick 183). This verifies the port's current slice, not
 original-game physics or visual parity:
 
 ```sh
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2 --ticks 600 --cut 0:0:0:519.25:343.5 --cut 0:1:0:138.66667:156.33333 --snapshot local/forest-win.png
 ```
 
-Canyon pack 2/entry 2 completed with 3/3 stars at tick 376 (feeding at tick 246)
+Canyon pack 2/entry 2 completed with 3/3 stars at tick 364 (feeding at tick 234)
 using `--tap 1:92:694 --cut 10:0:0:382:170 --tap 150:556:358`.
 
-Pack 1/entry 1 also completed with 3/3 stars at tick 237 (feeding at tick 107)
+Pack 1/entry 1 also completed with 3/3 stars at tick 238 (feeding at tick 108)
 using `--ticks 600 --cut 30:0:0:400:138`. Leaf randomness is deterministic for
 repeatable diagnostics; native randomness and visual parity remain unverified.
 

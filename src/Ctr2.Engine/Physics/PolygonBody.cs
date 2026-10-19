@@ -31,6 +31,13 @@ namespace Ctr2.Engine.Physics
         /// <summary>Native cached transform origin set by <c>SetTransform</c>; cleared by any position or angle write.</summary>
         internal Vector2? TransformOrigin;
 
+        /// <summary>Gets or sets whether the body is a static scene polygon, the game's land type for character reactions.</summary>
+        /// <value>True for static circle, rectangle and polygon shapes built by the scene.</value>
+        internal bool Land
+        {
+            get; set;
+        }
+
         /// <summary>Gets whether angular integration is disabled.</summary>
         /// <value>True for a fixed-rotation body.</value>
         public bool FixedRotation
@@ -80,6 +87,37 @@ namespace Ctr2.Engine.Physics
     {
         /// <summary>Total owned dynamic polygon fixture count.</summary>
         private int polygonFixtureCount;
+
+        /// <summary>Adds a body with the given convex fixtures, created in list order, like a native body built fixture by fixture.</summary>
+        /// <param name="fixtures">Local convex fixtures in meters.</param>
+        /// <param name="origin">Body origin in world meters.</param>
+        /// <param name="density">Fixture density; static and kinematic bodies accept zero.</param>
+        /// <param name="gravityScale">World gravity multiplier.</param>
+        /// <param name="angle">Initial clockwise radians.</param>
+        /// <param name="fixedRotation">Whether to disable angular motion.</param>
+        /// <param name="type">Native body type.</param>
+        /// <returns>The owned body.</returns>
+        /// <exception cref="ArgumentException">Body data, mass or fixture budgets are invalid.</exception>
+        public PhysicsBody AddPolygonFixtures(IReadOnlyList<ConvexPolygon> fixtures, Vector2 origin, float density, float gravityScale, float angle, bool fixedRotation,
+            PhysicsBodyType type)
+        {
+            ThrowIfLocked();
+            ArgumentNullException.ThrowIfNull(fixtures);
+            if (fixtures.Count == 0 || bodies.Count >= 4096 || polygonFixtureCount + fixtures.Count > 8192 ||
+                !float.IsFinite(origin.X) || !float.IsFinite(origin.Y) || MathF.Abs(origin.X) > 10000 || MathF.Abs(origin.Y) > 10000 ||
+                !Enum.IsDefined(type) || !float.IsFinite(density) || density < 0 || (density == 0 && type == PhysicsBodyType.Dynamic) || density > 1000000 ||
+                !float.IsFinite(gravityScale) || MathF.Abs(gravityScale) > 1000000 || !float.IsFinite(angle) || MathF.Abs(angle) > 1000000)
+            {
+                throw new ArgumentException("Invalid polygon body values or fixture budget.");
+            }
+            PhysicsBody body = new([.. fixtures], origin, density, gravityScale, angle, fixedRotation, type);
+            body.Center0 = body.Position;
+            body.Angle0 = angle;
+            RegisterBodyProxies(body);
+            bodies.Add(body);
+            polygonFixtureCount += fixtures.Count;
+            return body;
+        }
 
         /// <summary>Adds a dynamic convex outline, normally triangulated into a compound body.</summary>
         /// <param name="shape">Immutable convex local outline in meters.</param>

@@ -116,23 +116,12 @@ namespace Ctr2.Engine.Physics
             List<GeneralShape> shapes = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
             List<PlacedLevelObject> pins = [];
-            int terrainIndex = 0, characterIndex = 0;
             // Like the scene loader, every object creates its body in document order; ropes follow in a post-pass.
             foreach (PlacedLevelObject placed in layout.Objects)
             {
                 string kind = placed.Source.Kind;
                 switch (kind)
                 {
-                    case "polygon_materialized":
-                        TerrainShape shape = Terrain[terrainIndex++];
-                        if (!shape.IsSensor)
-                        {
-                            foreach (IReadOnlyList<Vector2> triangle in shape.Triangles)
-                            {
-                                World.AddTerrain(triangle, shape.Friction, shape.Restitution, false, shape.Filter);
-                            }
-                        }
-                        break;
                     case "candy":
                         PhysicsBody candy = BodyFactory.Create(World, candyDesign, placed.Position!.Value / 200, 0);
                         candies.Add(candy);
@@ -146,7 +135,7 @@ namespace Ctr2.Engine.Physics
                         grabs.Add(placed, BodyFactory.Create(World, grabDesign, placed.Position!.Value / 200, 0));
                         break;
                     case "omnom":
-                        characters.Add(AddCharacter(CharacterDefinitions[characterIndex++]));
+                        characters.Add(AddCharacter(placed, design));
                         break;
                     case "star":
                         AddStar(placed, design);
@@ -161,10 +150,13 @@ namespace Ctr2.Engine.Physics
                         AddBalloon(placed, design);
                         break;
                     default:
-                        if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal))
+                        if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
+                            kind.StartsWith("polygon", StringComparison.Ordinal))
                         {
                             IReadOnlyDictionary<string, string> fields = BodyFactory.MaterializedDesign(placed.Source, design);
                             GeneralShape general = new(kind, fields, BodyFactory.Create(World, fields));
+                            // The game's general polygon is land when its body is static.
+                            general.Body.Land = general.Body.Type == PhysicsBodyType.Static;
                             shapes.Add(general);
                             shapeBodies.Add(placed, general.Body);
                         }
@@ -475,18 +467,19 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        /// <summary>Creates one simulated character from its validated authored definition.</summary>
-        /// <param name="definition">Authored compound polygon definition.</param>
-        /// <returns>The owned dynamic body.</returns>
-        private PhysicsBody AddCharacter(PolygonBodyDefinition definition)
+        /// <summary>Builds Om Nom like its initializer: the master design, the authored attributes, then a forced normalized shape.</summary>
+        /// <param name="placed">Authored Om Nom.</param>
+        /// <param name="design">Matching master design document.</param>
+        /// <returns>The owned dynamic compound body.</returns>
+        private PhysicsBody AddCharacter(PlacedLevelObject placed, LevelDefinition design)
         {
-            PhysicsBody character = World.AddPolygon(definition.Shape, definition.Origin, definition.Density,
-                definition.GravityScale, definition.Angle, definition.FixedRotation);
-            character.LinearDamping = definition.LinearDamping;
-            character.AngularDamping = definition.AngularDamping;
-            character.Friction = definition.Friction;
-            character.Restitution = definition.Restitution;
-            return character;
+            Dictionary<string, string> fields = new(Fields(Find(design, "omnom")), StringComparer.Ordinal);
+            foreach ((string key, string value) in placed.Source.Attributes)
+            {
+                fields[key] = value;
+            }
+            fields["normalizeShape"] = "true";
+            return BodyFactory.Create(World, fields);
         }
 
         /// <summary>Copies a master design like the master loader: its attributes plus its tag as <c>shapeType</c>.</summary>
