@@ -214,7 +214,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new ArgumentOutOfRangeException(nameof(origin));
             }
-            PhysicsBody body = new(origin, 0, 0, 0, PhysicsBodyType.Static, false);
+            PhysicsBody body = new(origin, 0, 0, 1, PhysicsBodyType.Static, false);
             body.Center0 = body.Position;
             bodyProxies.Add(body, []);
             bodies.Add(body);

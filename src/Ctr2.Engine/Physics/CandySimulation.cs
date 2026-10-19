@@ -154,6 +154,9 @@ namespace Ctr2.Engine.Physics
                     case "frog":
                         AddFrog(placed);
                         break;
+                    case "balloon":
+                        AddBalloon(placed, design);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal))
                         {
@@ -190,6 +193,21 @@ namespace Ctr2.Engine.Physics
                 float x = Value(grab.Source, "target_x", 0), y = Value(grab.Source, "target_y", 0), lengthValue = Value(grab.Source, "length");
                 ropes.Add(CreateRope(grabs[grab], target!, lengthValue + lengthValue, Vector2.Zero, new(x + x, y + y), false, candy, bone, frequency));
             }
+            // Balloon ropes follow the grab ropes; a balloon has no default target.
+            foreach (SimulationBalloon balloon in balloons)
+            {
+                if (!balloon.Placed.Source.Attributes.TryGetValue("target_id", out string? name) || !layout.Named.TryGetValue(name, out PlacedLevelObject? named))
+                {
+                    continue;
+                }
+                bool candy = candyBodies.TryGetValue(named, out PhysicsBody? target);
+                if (!candy && !shapeBodies.TryGetValue(named, out target))
+                {
+                    throw new InvalidDataException("Ropes support candy and circle/rectangle shape targets only.");
+                }
+                float x = Value(balloon.Placed.Source, "target_x", 0), y = Value(balloon.Placed.Source, "target_y", 0), lengthValue = Value(balloon.Placed.Source, "length");
+                ropes.Add(CreateRope(balloon.Body!, target!, lengthValue + lengthValue, new(0, 45), new(x + x, y + y), false, candy, bone, frequency));
+            }
             Characters = characters.AsReadOnly();
             Candies = candies.AsReadOnly();
             Shapes = shapes.AsReadOnly();
@@ -223,10 +241,14 @@ namespace Ctr2.Engine.Physics
             Gameplay?.BeforeStep();
             World.Step();
             CloseTouchedTongues();
-            // Scene children update after the step: ropes first, then frogs.
+            // Scene children update after the step: ropes first, then balloons, then frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
+            }
+            foreach (SimulationBalloon balloon in balloons)
+            {
+                UpdateBalloon(balloon);
             }
             foreach (SimulationFrog frog in frogs)
             {

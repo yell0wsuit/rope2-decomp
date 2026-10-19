@@ -73,6 +73,7 @@ namespace Ctr2.Engine.Physics
                 body.Densities[0] /= 10;
                 body.ResetMassData();
             }
+            NotifyAttached(rope);
             return true;
         }
 
@@ -124,6 +125,7 @@ namespace Ctr2.Engine.Physics
                     break;
                 }
             }
+            SwipeBalloons(start, end);
             return accepted.AsReadOnly();
         }
 

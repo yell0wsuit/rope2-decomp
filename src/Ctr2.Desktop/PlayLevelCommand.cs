@@ -25,7 +25,8 @@ namespace Ctr2.Desktop
             int width = 640, height = 960, frames = 0, resolution = 2, ticks = 0;
             string? snapshot = null;
             List<RopeCut> cuts = [];
-            List<FrogTap> taps = [];
+            List<SceneTap> taps = [];
+            List<BalloonPop> pops = [];
             for (int i = 4; i < args.Length; i += 2)
             {
                 if (i + 1 == args.Length)
@@ -60,6 +61,16 @@ namespace Ctr2.Desktop
                         }
                         taps.Add(ParseTap(value));
                         break;
+                    case "--pop":
+                        if (pops.Count >= 1024)
+                        {
+                            throw new ArgumentException("Too many pops.");
+                        }
+                        string[] pop = value.Split(':');
+                        pops.Add(pop.Length == 2 && int.TryParse(pop[0], NumberStyles.None, CultureInfo.InvariantCulture, out int popTick) && popTick <= 36000 &&
+                            int.TryParse(pop[1], NumberStyles.None, CultureInfo.InvariantCulture, out int popIndex)
+                            ? new(popTick, popIndex) : throw new ArgumentException("Invalid pop tick or balloon index."));
+                        break;
                     case "--cut":
                         if (cuts.Count >= 1024)
                         {
@@ -79,13 +90,19 @@ namespace Ctr2.Desktop
                 int.Parse(args[3], CultureInfo.InvariantCulture), resolution, play: true).Preview;
             GameSession session = preview.Session!;
             Queue<RopeCut> replay = new(cuts.OrderBy(c => c.Tick));
-            Queue<FrogTap> tapReplay = new(taps.OrderBy(t => t.Tick));
+            Queue<SceneTap> tapReplay = new(taps.OrderBy(t => t.Tick));
+            Queue<BalloonPop> popReplay = new(pops.OrderBy(p => p.Tick));
             session.Stepping += () =>
             {
-                while (tapReplay.TryPeek(out FrogTap? tap) && tap.Tick == session.Simulation.Tick)
+                while (tapReplay.TryPeek(out SceneTap? tap) && tap.Tick == session.Simulation.Tick)
                 {
                     _ = tapReplay.Dequeue();
                     _ = session.Simulation.Tap(tap.Point);
+                }
+                while (popReplay.TryPeek(out BalloonPop? pop) && pop.Tick == session.Simulation.Tick)
+                {
+                    _ = popReplay.Dequeue();
+                    _ = session.Simulation.PopBalloon(pop.Balloon);
                 }
                 while (replay.TryPeek(out RopeCut? cut) && cut.Tick == session.Simulation.Tick)
                 {
@@ -96,7 +113,7 @@ namespace Ctr2.Desktop
                     }
                 }
             };
-            Console.WriteLine("Play: swipe to cut, tap frogs; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
+            Console.WriteLine("Play: swipe to cut or pop, tap frogs and balloons; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
             for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == LevelResult.Running; i++)
             {
                 session.Step();
@@ -156,7 +173,11 @@ namespace Ctr2.Desktop
             {
                 Console.WriteLine($"Candy consumed: tick {eaten.Tick}.");
             }
-            foreach (FrogTap tap in session.Input.Taps)
+            foreach (BalloonPop pop in session.Simulation.BalloonPops)
+            {
+                Console.WriteLine(FormattableString.Invariant($"Pop replay: --pop {pop.Tick}:{pop.Balloon}"));
+            }
+            foreach (SceneTap tap in session.Input.Taps)
             {
                 Console.WriteLine(FormattableString.Invariant($"Tap replay: --tap {tap.Tick}:{tap.Point.X:R}:{tap.Point.Y:R}"));
             }
@@ -167,7 +188,7 @@ namespace Ctr2.Desktop
             return 0;
         }
 
-        private static FrogTap ParseTap(string value)
+        private static SceneTap ParseTap(string value)
         {
             string[] parts = value.Split(':');
             return parts.Length != 3 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int tick) || tick > 36000 ||
@@ -215,7 +236,7 @@ namespace Ctr2.Desktop
             };
             canvas.DrawText($"{status}   Stars: {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}", 12, 27, SKTextAlign.Left, font, text);
             font.Size *= .75f;
-            canvas.DrawText("Swipe to cut, tap frogs | R: restart | Space: pause | Esc: exit", 12, 52, SKTextAlign.Left, font, text);
+            canvas.DrawText("Swipe to cut, tap frogs/balloons | R: restart | Space: pause | Esc: exit", 12, 52, SKTextAlign.Left, font, text);
         }
     }
 }

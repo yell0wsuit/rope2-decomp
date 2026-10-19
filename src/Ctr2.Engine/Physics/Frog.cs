@@ -96,7 +96,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Gets the authored frogs in creation order.</summary>
         public IReadOnlyList<SimulationFrog> Frogs => frogs.AsReadOnly();
 
-        /// <summary>Applies a tap like the scene: frogs are tried newest first, and one within 78 logical units toggles.</summary>
+        /// <summary>Applies a tap like the scene: frogs newest first (within 78 logical units a frog toggles), then balloons.</summary>
         /// <param name="point">Tap position in logical units.</param>
         /// <returns>Whether a frog consumed the tap.</returns>
         public bool Tap(Vector2 point)
@@ -119,7 +119,8 @@ namespace Ctr2.Engine.Physics
                 }
                 return true;
             }
-            return false;
+            // Balloons were added to the scene before frogs, so they see the tap afterwards.
+            return TapBalloon(point);
         }
 
         /// <summary>Creates an authored frog; a frog with an authored open tongue extends it during construction.</summary>

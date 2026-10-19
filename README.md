@@ -45,7 +45,7 @@ After importing a full Windows package, start with pack 1, entry 1 or 2:
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2
 ```
 
-Drag the primary mouse button across ropes; click a frog to open or close its tongue. **R** restarts, **Space** pauses or
+Drag the primary mouse button across ropes or balloons; click a frog to open or close its tongue, or a balloon to pop it. **R** restarts, **Space** pauses or
 resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.
 Restart restores the initial physics, stars, animation, input and replay clock.
@@ -53,9 +53,9 @@ Restart restores the initial physics, stars, animation, input and replay clock.
 This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
 a swipe hint, static terrain, and static or dynamic wood rectangles and circles,
 including ropes attached to wood at authored offsets, pins (hinges between bodies
-or to the world) and frogs whose tongues form bridges, in a dry level (wood, pins and
-frogs are drawn diagnostically). Gameplay is independent of the
-authored location; currently pack 1/entries 1 to 4 and four canyon frog levels use nothing but supported
+or to the world), frogs whose tongues form bridges and balloons, in a dry level (wood,
+pins, frogs and balloons are drawn diagnostically). Gameplay is independent of the
+authored location; currently 13 levels across the forest and canyon packs use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -75,8 +75,8 @@ star glow blend overrides and periodic flare, sound, saves and original-game par
 remain pending. Terrain and ropes still use diagnostic drawing; static and
 simulation previews retain their diagnostic presentation.
 
-`--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]` and
-`--tap tick:x:y`,
+`--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]`,
+`--tap tick:x:y` and `--pop tick:balloon`,
 `--width`, `--height`, `--resolution`, `--snapshot` and `--frames` support
 deterministic checks. Animation completion uses fixed ticks rather than render
 cadence. A terminal result freezes session ticks. Restart replays scheduled cuts
@@ -174,7 +174,7 @@ An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
 The supplied Windows 1.0.0.46 content has 168 desktop entries; currently only
-eight pass (pack 1/entries 1 to 4; pack 2/entries 2, 4, 11 and 17). Further work includes loader coverage, physical
+13 pass (pack 1/entries 1–4, 6, 7 and 9; pack 2/entries 2–4, 11, 17 and 20). Further work includes loader coverage, physical
 objects and general collision, moving stars, balloons, pumps, water, magnets,
 the other characters, level selection, progression, audio and saves.
 

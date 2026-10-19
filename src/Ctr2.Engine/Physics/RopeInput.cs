@@ -4,10 +4,10 @@ using System.Numerics;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>One accepted tap that a frog consumed.</summary>
+    /// <summary>One accepted tap that a scene object consumed.</summary>
     /// <param name="Tick">Zero-based tick before which the tap applied.</param>
     /// <param name="Point">Tap position in logical units.</param>
-    public sealed record FrogTap(int Tick, Vector2 Point);
+    public sealed record SceneTap(int Tick, Vector2 Point);
 
     /// <summary>Queues fitted pointer presses and swipes for application immediately before a fixed simulation tick.</summary>
     /// <param name="simulation">Scene receiving accepted cuts.</param>
@@ -17,7 +17,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Bounded pending logical presses and pointer segments in event order.</summary>
         private readonly Queue<(Vector2 Start, Vector2 End, bool Tap)> pending = new();
         /// <summary>Accepted taps in application order.</summary>
-        private readonly List<FrogTap> taps = [];
+        private readonly List<SceneTap> taps = [];
         /// <summary>Accepted immutable replay records in application order.</summary>
         private readonly List<RopeCut> cuts = [];
         /// <summary>Previous logical pointer position while held.</summary>
@@ -27,8 +27,8 @@ namespace Ctr2.Engine.Physics
         /// <summary>Gets accepted tick-indexed cuts, including impulses.</summary>
         /// <value>A read-only view updated only when pending input is applied.</value>
         public IReadOnlyList<RopeCut> Cuts => cuts.AsReadOnly();
-        /// <summary>Gets accepted tick-indexed taps that frogs consumed.</summary>
-        public IReadOnlyList<FrogTap> Taps => taps.AsReadOnly();
+        /// <summary>Gets accepted tick-indexed taps that scene objects consumed.</summary>
+        public IReadOnlyList<SceneTap> Taps => taps.AsReadOnly();
 
         /// <summary>Begins a primary-pointer drag only inside the fitted canvas.</summary>
         /// <param name="screen">Pointer position in output pixels.</param>

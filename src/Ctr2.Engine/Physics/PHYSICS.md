@@ -296,6 +296,7 @@ compilation nor game assets.
 | `ContactLifecycleReference.json` | 1,680 native per-tick snapshots: corner, bounce, centered/offset rotating compounds, late terrain and body removal/replacement. Exact contact order/identity/touching and proxy IDs; predicted bounds and six body-state components. |
 | `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates (including candy slowdown) and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
+| `BalloonReference.json` | 600 native ticks of balloons: tap and swipe pops, stratosphere gravity/damping blending, and fly-away on rope cut. Activity flags plus every alive body including gravity scale and damping. |
 | `FrogReference.json` | 720 native ticks of frog tongues: tap open/close bridge with candy, a block closing the opening tongue, and an authored open tongue. Tongue state and extension plus every alive body. |
 | `PinReference.json` | 240 native ticks of scene pins: locked, rotating, motorized and limit-locked hinges, plus pins that find one, three or no bodies. Every body including the main static body. |
 | `RopeReference.json` | 480 native ticks of scene ropes: end-offset ropes to a rotated plank and a wood circle, a candy rope, a rope with no material points, an exact bone multiple, stretch/restore cycles and two replay cuts. Every body in creation order, including linear damping. |
@@ -1135,6 +1136,29 @@ The older chain oracle now includes candy slowdown; its fixtures were regenerate
 (`PhysicsReference.csv` `f6fbc9728ee7efd1dbf2ffe040603a8577265a0988ee00811a538700d021978f`,
 `RopeCutReference.csv` `7caa11746038cd2e7265d857ebb301840ae78537f85c3142c3e6985c0b8d1f8d`).
 
+## Scene balloons
+
+A balloon body comes from the master `balloon` design merged with its authored
+attributes; the scene loads at most ten. Its rope to the target (no default
+target) is built after the grab ropes, with a (0, 45) logical head shift. Every
+update after the ropes, a balloon above the `balloon_design` stratosphere line
+keeps its initial gravity scale and damping; below the line they blend toward the
+stratosphere coefficients with height, and at or above the top of the scene they
+use the coefficients outright. A tap within 70 logical units (after frogs) or a
+swipe passing within 50 (after every rope) pops an active balloon. Popping, or
+any cut of its rope, destroys the body: an intact rope attached to it is first cut
+at the neighbouring joint at the anchored body position with no tip impulse, and
+the body then leaves the rope. Swipe pops replay as `--pop tick:balloon`. When the
+candy is eaten its ropes are released first, so attached balloons fly away
+without adding tips. The balloon's pre-solve handler only plays hit animations and
+cannot stop dispatch for supported gameplay contacts, so it is not modelled.
+
+`BalloonReference.json` (600 native ticks: tap pop, grab-rope cut, rise past the
+stratosphere line and swipe pop; and a balloon flying away when its rope to a wood
+circle is cut) is bit-identical under exact comparison on macOS arm64, including
+gravity scale and damping. Fixture SHA-256:
+`0b349ad7ffb15d5e737fd9ed601a5781c85e517ab11ac8c07afbc2864639a1c0`.
+
 ## Scene frogs
 
 A frog's tongue runs from 40 logical units in front of the frog to its doubled
@@ -1236,6 +1260,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BalloonTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FrogTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PinTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RopeTests'

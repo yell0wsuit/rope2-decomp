@@ -178,6 +178,15 @@ namespace Ctr2.Desktop
                     canvas.DrawRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, paint);
                     canvas.RestoreToCount(restore);
                 }
+                paint.Color = SKColors.IndianRed;
+                foreach (SimulationBalloon balloon in Simulation?.Balloons ?? [])
+                {
+                    // Diagnostic balloon until its artwork is ported.
+                    if (balloon.Body is PhysicsBody body)
+                    {
+                        canvas.DrawCircle(body.Position.X * 200, body.Position.Y * 200, body.Radius * 200, paint);
+                    }
+                }
                 foreach (SimulationFrog frog in Simulation?.Frogs ?? [])
                 {
                     // Diagnostic frog and tongue until their artwork is ported.
@@ -238,7 +247,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }
