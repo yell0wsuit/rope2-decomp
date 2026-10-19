@@ -77,7 +77,8 @@ namespace Ctr2.Engine.Physics
 
         private static int BodyDegrees(PhysicsBody body)
         {
-            int degrees = (int)(body.Angle * 180 / MathF.PI) % 360;
+            // Native: (int)((float)(angle * 180.0) / 3.14159265) % 360, truncating a double quotient.
+            int degrees = (int)((float)(body.Angle * 180.0) / 3.14159265) % 360;
             return degrees > 180 ? degrees - 360 : degrees < -180 ? degrees + 360 : degrees;
         }
 
@@ -99,7 +100,7 @@ namespace Ctr2.Engine.Physics
                     direction = CharacterProcedure.Bottom;
                     impulse *= 1.4f;
                 }
-                else if ((CharacterState is CharacterState.Falling or CharacterState.Rolling or CharacterState.FallingMouthClose) && impulse > .2f)
+                else if ((CharacterState is CharacterState.Falling or CharacterState.Rolling or CharacterState.Sliding or CharacterState.FallingMouthClose) && impulse > .2f)
                 {
                     Vector2 relative = impact.Point - body.Position;
                     float diff = (angle + 90 - (MathF.Atan2(relative.Y, relative.X) * 180 / MathF.PI)) % 360;

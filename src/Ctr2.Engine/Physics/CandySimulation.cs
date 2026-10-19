@@ -90,9 +90,12 @@ namespace Ctr2.Engine.Physics
         /// <param name="design">Matching master design document.</param>
         /// <param name="play">Whether to enable the supported gameplay slice.</param>
         /// <param name="firstLevelArrival">Whether the host selected the first production level, which has a special arrival.</param>
+        /// <param name="characterScenes">Om Nom scene durations by name, which let gameplay complete authored scenes on its own
+        /// fixed clock; without them only a presentation callback completes scenes.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
         /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
-        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool firstLevelArrival = false)
+        public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool firstLevelArrival = false,
+            IReadOnlyDictionary<string, double>? characterScenes = null)
         {
             LevelLayout layout = LevelLayout.Create(level);
             // The scene first creates a fixtureless static body at the bottom center of its logical screen; world pins anchor to it.
@@ -231,7 +234,7 @@ namespace Ctr2.Engine.Physics
             Shapes = shapes.AsReadOnly();
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
-            Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival) : null;
+            Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival, characterScenes) : null;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>

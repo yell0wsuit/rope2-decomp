@@ -1483,8 +1483,33 @@ as the source does, and the independent 2.8-second consumption timer remains act
 Replacing the scene cancels preparation; paused/restarted sessions cannot apply
 an old preparation impulse. Tick durations remain .0167 seconds, so sampled poses
 and completion quantize to the first fixed tick at or beyond each duration.
-Authored inter-scene transitions, sliding/turning and original runtime visual and
-trajectory parity remain pending.
+Authored inter-scene transitions and original runtime visual parity remain pending.
+
+## Character states and scene completion
+
+Given Om Nom's Windows animation (resource 85), gameplay completes authored scenes
+itself: on the first fixed tick at or beyond the scene's duration, once per scene
+revision, after procedural completion and before the motion history samples the
+tick, as the source's timeline callbacks run before its speed calculator. Without
+durations only a presentation callback completes scenes, so journal replays and
+the desktop share one clock. The motion history scales each window's newest-first
+sum by the source's rounded reciprocals (0.2, 0.071429, 0.034483, 0.016949) and adds
+the 250 ms windows: 14 velocity samples and angular samples 5 through 13 over 14.
+Integer body degrees use the source's `(int)((float)(angle * 180.0) / 3.14159265)`.
+
+The character starts facing right when its origin lies left of the screen center.
+Opening the mouth faces the candy; a finished `MOUTH_CLOSE` faces the center when
+more than 50 units away and enters `Puzzled` until `PUZZLED` finishes. An idle
+character playing `IDLE`, slower than 0.2 m/s and 0.1 rad/s over 250 ms and within
+20 degrees of upright, turns (`TURN`) toward the center when it faces away and lies
+more than 50 units off center. An idle character whose 100 ms velocity exceeds
+0.5 m/s, heads between 10 and 170 degrees, stays within one degree of the body angle
+modulo 180 and differs by more than 15 degrees from the previous slide's heading
+starts `Sliding` (`SLIDE_LEFT` when moving the way it faces, otherwise `SLIDE_RIGHT`);
+any finished scene ends the slide without a new scene. Static terrain impacts above
+0.2 bump a sliding character like a falling one, so a bump that ends while spinning
+rolls. In level 1-16 this reproduces the recording's pump-driven slide, roll and
+delayed stand-up bit for bit.
 
 ## Hint journal regression baseline
 

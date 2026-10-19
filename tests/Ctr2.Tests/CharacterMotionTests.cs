@@ -23,24 +23,27 @@ namespace Ctr2.Tests
             return new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" + objects + "</layer></map>"), LevelReader.Read(design), true);
         }
 
-        /// <summary>History starts with 59 zeros and averages newest samples in reverse insertion order.</summary>
+        /// <summary>History starts with 59 zeros, sums newest samples first and scales each window by the source's rounded
+        /// reciprocal (0.2, 0.071429, 0.034483 and 0.016949) rather than dividing.</summary>
         [Fact]
         public void HistoryUsesZeroFilledSourceWindows()
         {
             CharacterMotionHistory history = new();
-            history.Sample(new(5, 10));
-            Assert.Equal(new Vector2(1, 2), history.Short);
-            Assert.Equal(new Vector2(5, 10) / 29, history.Medium);
-            Assert.Equal(new Vector2(5, 10) / 59, history.Long);
+            history.Sample(new(5, 10), 7);
+            Assert.Equal(new Vector2(5, 10) * .2f, history.Short);
+            Assert.Equal(new Vector2(5, 10) * .071429f, history.Quarter);
+            Assert.Equal(new Vector2(5, 10) * .034483f, history.Medium);
+            Assert.Equal(new Vector2(5, 10) * .016949f, history.Long);
+            Assert.Equal((7f, 0f), (history.ShortAngular * 5, history.QuarterAngular));
             for (int i = 0; i < 58; i++)
             {
                 history.Sample(new(1, 1));
             }
-            Assert.Equal(Vector2.One, history.Short);
-            Assert.Equal(Vector2.One, history.Medium);
-            Assert.Equal(new Vector2(63, 68) / 59, history.Long);
+            Assert.Equal(new Vector2(5 * .2f), history.Short);
+            Assert.Equal(new Vector2(29 * .034483f), history.Medium);
+            Assert.Equal(new Vector2(63, 68) * .016949f, history.Long);
             history.Sample(Vector2.One);
-            Assert.Equal(Vector2.One, history.Long);
+            Assert.Equal(new Vector2(59 * .016949f), history.Long);
         }
 
         /// <summary>Fall detection requires both its directional threshold and consistent recent motion.</summary>

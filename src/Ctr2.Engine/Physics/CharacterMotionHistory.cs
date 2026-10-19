@@ -14,6 +14,11 @@ namespace Ctr2.Engine.Physics
         {
             get; private set;
         }
+        /// <summary>Gets angular samples 5 through 13 divided by 14, the source's 250 ms window.</summary>
+        public float QuarterAngular
+        {
+            get; private set;
+        }
         /// <summary>Gets older angular samples 29 through 58 divided by 59, matching the source.</summary>
         public float LongAngular
         {
@@ -21,6 +26,11 @@ namespace Ctr2.Engine.Physics
         }
         /// <summary>Gets the newest five-sample velocity average.</summary>
         public Vector2 Short
+        {
+            get; private set;
+        }
+        /// <summary>Gets the newest 14-sample velocity average, the source's 250 ms window.</summary>
+        public Vector2 Quarter
         {
             get; private set;
         }
@@ -47,7 +57,7 @@ namespace Ctr2.Engine.Physics
             }
             samples[next] = velocity;
             angular[next] = angularVelocity;
-            ShortAngular = LongAngular = 0;
+            ShortAngular = QuarterAngular = LongAngular = 0;
             next = (next + 1) % samples.Length;
             Vector2 sum = Vector2.Zero;
             for (int i = 0; i < samples.Length; i++)
@@ -57,6 +67,10 @@ namespace Ctr2.Engine.Physics
                 {
                     ShortAngular += angularSample;
                 }
+                else if (i < 14)
+                {
+                    QuarterAngular += angularSample;
+                }
 
                 if (i >= 29)
                 {
@@ -64,17 +78,23 @@ namespace Ctr2.Engine.Physics
                 }
 
                 sum += samples[(next + samples.Length - 1 - i) % samples.Length];
+                // The source scales each window's sum by a rounded reciprocal.
                 if (i == 4)
                 {
-                    Short = sum / 5;
+                    Short = sum * .2f;
+                }
+                if (i == 13)
+                {
+                    Quarter = sum * .071429f;
                 }
                 if (i == 28)
                 {
-                    Medium = sum / 29;
+                    Medium = sum * .034483f;
                 }
             }
-            Long = sum / 59;
+            Long = sum * .016949f;
             ShortAngular /= 5;
+            QuarterAngular /= 14;
             LongAngular /= 59;
         }
     }

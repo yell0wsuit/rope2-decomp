@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -13,14 +14,15 @@ namespace Ctr2.Tests
     public sealed class GameplayTests
     {
         /// <summary>Builds a stationary invented scene without original assets.</summary>
-        internal static CandySimulation Create(string objects = "<candy id='c' x='100' y='100'/><omnom x='100' y='100'/>", bool play = true)
+        internal static CandySimulation Create(string objects = "<candy id='c' x='100' y='100'/><omnom x='100' y='100'/>", bool play = true,
+            IReadOnlyDictionary<string, double>? scenes = null)
         {
             string design = CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master +
                 "<circle id='star' body_type='kinematic' radius='13' isSensor='true'/>" + "</layer></map>")
                 .Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"")
                 .Replace("gravityScale='0.7'", "gravityScale='0'");
             return new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" + objects + "</layer></map>"),
-                LevelReader.Read(design), play);
+                LevelReader.Read(design), play, characterScenes: scenes);
         }
 
         /// <summary>Contact consumes once, retains a fading sensor briefly, then completes after chewing.</summary>
@@ -198,6 +200,37 @@ namespace Ctr2.Tests
                 LevelReader.Read(design), play: true);
             scene.Step();
             _ = Assert.Single(scene.Gameplay!.Consumptions);
+        }
+
+        /// <summary>With scene durations, gameplay completes authored scenes on its own fixed clock: the failure scene ends
+        /// the level once, on the first tick at or beyond its duration, without any presentation callback.</summary>
+        [Fact]
+        public void SceneDurationsCompleteScenesWithoutPresentation()
+        {
+            const string Objects = "<candy id='c' x='100' y='576'/><omnom x='100' y='100'/>";
+            CandySimulation owned = Create(Objects, scenes: new Dictionary<string, double> { ["FAIL"] = .05 });
+            CandySimulation presented = Create(Objects);
+            for (int i = 0; i < 10; i++)
+            {
+                owned.Step();
+                presented.Step();
+            }
+            Assert.Equal((LevelResult.Lost, 4), (owned.Gameplay!.Result, owned.Gameplay.FinishedAt));
+            Assert.Equal(LevelResult.Running, presented.Gameplay!.Result);
+        }
+
+        /// <summary>A closed mouth leaves the character puzzled, not idle, until the puzzled scene ends.</summary>
+        [Fact]
+        public void MouthCloseLeavesThePuzzledState()
+        {
+            LevelGameplay game = Create("<candy id='c' x='300' y='100'/><omnom x='100' y='100'/>").Gameplay!;
+            game.SceneFinished("MOUTH_CLOSE", game.SceneRevision);
+            Assert.Equal(("IDLE", CharacterState.Idle), (game.Scene, game.CharacterState));
+            typeof(LevelGameplay).GetProperty(nameof(LevelGameplay.Scene))!.SetValue(game, "MOUTH_CLOSE");
+            game.SceneFinished("MOUTH_CLOSE", game.SceneRevision);
+            Assert.Equal(("PUZZLED", CharacterState.Puzzled), (game.Scene, game.CharacterState));
+            game.SceneFinished("PUZZLED", game.SceneRevision);
+            Assert.Equal(("IDLE", CharacterState.Idle), (game.Scene, game.CharacterState));
         }
 
         /// <summary>Ordinary dry scenes use the source margin plus 150 logical units for loss.</summary>

@@ -42,6 +42,20 @@ namespace Ctr2.Engine
             return sprites;
         }
 
+        /// <summary>Returns every named, nonempty scene's duration, keyed by scene name; the first scene with a name wins.</summary>
+        /// <param name="root">Animation tree.</param>
+        /// <returns>Scene durations in seconds.</returns>
+        public static IReadOnlyDictionary<string, double> SceneDurations(AnimationElement root)
+        {
+            ArgumentNullException.ThrowIfNull(root);
+            Dictionary<string, double> durations = new(StringComparer.Ordinal);
+            foreach (AnimationTimeline timeline in root.Timelines.Where(t => !t.IsEmpty && !string.IsNullOrEmpty(t.Name)))
+            {
+                _ = durations.TryAdd(timeline.Name, Duration(root, timeline.Id));
+            }
+            return durations.AsReadOnly();
+        }
+
         /// <summary>Returns the longest track duration in a scene across the whole tree.</summary>
         /// <param name="root">Animation tree.</param>
         /// <param name="scene">Original scene ID.</param>

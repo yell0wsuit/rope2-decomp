@@ -2,7 +2,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Text.Json;
 
 using Ctr2.Assets;
 
@@ -81,24 +80,7 @@ namespace Ctr2.Desktop
         /// <returns>The catalog.</returns>
         internal static ResourceCatalog LoadCatalog(string cache)
         {
-            ResourceCatalog catalog;
-            try
-            {
-                using FileStream sidecar = File.OpenRead(Path.Combine(cache, "resources.json"));
-                if (sidecar.Length > 16 * 1024 * 1024)
-                {
-                    throw new InvalidDataException("Resource sidecar exceeds size limit.");
-                }
-
-                catalog = JsonSerializer.Deserialize<ResourceCatalog>(sidecar) ?? throw new InvalidDataException("Empty resource catalog.");
-            }
-            catch (JsonException error)
-            {
-                throw new InvalidDataException("Malformed resource catalog.", error);
-            }
-            return catalog.SchemaVersion != 1 || catalog.Resources == null || catalog.Resources.Any(r => r == null)
-                ? throw new InvalidDataException("Unsupported resource catalog schema or records.")
-                : catalog;
+            return ResourceCatalog.Load(cache);
         }
 
         /// <summary>Validates an image path and its imported byte binding.</summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Numerics;
 
 namespace Ctr2.Engine.Physics
 {
@@ -19,6 +20,7 @@ namespace Ctr2.Engine.Physics
                 CharacterState = CharacterState.Idle;
                 SetScene("IDLE");
             }
+            UpdateSliding();
             if (CharacterState == CharacterState.Idle && motion.IsFalling)
             {
                 CharacterState = CharacterState.Falling;
@@ -36,6 +38,38 @@ namespace Ctr2.Engine.Physics
             {
                 CharacterState = CharacterState.Chewing;
                 SetScene("CHEWING");
+            }
+        }
+    }
+
+    public sealed partial class LevelGameplay
+    {
+        /// <summary>Native idle slide: recent motion over 0.5 m/s, heading 10 to 170 degrees, within one degree of the body
+        /// angle (modulo 180) and more than 15 degrees from the previous slide's heading.</summary>
+        private void UpdateSliding()
+        {
+            if (CharacterState != CharacterState.Idle)
+            {
+                return;
+            }
+            Vector2 average = motion.Short;
+            float heading = (float)((float)(MathF.Atan2(average.Y, average.X) * 180.0) / 3.14159265);
+            float body = (float)((float)(simulation.Characters[0].Angle * 180.0) / 3.14159265);
+            float diff = heading - body;
+            while (diff > 170)
+            {
+                diff = (float)(diff + -180.0);
+            }
+            while (diff < -170)
+            {
+                diff = (float)(diff + 180.0);
+            }
+            if (MathF.Abs(heading - lastSlideAngle) > 15 && heading > 10 && heading < 170 && average.Length() > .5f && MathF.Abs(diff) < 1)
+            {
+                CharacterState = CharacterState.Sliding;
+                lastSlideAngle = heading;
+                // The source plays SLIDE_LEFT when moving the way the character faces, otherwise SLIDE_RIGHT.
+                SetScene((FacingRight ? average.X > 0 : average.X < 0) ? "SLIDE_LEFT" : "SLIDE_RIGHT");
             }
         }
     }

@@ -10,6 +10,38 @@ namespace Ctr2.Assets
     /// <summary>Reads the original protobuf-lite animation format without executing game code.</summary>
     public static class AnimationReader
     {
+        /// <summary>Loads one imported Windows animation resource by its original ID.</summary>
+        /// <param name="cache">Imported Windows cache root.</param>
+        /// <param name="id">Original animation resource ID.</param>
+        /// <returns>The decoded element tree.</returns>
+        /// <exception cref="InvalidDataException">The resource is missing, ambiguous, linked, oversized or malformed.</exception>
+        public static AnimationElement LoadWindows(string cache, int id)
+        {
+            ResourceEntry[] matches = [.. ResourceCatalog.Load(cache).Resources.Where(r => r.Id == id && r.Type == 7)];
+            if (matches.Length != 1)
+            {
+                throw new InvalidDataException("Expected one animation resource for ID " + id);
+            }
+            string name = matches[0].Path;
+            if (string.IsNullOrEmpty(name) || name.Contains('/') || name.Contains('\\') || name.Contains(':') || name.Contains("..", StringComparison.Ordinal))
+            {
+                throw new InvalidDataException("Unsafe animation asset path.");
+            }
+            string assets = Path.GetFullPath(Path.Combine(cache, "assets")), path = Path.Combine(assets, name);
+            if ((File.GetAttributes(assets) & FileAttributes.ReparsePoint) != 0 || (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidDataException("Linked cache animations are unsupported.");
+            }
+            using FileStream input = File.OpenRead(path);
+            if (input.Length > 16 * 1024 * 1024)
+            {
+                throw new InvalidDataException("Animation exceeds 16 MiB.");
+            }
+            byte[] bytes = new byte[(int)input.Length];
+            input.ReadExactly(bytes);
+            return Read(bytes);
+        }
+
         /// <summary>Decodes an animation with bounded bytes, recursion, and field counts.</summary>
         /// <param name="bytes">Uncompressed .pb contents, at most 16 MiB.</param>
         /// <returns>The decoded element tree.</returns>

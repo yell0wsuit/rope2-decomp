@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 using Ctr2.Assets;
 
@@ -10,18 +11,24 @@ namespace Ctr2.Engine.Physics
         private readonly LevelDefinition level;
         private readonly LevelDefinition design;
         private readonly bool firstLevelArrival;
+        private readonly IReadOnlyDictionary<string, double>? characterScenes;
         private SimulationClock clock = new();
         private double hostTime;
         private double activeTime;
         private bool rebase;
         private bool paused;
         /// <summary>Creates a supported session from immutable authored level and design definitions.</summary>
-        public GameSession(LevelDefinition level, LevelDefinition design, bool firstLevelArrival = false)
+        /// <param name="level">Original editor-space level.</param>
+        /// <param name="design">Matching master design document.</param>
+        /// <param name="firstLevelArrival">Whether the host selected the first production level.</param>
+        /// <param name="characterScenes">Optional Om Nom scene durations; see <see cref="CandySimulation"/>.</param>
+        public GameSession(LevelDefinition level, LevelDefinition design, bool firstLevelArrival = false, IReadOnlyDictionary<string, double>? characterScenes = null)
         {
             this.level = level;
             this.design = design;
             this.firstLevelArrival = firstLevelArrival;
-            Simulation = new(level, design, play: true, firstLevelArrival: firstLevelArrival);
+            this.characterScenes = characterScenes;
+            Simulation = new(level, design, play: true, firstLevelArrival: firstLevelArrival, characterScenes);
             Input = new(Simulation, LevelLayout.Create(level).Size);
         }
         /// <summary>Gets the current simulation, replaced on restart.</summary>
@@ -56,7 +63,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Restores the initial level and cancels held and queued input.</summary>
         public void Restart()
         {
-            CandySimulation replacement = new(level, design, play: true, firstLevelArrival: firstLevelArrival);
+            CandySimulation replacement = new(level, design, play: true, firstLevelArrival: firstLevelArrival, characterScenes);
             Input.Cancel();
             Simulation = replacement;
             Input = new(Simulation, LevelLayout.Create(level).Size);

@@ -72,7 +72,8 @@ namespace Ctr2.Desktop
                 }
                 if (play)
                 {
-                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), firstLevelArrival: pack == 1 && level == 1);
+                    preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), firstLevelArrival: pack == 1 && level == 1,
+                        LevelGameplay.LoadCharacterScenes(cache));
                     if (preview.Session.Simulation.Gameplay!.ArrivalLeaves != null)
                     {
                         preview.forestLeaves = new ForestLeafSprites(cache, resolution);
@@ -381,13 +382,8 @@ namespace Ctr2.Desktop
 
         private void UpdateGameAnimation()
         {
+            // Gameplay completes authored scenes on its own fixed clock; presentation only follows the selected scene.
             SyncGameAnimation();
-            LevelGameplay game = Simulation!.Gameplay!;
-            if ((Simulation.Tick - game.SceneStartedAt) * (double)PhysicsWorld.TimeStep >= omnom!.Duration)
-            {
-                game.SceneFinished(game.Scene, game.SceneRevision);
-                SyncGameAnimation();
-            }
         }
 
         /// <summary>Releases owned character textures; repeated calls are safe.</summary>

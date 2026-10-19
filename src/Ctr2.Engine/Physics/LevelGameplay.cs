@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 
+using Ctr2.Assets;
+
 
 namespace Ctr2.Engine.Physics
 {
@@ -56,7 +58,15 @@ namespace Ctr2.Engine.Physics
         /// <summary>Preparing or playing the authored stand-up response.</summary>
         StandUp,
         /// <summary>Standing while chewing, with the original fallback timer retained.</summary>
-        StandUpChewing
+        StandUpChewing,
+        /// <summary>Sliding along a surface parallel to the body until the slide scene ends.</summary>
+        Sliding,
+        /// <summary>Puzzled after the mouth closed without candy, until that scene ends.</summary>
+        Puzzled,
+        /// <summary>Turning to face left until the turn scene ends.</summary>
+        TurnLeft,
+        /// <summary>Turning to face right until the turn scene ends.</summary>
+        TurnRight
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -73,8 +83,11 @@ namespace Ctr2.Engine.Physics
         private readonly List<CandyConsumption> consumptions = [];
         private float eatingTime;
         private float chewingTime;
+        private readonly IReadOnlyDictionary<string, double>? sceneDurations;
+        private int completedRevision = -1;
+        private float lastSlideAngle = 3.4028e38f;
 
-        internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival)
+        internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
                 layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "tutorial_swipe" or "tutorial_tap")) ||
@@ -83,7 +96,10 @@ namespace Ctr2.Engine.Physics
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
             }
             this.simulation = simulation;
+            this.sceneDurations = sceneDurations;
             canvas = layout.Size;
+            // The source faces right when the character starts left of the screen center.
+            FacingRight = (float)(simulation.Characters[0].Origin.X * 200.0) < (float)(canvas.X / 2.0);
             Consumptions = consumptions.AsReadOnly();
             ArrivalLeaves = firstLevelArrival ? new ForestLeafBurst((simulation.Characters[0].Origin * 200) + new Vector2(0, 20)) : null;
             PlacedLevelObject[] hints = [.. layout.Objects.Where(o => o.Source.Kind is "tutorial_swipe" or "tutorial_tap")];
@@ -128,6 +144,11 @@ namespace Ctr2.Engine.Physics
         }
         /// <summary>Gets the matching Windows animation scene for supported state playback.</summary>
         public string Scene { get; private set; } = "IDLE";
+        /// <summary>Gets whether the character faces right; the source flips its artwork when it does.</summary>
+        public bool FacingRight
+        {
+            get; private set;
+        }
         /// <summary>Gets the scene revision, used to reject callbacks from replaced animations.</summary>
         public int SceneRevision
         {
@@ -187,6 +208,7 @@ namespace Ctr2.Engine.Physics
             PhysicsBody candy = simulation.Candies[0], character = simulation.Characters[0];
             ProcessImpacts();
             AdvanceProcedure();
+            CompleteAuthoredScene();
             motion.Sample(character.Velocity, character.AngularVelocity);
             collidedWithTerrain |= simulation.CharacterTouchesTerrain();
             if (Outside(character.Origin, 70))
@@ -229,7 +251,12 @@ namespace Ctr2.Engine.Physics
             }
             else
             {
+                UpdateTurn();
                 float distance = Vector2.Distance(character.Position, candy.Position) * 200;
+                if (CharacterState is CharacterState.Idle or CharacterState.Falling && distance < 150)
+                {
+                    FacingRight = (float)(candy.Position.X * 200.0) > CharacterX();
+                }
                 if (CharacterState == CharacterState.Idle && distance < 150)
                 {
                     CharacterState = CharacterState.MouthOpen;
@@ -301,13 +328,85 @@ namespace Ctr2.Engine.Physics
                     Finish(LevelResult.Won);
                 }
             }
+            else if (CharacterState == CharacterState.Sliding)
+            {
+                // Any finished timeline ends a slide; the source plays no new scene.
+                CharacterState = CharacterState.Idle;
+            }
+            else if (CharacterState is CharacterState.TurnLeft or CharacterState.TurnRight && scene == "TURN")
+            {
+                FacingRight = CharacterState == CharacterState.TurnRight;
+                CharacterState = CharacterState.Idle;
+                SetScene("IDLE");
+            }
             else if (scene == "MOUTH_CLOSE")
             {
+                float x = CharacterX(), center = (float)(canvas.X / 2.0);
+                if (x < center + -50)
+                {
+                    FacingRight = true;
+                }
+                else if (x > center + 50)
+                {
+                    FacingRight = false;
+                }
+                CharacterState = CharacterState.Puzzled;
                 SetScene("PUZZLED");
             }
             else if (scene == "PUZZLED")
             {
+                CharacterState = CharacterState.Idle;
                 SetScene("IDLE");
+            }
+        }
+
+        /// <summary>Windows animation resource for Om Nom.</summary>
+        public const int CharacterAnimationId = 85;
+
+        /// <summary>Loads Om Nom's scene durations from an imported Windows cache for engine-owned scene completion.</summary>
+        /// <param name="cache">Imported Windows cache root.</param>
+        /// <returns>Scene durations in seconds by scene name.</returns>
+        public static IReadOnlyDictionary<string, double> LoadCharacterScenes(string cache)
+        {
+            return AnimationPose.SceneDurations(AnimationReader.LoadWindows(cache, CharacterAnimationId));
+        }
+
+        /// <summary>Completes the current authored scene on the first fixed tick at or beyond its duration, once per revision.</summary>
+        private void CompleteAuthoredScene()
+        {
+            if (sceneDurations != null && completedRevision != SceneRevision && !ProcedureActive &&
+                sceneDurations.TryGetValue(Scene, out double duration) && (simulation.Tick - SceneStartedAt) * (double)PhysicsWorld.TimeStep >= duration)
+            {
+                completedRevision = SceneRevision;
+                SceneFinished(Scene, SceneRevision);
+            }
+        }
+
+        /// <summary>Gets the character's logical x like the source node, from the body origin.</summary>
+        private float CharacterX()
+        {
+            return (float)(simulation.Characters[0].Origin.X * 200.0);
+        }
+
+        /// <summary>Native idle turn: an upright, settled character away from the center turns to face it.</summary>
+        private void UpdateTurn()
+        {
+            PhysicsBody body = simulation.Characters[0];
+            if (CharacterState != CharacterState.Idle || Scene != "IDLE" || motion.Quarter.Length() >= .2f || MathF.Abs(motion.QuarterAngular) >= .1f ||
+                Math.Abs(BodyDegrees(body)) >= 20)
+            {
+                return;
+            }
+            float x = CharacterX(), center = (float)(canvas.X / 2.0);
+            if (!FacingRight && x < center + -50)
+            {
+                CharacterState = CharacterState.TurnRight;
+                SetScene("TURN");
+            }
+            else if (FacingRight && x > center + 50)
+            {
+                CharacterState = CharacterState.TurnLeft;
+                SetScene("TURN");
             }
         }
 

@@ -38,6 +38,32 @@ namespace Ctr2.Assets
     public sealed record ResourceCatalog(int SchemaVersion, string Profile, string ExecutableSha256,
         IReadOnlyList<ResourceEntry> Resources)
     {
+        /// <summary>Reads the bounded and versioned imported catalog.</summary>
+        /// <param name="cache">Cache root.</param>
+        /// <returns>The catalog.</returns>
+        /// <exception cref="InvalidDataException">The sidecar is oversized, malformed or an unsupported schema.</exception>
+        public static ResourceCatalog Load(string cache)
+        {
+            ResourceCatalog catalog;
+            try
+            {
+                using FileStream sidecar = File.OpenRead(Path.Combine(cache, "resources.json"));
+                if (sidecar.Length > 16 * 1024 * 1024)
+                {
+                    throw new InvalidDataException("Resource sidecar exceeds size limit.");
+                }
+
+                catalog = System.Text.Json.JsonSerializer.Deserialize<ResourceCatalog>(sidecar) ?? throw new InvalidDataException("Empty resource catalog.");
+            }
+            catch (System.Text.Json.JsonException error)
+            {
+                throw new InvalidDataException("Malformed resource catalog.", error);
+            }
+            return catalog.SchemaVersion != 1 || catalog.Resources == null || catalog.Resources.Any(r => r == null)
+                ? throw new InvalidDataException("Unsupported resource catalog schema or records.")
+                : catalog;
+        }
+
         /// <summary>
         /// Binds resource image metadata to cached bytes and identifies out-of-bounds RAW placeholders.
         /// </summary>
