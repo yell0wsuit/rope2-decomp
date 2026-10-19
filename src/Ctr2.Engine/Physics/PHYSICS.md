@@ -1452,3 +1452,22 @@ an old preparation impulse. Tick durations remain .0167 seconds, so sampled pose
 and completion quantize to the first fixed tick at or beyond each duration.
 Authored inter-scene transitions, sliding/turning and original runtime visual and
 trajectory parity remain pending.
+
+## Hint journal regression baseline
+
+The original developer hint journals double as playtests. `replay-check` replays one
+open-loop and reports per-object drift; `replay-baseline <cache> [--write file]` replays
+all of them (about four seconds) and records, per desktop pack, entry and variant, the
+first snapshot frame that is not bit-identical and the count of exact samples before it.
+`tests/Ctr2.Tests/ReplayBaseline.tsv` stores only those identities and counts, and
+`ReplayBaselineTests` fails when any supported journal's exact prefix shrinks or a
+supported journal becomes unsupported. It is skipped without a local cache
+(`CTR2_CACHE`, or `cache/windows-alpha` at the repository root). Regenerate the
+baseline after an improvement.
+
+The prefixes end at ulp-level differences rather than mechanics. Replaying the port's
+own world mutations against native Box2D 2.2.1 matches bit for bit on every supported
+level for the whole journal, so the remaining divergence comes from the recording
+platform's `sinf`/`cosf`, which rounds a few results differently from the host's: a
+correctly rounded or FreeBSD-style sine and cosine fix some early divergences and
+introduce others. The port keeps the host's float trigonometry.

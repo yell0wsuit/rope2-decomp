@@ -23,6 +23,23 @@ try
     {
         return LevelAuditCommand.Run(args);
     }
+    if (args.Length > 0 && args[0] == "replay-baseline")
+    {
+        if (args.Length is not (2 or 4) || (args.Length == 4 && args[2] != "--write"))
+        {
+            throw new ArgumentException("replay-baseline requires a cache and optionally --write <file>.");
+        }
+        string[] lines = [.. JournalBaseline.RunAll(args[1]).Select(o => o.Line)];
+        if (args.Length == 4)
+        {
+            File.WriteAllLines(args[3], ["# pack\tentry\tvariant\tstatus\tfirstInexactFrame\texactSamples\tsamples", .. lines]);
+        }
+        else
+        {
+            Array.ForEach(lines, Console.WriteLine);
+        }
+        return 0;
+    }
     if (args.Length > 0 && args[0] == "replay-check")
     {
         return ReplayCheckCommand.Run(args);
@@ -277,6 +294,7 @@ try
     Console.WriteLine("CTR2 PC port foundation — local assets required.\n" +
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
         "  audit-levels <cache>\n" +
+        "  replay-baseline <cache> [--write file]\n" +
         "  replay-check <cache> <pack> <entry> [--variant challenge|fruit_challenge] [--threshold meters] [--trace]\n" +
         "  play-level <cache> <one-based pack> <one-based level> [--ticks N] [--cut tick:rope:segment:x:y[:impulseX:impulseY]] [preview options]\n" +
         "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [--cut tick:rope:segment:x:y] [preview options]\n" +
