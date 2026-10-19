@@ -116,7 +116,7 @@ namespace Ctr2.Tests
                 Assert.Equal(SKColors.Red, bitmap.GetPixel(200, 200));
                 Assert.NotEqual(SKColors.Lime, bitmap.GetPixel(190, 300));
                 Assert.Equal(LevelResult.Running, session.Simulation.Gameplay!.Result);
-                File.WriteAllText(Path.Combine(maps, "test.xml"), "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='300' y='0'/><omnom x='100' y='100' angle='90'/></layer></map>");
+                File.WriteAllText(Path.Combine(maps, "test.xml"), "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='20' y='0'/><omnom x='250' y='100' angle='90'/></layer></map>");
                 using LevelPreview standing = LevelPreview.Load(root, 2, 1, 2, play: true).Preview;
                 for (int i = 0; i < 7; i++)
                 {
@@ -125,12 +125,13 @@ namespace Ctr2.Tests
 
                 Assert.Equal(CharacterState.StandUp, standing.Session!.Simulation.Gameplay!.CharacterState);
                 standing.Draw(canvas, 640, 960, 0);
-                // Native fixed art translation lies inside scale; procedural root position lies outside.
-                Assert.Equal(SKColors.Lime, bitmap.GetPixel(218, 203));
-                Assert.NotEqual(SKColors.Lime, bitmap.GetPixel(206, 203));
+                // Native fixed art translation lies inside scale; procedural root position lies outside. The character
+                // stands right of center, so it faces left and its artwork is not mirrored.
+                Assert.Equal(SKColors.Lime, bitmap.GetPixel(518, 203));
+                Assert.NotEqual(SKColors.Lime, bitmap.GetPixel(506, 203));
                 standing.Session.Paused = true;
                 standing.Draw(canvas, 640, 960, 1000);
-                Assert.Equal(SKColors.Lime, bitmap.GetPixel(218, 203));
+                Assert.Equal(SKColors.Lime, bitmap.GetPixel(518, 203));
             }
             finally { Directory.Delete(root, true); }
         }

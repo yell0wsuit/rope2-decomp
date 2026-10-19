@@ -219,6 +219,19 @@ namespace Ctr2.Tests
             Assert.Equal(LevelResult.Running, presented.Gameplay!.Result);
         }
 
+        /// <summary>The character starts facing the screen center; turning its attention left keeps the artwork mirrored to the
+        /// right until a turn or scale timeline rewrites it, as the source's one-way mirror does.</summary>
+        [Fact]
+        public void ArtworkMirrorFollowsTheSourceFacingRules()
+        {
+            Assert.False(Create("<candy id='c' x='100' y='0'/><omnom x='250' y='100'/>").Gameplay!.ArtFacingRight);
+            CandySimulation scene = Create("<candy id='c' x='60' y='100'/><omnom x='100' y='100'/>");
+            LevelGameplay game = scene.Gameplay!;
+            Assert.True(game.FacingRight && game.ArtFacingRight);
+            scene.Step();
+            Assert.Equal((CharacterState.MouthOpen, false, true), (game.CharacterState, game.FacingRight, game.ArtFacingRight));
+        }
+
         /// <summary>A closed mouth leaves the character puzzled, not idle, until the puzzled scene ends.</summary>
         [Fact]
         public void MouthCloseLeavesThePuzzledState()

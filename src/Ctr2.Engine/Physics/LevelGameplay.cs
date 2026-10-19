@@ -100,6 +100,7 @@ namespace Ctr2.Engine.Physics
             canvas = layout.Size;
             // The source faces right when the character starts left of the screen center.
             FacingRight = (float)(simulation.Characters[0].Origin.X * 200.0) < (float)(canvas.X / 2.0);
+            ArtFacingRight = FacingRight;
             Consumptions = consumptions.AsReadOnly();
             ArrivalLeaves = firstLevelArrival ? new ForestLeafBurst((simulation.Characters[0].Origin * 200) + new Vector2(0, 20)) : null;
             PlacedLevelObject[] hints = [.. layout.Objects.Where(o => o.Source.Kind is "tutorial_swipe" or "tutorial_tap")];
@@ -146,6 +147,14 @@ namespace Ctr2.Engine.Physics
         public string Scene { get; private set; } = "IDLE";
         /// <summary>Gets whether the character faces right; the source flips its artwork when it does.</summary>
         public bool FacingRight
+        {
+            get; private set;
+        }
+        /// <summary>Gets whether the character artwork is mirrored to face right.</summary>
+        /// <value>The source mirrors the artwork whenever the character faces right, but only a finished turn (or a
+        /// procedural scale timeline, which rewrites the scale every frame) mirrors it back, so the artwork can keep
+        /// facing right after the character turns its attention left.</value>
+        public bool ArtFacingRight
         {
             get; private set;
         }
@@ -198,6 +207,22 @@ namespace Ctr2.Engine.Physics
         }
 
         internal void AfterStep()
+        {
+            bool scaling = ProcedureActive;
+            UpdateCharacter();
+            // The source ends each character update by mirroring a right-facing character; a running scale timeline has
+            // just rewritten the scale with a positive value, so the mirror then follows the facing direction exactly.
+            if (scaling || ProcedureActive)
+            {
+                ArtFacingRight = FacingRight;
+            }
+            else if (FacingRight)
+            {
+                ArtFacingRight = true;
+            }
+        }
+
+        private void UpdateCharacter()
         {
             if (Result != LevelResult.Running)
             {
@@ -335,7 +360,7 @@ namespace Ctr2.Engine.Physics
             }
             else if (CharacterState is CharacterState.TurnLeft or CharacterState.TurnRight && scene == "TURN")
             {
-                FacingRight = CharacterState == CharacterState.TurnRight;
+                FacingRight = ArtFacingRight = CharacterState == CharacterState.TurnRight;
                 CharacterState = CharacterState.Idle;
                 SetScene("IDLE");
             }

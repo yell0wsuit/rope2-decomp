@@ -328,6 +328,11 @@ namespace Ctr2.Desktop
                         }
                         Vector2 origin = (-omnom.CanvasSize / 2) + new Vector2(-8, -11);
                         Vector2 scale = Simulation?.Gameplay?.CharacterScale ?? Vector2.One;
+                        if (Simulation?.Gameplay?.ArtFacingRight ?? (position.X < Layout.Size.X / 2))
+                        {
+                            // The artwork faces left; the source mirrors its scale to face right.
+                            scale.X = -scale.X;
+                        }
                         Vector2 offset = Simulation?.Gameplay?.CharacterOffset ?? Vector2.Zero;
                         Matrix4x4 character = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
                             Matrix4x4.CreateScale(scale.X, scale.Y, 1) * Matrix4x4.CreateTranslation(offset.X, offset.Y, 0) *

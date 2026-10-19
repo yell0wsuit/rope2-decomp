@@ -62,7 +62,8 @@ namespace Ctr2.Tests
                     using SKBitmap bitmap = new(width, height);
                     using SKCanvas canvas = new(bitmap);
                     preview.Draw(canvas, width, height, 0);
-                    Vector2 artworkCenter = (body.Origin * 200) + Vector2.Transform(new(-8, -11), Matrix3x2.CreateRotation(body.Angle));
+                    // Left of center the character faces right, so the mirrored scale also mirrors the art offset.
+                    Vector2 artworkCenter = (body.Origin * 200) + Vector2.Transform(new(8, -11), Matrix3x2.CreateRotation(body.Angle));
                     Viewport viewport = Viewport.Fit(width, height, 640, 960);
                     Vector2 expected = viewport.ToScreen(artworkCenter);
                     Assert.Equal(SKColors.Lime, bitmap.GetPixel((int)expected.X, (int)expected.Y));

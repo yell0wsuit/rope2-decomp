@@ -1498,6 +1498,12 @@ the 250 ms windows: 14 velocity samples and angular samples 5 through 13 over 14
 Integer body degrees use the source's `(int)((float)(angle * 180.0) / 3.14159265)`.
 
 The character starts facing right when its origin lies left of the screen center.
+The artwork faces left and is mirrored through its scale, with the fixed art offset
+inside the mirror. Like the source, which ends each update by mirroring a
+right-facing character, the mirror turns on as soon as the character faces right
+but turns off only when a left turn finishes or while a procedural scale timeline
+rewrites the scale, so the artwork can keep facing right after the character's
+attention turns left. Previews without gameplay apply the initial rule.
 Opening the mouth faces the candy; a finished `MOUTH_CLOSE` faces the center when
 more than 50 units away and enters `Puzzled` until `PUZZLED` finishes. An idle
 character playing `IDLE`, slower than 0.2 m/s and 0.1 rad/s over 250 ms and within
