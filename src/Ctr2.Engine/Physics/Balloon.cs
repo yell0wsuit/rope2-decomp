@@ -149,7 +149,7 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Pops every balloon within 50 logical units of a swipe segment, after ropes, as the finger trace does.</summary>
-        private void SwipeBalloons(Vector2 start, Vector2 end)
+        internal void SwipeBalloons(Vector2 start, Vector2 end)
         {
             for (int i = 0; i < balloons.Count; i++)
             {
