@@ -622,7 +622,7 @@ followed by removal and filtered continuous sweeps. Fixture SHA-256:
 Sensor overlap uses fresh-cache GJK distance with radii and a strict `10 * epsilon`
 threshold, independently of solid manifold generation. Generic queued Begin/End
 records now expose its discrete world lifecycle below. Existing gameplay overlap
-helpers are unchanged; authored Windows collision-filter import remains unsupported.
+helpers are unchanged; authored filters are imported by the design body factory below.
 
 ## Standalone native GJK distance and overlap
 
@@ -1098,12 +1098,44 @@ Both flags default off, so existing event consumers are unchanged.
 tick 120 (480 snapshots) and is bit-identical on the oracle platform. Fixture
 SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI islands report PostSolve the same way; see the continuous collision section.
 
+## Design body factory
+
+`BodyFactory` ports the scene's shared body factory for one-fixture circle and
+rectangle designs. `MaterializedDesign` merges like the scene loader: the
+material's master design for `*_materialized` tags, then `shapeType` from the tag
+prefix, then the authored attributes. Absent numbers read zero and absent flags
+read false, exactly as the game's string accessors do: an absent `gravityScale`
+means no gravity and an absent `body_type` means static. Position doubles the
+editor `x`/`y` and divides by 200; the degree angle converts in double precision
+before narrowing. Radius, width and height double into logical units before the
+meter conversion. Rectangles use `ConvexPolygon.Box`, which assigns native
+`SetAsBox` axis normals directly; normalizing the edges instead diverges from the
+oracle within 44 ticks. Filters use category `1 << filter.category`; `collideWith`
+`all`, `like me` and `not like me` give mask 65535, the category, or its
+complement; each `filter.excludeCategories` entry clears its bit.
+
+Out of scope and rejected explicitly: polygon shapes (static terrain keeps its
+dedicated path), bullets (deliberately unported), dynamic bodies without positive
+density, static bodies with an initial velocity (native islands would feed it to
+contact solving), and numbers the C++ stream would only partly parse.
+
+`BodyFactoryReference.json` holds two native scenes, each with creation data and
+180 ticks: static, rotated static and dynamic wood-like rectangles and circles with
+a candy-like circle; and fixed rotation, kinematic and dynamic initial motion,
+absent gravity scale, all three collide-with modes, excluded categories, a sensor
+and an absent body type. Committed tests use the shared 0.00002 relative tolerance;
+under exact equality every trajectory, contact and coefficient is bit-identical on
+macOS arm64. Reported rotational inertia alone differs by one ulp, because the
+managed body stores the inverse that the solver uses. Fixture SHA-256:
+`cea29caf3d57e0f360469e0eaa33982c87fef5c6eed9cc8431d10e56e1a2f8f2`.
+
 ## Running numerical verification
 
 From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyFactoryTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SleepTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PrismaticJointTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*ContinuousWorldTests'

@@ -24,6 +24,15 @@ namespace Ctr2.Engine.Physics
             return proxies[fixture].Filter;
         }
 
+        /// <summary>Gets a body's active fixture labels in fixture creation order.</summary>
+        /// <param name="body">A body owned by this world.</param>
+        /// <returns>Stable world-local labels accepted by the fixture filter, sensor and density accessors.</returns>
+        /// <exception cref="KeyNotFoundException">The body is not owned by this world.</exception>
+        public IReadOnlyList<int> GetFixtureLabels(PhysicsBody body)
+        {
+            return bodyProxies[body].ConvertAll(p => p.Label).AsReadOnly();
+        }
+
         /// <summary>Changes one fixture's filter; contact changes take effect during later world updates.</summary>
         /// <param name="fixture">An active fixture label from CaptureProxies.</param>
         /// <param name="filter">New categories, mask and group.</param>

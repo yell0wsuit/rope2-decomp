@@ -32,7 +32,7 @@ namespace Ctr2.Engine.Physics
         internal Vector2? TransformOrigin;
 
         /// <summary>Gets whether angular integration is disabled.</summary>
-        /// <value>True for a fixed-rotation polygon.</value>
+        /// <value>True for a fixed-rotation body.</value>
         public bool FixedRotation
         {
             get;

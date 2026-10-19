@@ -2,6 +2,7 @@
   <PropertyGroup><OutputType>Exe</OutputType><IsTestProject>true</IsTestProject></PropertyGroup>
   <ItemGroup>
     <None Update="SleepReference.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="BodyFactoryReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PrismaticReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ContinuousWorldReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ToiReference.json" CopyToOutputDirectory="PreserveNewest" />

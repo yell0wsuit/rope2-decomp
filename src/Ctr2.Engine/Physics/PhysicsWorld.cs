@@ -140,8 +140,9 @@ namespace Ctr2.Engine.Physics
         /// <param name="density">Nonnegative fixture density.</param>
         /// <param name="gravityScale">Gravity multiplier.</param>
         /// <param name="type">Native body type.</param>
-        internal PhysicsBody(Vector2 position, float radius, float density, float gravityScale, PhysicsBodyType type)
-            : this([], radius, density, gravityScale, type, false)
+        /// <param name="fixedRotation">Whether to disable angular motion.</param>
+        internal PhysicsBody(Vector2 position, float radius, float density, float gravityScale, PhysicsBodyType type, bool fixedRotation)
+            : this([], radius, density, gravityScale, type, fixedRotation)
         {
             Position = position;
         }
@@ -177,9 +178,11 @@ namespace Ctr2.Engine.Physics
         /// <param name="gravityScale">Finite world gravity multiplier.</param>
         /// <param name="angle">Initial finite clockwise orientation in radians.</param>
         /// <param name="type">Native body type, or null to infer static from zero density and dynamic otherwise.</param>
+        /// <param name="fixedRotation">Whether to disable angular motion.</param>
         /// <returns>The newly owned body.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Values or the body budget are invalid.</exception>
-        public PhysicsBody AddCircle(Vector2 position, float radius, float density, float gravityScale, float angle = 0, PhysicsBodyType? type = null)
+        public PhysicsBody AddCircle(Vector2 position, float radius, float density, float gravityScale, float angle = 0, PhysicsBodyType? type = null,
+            bool fixedRotation = false)
         {
             ThrowIfLocked();
             float mass = density * MathF.PI * radius * radius;
@@ -189,7 +192,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new ArgumentOutOfRangeException(nameof(radius));
             }
-            PhysicsBody body = new(position, radius, density, gravityScale, type ?? (density > 0 ? PhysicsBodyType.Dynamic : PhysicsBodyType.Static))
+            PhysicsBody body = new(position, radius, density, gravityScale, type ?? (density > 0 ? PhysicsBodyType.Dynamic : PhysicsBodyType.Static), fixedRotation)
             {
                 Angle = angle
             };

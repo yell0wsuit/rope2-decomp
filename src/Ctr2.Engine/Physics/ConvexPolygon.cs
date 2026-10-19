@@ -67,6 +67,32 @@ namespace Ctr2.Engine.Physics
             Normals = Array.AsReadOnly(normals);
         }
 
+        /// <summary>Wraps already validated geometry and its exact normals.</summary>
+        /// <param name="points">Owned counterclockwise vertices.</param>
+        /// <param name="normals">Owned outward unit normals.</param>
+        private ConvexPolygon(Vector2[] points, Vector2[] normals)
+        {
+            this.points = points;
+            this.normals = normals;
+            Vertices = Array.AsReadOnly(points);
+            Normals = Array.AsReadOnly(normals);
+        }
+
+        /// <summary>Creates a centered axis-aligned box like native <c>SetAsBox</c>, with exact axis normals.</summary>
+        /// <param name="halfWidth">Positive half width in meters.</param>
+        /// <param name="halfHeight">Positive half height in meters.</param>
+        /// <returns>The box in native vertex order, starting at the negative corner.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">A half extent is nonpositive, nonfinite or too large.</exception>
+        public static ConvexPolygon Box(float halfWidth, float halfHeight)
+        {
+            // Normalizing an edge can differ from a unit axis by one ulp, so the native setter assigns normals directly.
+            return !float.IsFinite(halfWidth) || !float.IsFinite(halfHeight) || halfWidth <= 0 || halfHeight <= 0 ||
+                halfWidth > 10000 || halfHeight > 10000 || halfWidth * halfHeight < 2.5e-11f
+                ? throw new ArgumentOutOfRangeException(nameof(halfWidth))
+                : new([new(-halfWidth, -halfHeight), new(halfWidth, -halfHeight), new(halfWidth, halfHeight), new(-halfWidth, halfHeight)],
+                [new(0, -1), new(1, 0), new(0, 1), new(-1, 0)]);
+        }
+
         /// <summary>Computes fixture mass and moments of inertia about the origin and centroid.</summary>
         /// <param name="density">Nonnegative fixture density.</param>
         /// <returns>Local mass data.</returns>
