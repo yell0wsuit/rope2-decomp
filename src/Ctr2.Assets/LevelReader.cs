@@ -49,10 +49,11 @@ namespace Ctr2.Assets
             }
             XElement[] layers = [.. root.Elements("layer")];
             XElement[] settings = [.. layers.Where(e => (string?)e.Attribute("name") == "settings")];
-            XElement[] objects = [.. layers.Where(e => (string?)e.Attribute("name") == "Objects")];
-            if (settings.Length != 1 || objects.Length > 1 || layers.Length != settings.Length + objects.Length)
+            // The scene loader walks every layer in document order and ignores layer names.
+            XElement[] objects = [.. layers.Where(e => (string?)e.Attribute("name") != "settings")];
+            if (settings.Length != 1)
             {
-                throw new InvalidDataException("Expected one settings layer and at most one Objects layer.");
+                throw new InvalidDataException("Expected one settings layer.");
             }
             XElement[] maps = [.. settings[0].Elements("map")];
             if (maps.Length != 1)

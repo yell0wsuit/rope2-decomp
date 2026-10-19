@@ -31,9 +31,21 @@ namespace Ctr2.Engine
     /// <param name="Ropes">Resolved basic grab links.</param>
     /// <param name="Polygons">Unsmoothed authored polygon outlines.</param>
     /// <param name="Diagnostics">Unsupported features and off-screen positions requiring later work.</param>
+    /// <param name="Named">Editor IDs of name-registering objects; a later duplicate replaces an earlier one.</param>
     public sealed record LevelLayout(Vector2 Size, IReadOnlyList<PlacedLevelObject> Objects,
-        IReadOnlyList<LevelRope> Ropes, IReadOnlyList<LevelPolygon> Polygons, IReadOnlyList<string> Diagnostics)
+        IReadOnlyList<LevelRope> Ropes, IReadOnlyList<LevelPolygon> Polygons, IReadOnlyList<string> Diagnostics,
+        IReadOnlyDictionary<string, PlacedLevelObject> Named)
     {
+        /// <summary>Reports whether the scene loader registers this object's editor ID for name lookup.</summary>
+        /// <param name="kind">Authored element name.</param>
+        /// <returns>True for Om Nom, throwers, Bookas, candy, fireballs and circle/rectangle/polygon shapes.</returns>
+        public static bool RegistersName(string kind)
+        {
+            return kind is "omnom" or "thrower" or "booka" or "candy" or "fireball" ||
+                kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
+                kind.StartsWith("polygon", StringComparison.Ordinal);
+        }
+
         /// <summary>Creates logical diagnostic geometry while preserving authored data and negative positions.</summary>
         /// <param name="level">Parsed editor-space definition.</param>
         /// <returns>A bounded static layout with explicit diagnostics for pending behavior.</returns>
@@ -53,9 +65,9 @@ namespace Ctr2.Engine
                 Vector2? position = known || hasPosition ? new Vector2(Number(element, "x", integer: true), Number(element, "y", integer: true)) * 2 : null;
                 PlacedLevelObject placed = new(element, position, Number(element, "angle", optional: true));
                 objects.Add(placed);
-                if (element.Attributes.TryGetValue("id", out string? id) && id.Length != 0 && !named.TryAdd(id, placed))
+                if (RegistersName(element.Kind) && element.Attributes.TryGetValue("id", out string? id))
                 {
-                    throw new InvalidDataException("Duplicate level object ID: " + id);
+                    named[id] = placed;
                 }
                 if (!known)
                 {
@@ -82,10 +94,11 @@ namespace Ctr2.Engine
             }
             foreach (PlacedLevelObject grab in objects.Where(o => o.Source.Kind == "grab"))
             {
-                string targetId = Required(grab.Source, "target_id");
-                if (!named.TryGetValue(targetId, out PlacedLevelObject? target) || target.Position == null)
+                if (!grab.Source.Attributes.TryGetValue("target_id", out string? targetId) ||
+                    !named.TryGetValue(targetId, out PlacedLevelObject? target) || target.Position == null)
                 {
-                    throw new InvalidDataException("Unresolved rope target: " + targetId);
+                    diagnostics.Add("Grab without rope target: " + (targetId ?? "(none)"));
+                    continue;
                 }
                 float length = Number(grab.Source, "length") * 2;
                 if (length <= 0)
@@ -102,7 +115,7 @@ namespace Ctr2.Engine
                 ropes.Add(new(grab.Position!.Value, end, length));
             }
             diagnostics.Add("Static layout only: physics, rope sag/cutting, star collection, tutorials, intro, polygon smoothing, backgrounds and gameplay camera are pending.");
-            return new(size, objects.AsReadOnly(), ropes.AsReadOnly(), polygons.AsReadOnly(), diagnostics.AsReadOnly());
+            return new(size, objects.AsReadOnly(), ropes.AsReadOnly(), polygons.AsReadOnly(), diagnostics.AsReadOnly(), named.AsReadOnly());
         }
 
         /// <summary>Reads a required nonempty authored attribute.</summary>

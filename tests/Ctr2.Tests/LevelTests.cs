@@ -47,11 +47,37 @@ namespace Ctr2.Tests
         [InlineData("<!DOCTYPE map [<!ENTITY e SYSTEM 'file:///etc/passwd'>]><map>&e;</map>")]
         [InlineData("<map><layer name='settings'><map width='0' height='480'/></layer></map>")]
         [InlineData("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy x='NaN' y='0'/></layer></map>")]
-        [InlineData("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy x='0' y='0' id='a'/><star x='1' y='1' id='a'/></layer></map>")]
-        [InlineData("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><grab x='0' y='0' length='1' target_id='missing'/></layer></map>")]
+        [InlineData("<map><layer name='Objects'><candy x='0' y='0'/></layer></map>")]
+        [InlineData("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='settings'><map width='320' height='480'/></layer></map>")]
         public void InvalidScenesFailClearly(string xml)
         {
             _ = Assert.Throws<InvalidDataException>(() => LevelLayout.Create(LevelReader.Read(xml)));
+        }
+
+        /// <summary>Reads objects from every non-settings layer in document order, as the scene loader ignores layer names.</summary>
+        [Fact]
+        public void ObjectLayerNamesAreIgnored()
+        {
+            LevelDefinition level = LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Layer 1'><candy x='1' y='2'/></layer><layer name='Layer 4'><star x='3' y='4'/></layer></map>");
+            Assert.Equal(["candy", "star"], level.Objects.Select(o => o.Kind));
+        }
+
+        /// <summary>Resolves duplicate editor IDs to the last registering object; unregistered kinds never shadow a name.</summary>
+        [Fact]
+        public void DuplicateIdsResolveToLastRegisteredObject()
+        {
+            LevelLayout layout = LevelLayout.Create(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy x='10' y='10' id='a'/><candy x='20' y='20' id='a'/><star x='30' y='30' id='a'/><grab x='0' y='0' length='5' target_id='a'/></layer></map>"));
+            Assert.Equal(new Vector2(40, 40), Assert.Single(layout.Ropes).End);
+            Assert.Equal(new Vector2(40, 40), layout.Named["a"].Position);
+        }
+
+        /// <summary>Keeps a grab without a rope when its target name is not registered, instead of rejecting the level.</summary>
+        [Fact]
+        public void UnresolvedGrabTargetCreatesNoRope()
+        {
+            LevelLayout layout = LevelLayout.Create(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><star x='1' y='1' id='s'/><grab x='0' y='0' length='1' target_id='s'/><grab x='0' y='0' length='1' target_id='missing'/></layer></map>"));
+            Assert.Empty(layout.Ropes);
+            Assert.Equal(2, layout.Diagnostics.Count(d => d.StartsWith("Grab without rope target", StringComparison.Ordinal)));
         }
 
         /// <summary>Checks desktop selection by pack ID and authored entry order, with safe flat filenames.</summary>

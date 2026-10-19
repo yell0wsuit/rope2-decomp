@@ -32,6 +32,15 @@ namespace Ctr2.Tests
             return LevelReader.Read($"<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='200' y='147'/><grab x='200' y='43' length='{length}' target_id='c' target_x='0' target_y='0'/></layer></map>");
         }
 
+        /// <summary>Binds duplicate candy IDs to the last candy and leaves a grab with an unregistered target without a rope.</summary>
+        [Fact]
+        public void RopesFollowSceneNameRegistration()
+        {
+            CandySimulation scene = new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='100' y='147'/><candy id='c' x='200' y='147'/><grab x='200' y='43' length='105' target_id='c'/><grab x='50' y='43' length='105' target_id='missing'/></layer></map>"), LevelReader.Read(Design));
+            Assert.Equal(1, scene.RopeCount);
+            Assert.Equal(new Vector2(400, 294), scene.RopePoints(0)[^1]);
+        }
+
         /// <summary>Checks chain damping, stretch transitions and diagnostic release against the independent C++ reference.</summary>
         /// <param name="scenario">Reference replay with or without release at tick 60.</param>
         [Theory]

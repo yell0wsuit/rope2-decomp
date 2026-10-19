@@ -86,7 +86,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Rope bone length and stretch frequency must be positive.");
             }
-            Dictionary<string, PhysicsBody> named = new(StringComparer.Ordinal);
+            Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance);
             List<PhysicsBody> candies = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
             foreach (PlacedLevelObject placed in layout.Objects)
@@ -104,14 +104,7 @@ namespace Ctr2.Engine.Physics
                 if (isCandy)
                 {
                     candies.Add(body);
-                    if (placed.Source.Attributes.TryGetValue("id", out string? id))
-                    {
-                        named.Add(id, body);
-                    }
-                    else
-                    {
-                        throw new InvalidDataException("Candy requires an ID for diagnostic rope binding.");
-                    }
+                    candyBodies.Add(placed, body);
                 }
                 else
                 {
@@ -128,8 +121,13 @@ namespace Ctr2.Engine.Physics
             }
             foreach (PlacedLevelObject grab in layout.Objects.Where(o => o.Source.Kind == "grab"))
             {
+                // Like the scene loader, a grab whose target name is not registered keeps no rope.
+                if (!grab.Source.Attributes.TryGetValue("target_id", out string? id) || !layout.Named.TryGetValue(id, out PlacedLevelObject? named))
+                {
+                    continue;
+                }
                 if (Value(grab.Source, "target_x", 0) != 0 || Value(grab.Source, "target_y", 0) != 0 ||
-                    !grab.Source.Attributes.TryGetValue("target_id", out string? id) || !named.TryGetValue(id, out PhysicsBody? target))
+                    !candyBodies.TryGetValue(named, out PhysicsBody? target))
                 {
                     throw new InvalidDataException("Physics preview supports zero-offset named candy targets only.");
                 }
