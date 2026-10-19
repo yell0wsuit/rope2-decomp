@@ -1107,6 +1107,13 @@ SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI
 
 ## Scene ropes
 
+A rope's initial material points use the `ropeMaterialPoint_menu` design: the
+scene's rope constructor builds them before it records its scene, which selects the
+menu design. Only tips added by later cuts use `ropeMaterialPoint`. In the shipped
+master the two differ only in density (0.8 versus 0.6). The original hint journals
+exposed this: with 0.6, every level with ropes diverged by millimetres in the first
+step; with the menu design the first steps match the recordings bit for bit.
+
 Each grab rope targets the registered object named by `target_id`, or `candy` when
 the attribute is absent; an unregistered name keeps no rope. Candy and circle or
 rectangle shapes are supported targets. `target_x`/`target_y` double into a
@@ -1131,7 +1138,7 @@ which quantizes the angle to 1/1024 of a turn. A cut removes the stretch spring
 and the cut joint, adds two tips with a real linear impulse, and measures the new
 joints from those positions to the crossing, keeping the head and tail anchors.
 `RopeReference.json` is bit-identical under exact comparison on macOS arm64.
-Fixture SHA-256: `30f0331e4c1c8c6dbd8613a6d0db462501ae863c13dff15016e6bbadcdd9678d`.
+Fixture SHA-256: `9f62f8739057c798b0dc02b3f4856dda615a035adb0b348e2f9cc5c1ee9554e4`.
 The older chain oracle now includes candy slowdown; its fixtures were regenerated
 (`PhysicsReference.csv` `f6fbc9728ee7efd1dbf2ffe040603a8577265a0988ee00811a538700d021978f`,
 `RopeCutReference.csv` `7caa11746038cd2e7265d857ebb301840ae78537f85c3142c3e6985c0b8d1f8d`).
@@ -1157,7 +1164,7 @@ cannot stop dispatch for supported gameplay contacts, so it is not modelled.
 stratosphere line and swipe pop; and a balloon flying away when its rope to a wood
 circle is cut) is bit-identical under exact comparison on macOS arm64, including
 gravity scale and damping. Fixture SHA-256:
-`0b349ad7ffb15d5e737fd9ed601a5781c85e517ab11ac8c07afbc2864639a1c0`.
+`11f8b7a90893deef5c38ba257a2279131fddb6f7e5f9af223e4998024987a771`.
 
 ## Scene frogs
 

@@ -20,6 +20,7 @@ namespace Ctr2.Tests
             <circle id="candy" friction="0.2" isSensor="false" body_type="dynamic" radius="16" density="0.5" gravityScale="0.7" linearDamping="0" angularDamping="1" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
             <circle id="grab" friction="0.2" isSensor="true" body_type="static" radius="8" density="0.4" gravityScale="1" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
             <circle id="ropeMaterialPoint" friction="0.2" isSensor="true" body_type="dynamic" radius="3" density="0.6" gravityScale="0.6" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
+            <circle id="ropeMaterialPoint_menu" friction="0.2" isSensor="true" body_type="dynamic" radius="3" density="0.6" gravityScale="0.6" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
             <rope_design id="rope_design" bone_length="40" stretch_hertz="5"/>
             </layer></map>
             """;

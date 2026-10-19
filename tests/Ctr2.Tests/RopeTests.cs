@@ -20,6 +20,7 @@ namespace Ctr2.Tests
             <circle id="candy" body_type="dynamic" radius="16" density="0.5" gravityScale="0.7" angularDamping="1" friction="0.3" restitution="0.4"/>
             <circle id="grab" body_type="static" radius="8" density="0.4" gravityScale="1" friction="0.8" restitution="0.2" isSensor="true"/>
             <circle id="ropeMaterialPoint" body_type="dynamic" radius="3" density="0.6" gravityScale="0.6" isSensor="true"/>
+            <circle id="ropeMaterialPoint_menu" body_type="dynamic" radius="3" density="0.8" gravityScale="0.6" isSensor="true"/>
             <polygon id="wood_dynamic" body_type="dynamic" linearDamping="0.5" angularDamping="0.5" gravityScale="0.9" friction="0.2" restitution="0.1" density="0.2" filter.category="15"/>
             <rope_design id="rope_design" bone_length="40" stretch_hertz="5"/>
             </layer></map>

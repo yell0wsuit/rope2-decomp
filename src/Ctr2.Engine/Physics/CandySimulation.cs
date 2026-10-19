@@ -101,6 +101,9 @@ namespace Ctr2.Engine.Physics
             Terrain = TerrainGeometry.Build(level, design);
             IReadOnlyDictionary<string, string> candyDesign = Fields(Find(design, "candy")), grabDesign = Fields(Find(design, "grab"));
             pointDesign = Fields(Find(design, "ropeMaterialPoint"));
+            // The scene's rope constructor builds its points before it knows the scene, so they take the menu design;
+            // only tips added by later cuts use the scene design.
+            initialPointDesign = Fields(Find(design, "ropeMaterialPoint_menu"));
             LevelElement ropeDesign = Find(design, "rope_design");
             float bone = Value(ropeDesign, "bone_length") / 100;
             float frequency = Value(ropeDesign, "stretch_hertz");
@@ -317,7 +320,7 @@ namespace Ctr2.Engine.Physics
             for (int i = 0; i < generated; i++)
             {
                 position += shift;
-                points.Add(BodyFactory.Create(World, pointDesign, position, 0));
+                points.Add(BodyFactory.Create(World, initialPointDesign, position, 0));
             }
             points.Add(tail);
             List<PhysicsJoint> constraints = [];

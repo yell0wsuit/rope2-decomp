@@ -19,6 +19,8 @@ namespace Ctr2.Engine.Physics
     {
         /// <summary>Matching master definition used to create physical cut tips.</summary>
         private readonly IReadOnlyDictionary<string, string> pointDesign;
+        /// <summary>Master definition used for a rope's initial material points.</summary>
+        private readonly IReadOnlyDictionary<string, string> initialPointDesign;
 
         /// <summary>Splits one active bone into two disconnected physical fragments.</summary>
         /// <param name="ropeIndex">Zero-based authored rope.</param>
