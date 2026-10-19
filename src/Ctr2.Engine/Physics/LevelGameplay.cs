@@ -66,7 +66,9 @@ namespace Ctr2.Engine.Physics
         /// <summary>Turning to face left until the turn scene ends.</summary>
         TurnLeft,
         /// <summary>Turning to face right until the turn scene ends.</summary>
-        TurnRight
+        TurnRight,
+        /// <summary>Held by a thrower until thrown.</summary>
+        ThrowerCaptured
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -90,7 +92,7 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "tutorial_swipe" or "tutorial_tap")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "tutorial_swipe" or "tutorial_tap")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
@@ -196,6 +198,8 @@ namespace Ctr2.Engine.Physics
             if (character.PolygonFixtures.Any(f => f.OverlapsCircle(candy.Position, candy.Radius, character.Origin, character.Angle)))
             {
                 consumptions.Add(new(simulation.Tick, 0, 0));
+                // A thrower holding the candy swaps it for the character.
+                simulation.SwapThrowerCapture(candy, character);
                 CandyState = CandyState.Eating;
                 bool airborne = CharacterState == CharacterState.FallingMouthOpen;
                 CharacterState = airborne ? CharacterState.FallingChewing : CharacterState.Chewing;
@@ -353,6 +357,11 @@ namespace Ctr2.Engine.Physics
                     Finish(LevelResult.Won);
                 }
             }
+            else if (CharacterState == CharacterState.ThrowerCaptured)
+            {
+                // A held character returns to the idle animation without leaving the thrower.
+                SetScene("IDLE");
+            }
             else if (CharacterState == CharacterState.Sliding)
             {
                 // Any finished timeline ends a slide; the source plays no new scene.
@@ -405,6 +414,32 @@ namespace Ctr2.Engine.Physics
                 completedRevision = SceneRevision;
                 SceneFinished(Scene, SceneRevision);
             }
+        }
+
+        /// <summary>Native <c>Omnom::capturedByThrower</c>: a character that is neither chewing nor failed shows the thrower hold.</summary>
+        internal void CharacterCaptured()
+        {
+            if (CharacterState is not (CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing or CharacterState.Fail))
+            {
+                CharacterState = CharacterState.ThrowerCaptured;
+                SetScene("WITH_THROWER");
+            }
+        }
+
+        /// <summary>Native <c>Omnom::releasedByThrower</c>: a thrown character falls, chewing if it was.</summary>
+        internal void CharacterReleased()
+        {
+            if (CharacterState is CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing)
+            {
+                CharacterState = CharacterState.FallingChewing;
+                SetScene("FALLING_CHEWING");
+            }
+            else if (CharacterState != CharacterState.Fail)
+            {
+                CharacterState = CharacterState.Falling;
+                SetScene("FALLING");
+            }
+            collidedWithTerrain = false;
         }
 
         /// <summary>Gets the character's logical x like the source node, from the body origin.</summary>
@@ -464,6 +499,7 @@ namespace Ctr2.Engine.Physics
         internal void RetireCandy()
         {
             PhysicsBody candy = Candies[0];
+            ForgetThrownBody(candy);
             for (int r = 0; r < ropes.Count; r++)
             {
                 CutWithBodyDestroyed(r, candy);

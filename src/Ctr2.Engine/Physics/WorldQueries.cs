@@ -90,6 +90,14 @@ namespace Ctr2.Engine.Physics
             return proxies[fixture].Body;
         }
 
+        /// <summary>Gets the body owning a fixture that may since have been retired.</summary>
+        /// <param name="fixture">A fixture label from a recorded event.</param>
+        /// <returns>The owning body, or null for terrain or a retired fixture.</returns>
+        internal PhysicsBody? TryGetFixtureBody(int fixture)
+        {
+            return proxies.TryGetValue(fixture, out FixtureProxy? proxy) ? proxy.Body : null;
+        }
+
         /// <summary>Rejects structural world changes from inside query callbacks before anything mutates.</summary>
         /// <exception cref="InvalidOperationException">A broadphase query or pair update is in progress.</exception>
         private void ThrowIfLocked()

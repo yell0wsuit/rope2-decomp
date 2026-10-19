@@ -1255,6 +1255,29 @@ body then receives the impulse `R * (0, -power) * (1 - d / h)` at its center whe
 center lies within `h` of the pump; static and kinematic bodies are unaffected but
 still take a slot. The press is consumed.
 
+## Scene throwers
+
+A `thrower` is a dynamic compound polygon built like Om Nom: the `thrower` master
+design, the authored attributes and a forced `normalizeShape`. Its contact handler
+runs from begin-contact events with the two objects ordered by native game body type
+(general polygon 3, candy 4, Om Nom 6, thrower 8): candy, Om Nom, circle shapes and
+other throwers become candidates. While the thrower holds nothing, the candidate,
+or the outermost thrower of a chain holding it, is scheduled; otherwise it joins a
+collision list that finished contacts erase. After the step, in scene order after
+frogs, each thrower cools down toward zero at 1 per second, retries its scheduled
+capture until it succeeds or the bodies stop touching, then tries the first stored
+collision. A capture is refused during the cooldown or when the candidate thrower
+already holds this one through its chain. It teleports the body to the thrower
+origin at the thrower angle (the scene object's height is zero), stops its linear
+motion and adds a revolute joint from the thrower origin to the body's
+`(0, length)` point with a zero-width angle limit. The length is the circle radius
+minus 0.06, 0.1 for candy, 0.23 for Om Nom and 0.26 for a thrower. A press within
+90 logical units of a holding thrower (throwers first, newest first) destroys the
+joint, applies `R * (0, -mass * power)` (`thrower_design` power) at the body's
+center and starts a 0.3 second cooldown. Om Nom shows `WITH_THROWER` while held
+and falls, chewing if he was, when thrown. Eating held candy swaps it for Om Nom
+without a cooldown, and destroying a held body releases it with one.
+
 ## Scene construction order
 
 `CandySimulation` creates bodies the way the scene loader does: one pass over the

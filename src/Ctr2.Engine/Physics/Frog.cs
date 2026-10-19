@@ -96,10 +96,10 @@ namespace Ctr2.Engine.Physics
         /// <summary>Gets the authored frogs in creation order.</summary>
         public IReadOnlyList<SimulationFrog> Frogs => frogs.AsReadOnly();
 
-        /// <summary>Applies a tap like the scene: frogs newest first (within 78 logical units a frog toggles), then balloons.</summary>
+        /// <summary>Frogs newest first (within 78 logical units a frog toggles), then balloons and pumps.</summary>
         /// <param name="point">Tap position in logical units.</param>
-        /// <returns>Whether a frog consumed the tap.</returns>
-        public bool Tap(Vector2 point)
+        /// <returns>Whether one of them consumed the tap.</returns>
+        private bool TapFrogs(Vector2 point)
         {
             for (int i = frogs.Count - 1; i >= 0; i--)
             {
@@ -121,6 +121,14 @@ namespace Ctr2.Engine.Physics
             }
             // Balloons, then pumps, were added to the scene before frogs, so they see the tap afterwards in reverse order.
             return TapBalloon(point) || TapPump(point);
+        }
+
+        /// <summary>Offers a press to touchable scene children in reverse order: throwers (added after frogs) first.</summary>
+        /// <param name="point">Logical-space press.</param>
+        /// <returns>Whether a child consumed the press.</returns>
+        public bool Tap(Vector2 point)
+        {
+            return TapThrower(point) || TapFrogs(point);
         }
 
         /// <summary>Creates an authored frog; a frog with an authored open tongue extends it during construction.</summary>
@@ -146,13 +154,14 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Closes opening tongues touched by a solid game object during the step, as the frog's contact handler does.</summary>
-        private void CloseTouchedTongues()
+        /// <param name="contacts">Contact events recorded during the step.</param>
+        private void CloseTouchedTongues(IReadOnlyList<PhysicsContactEvent> contacts)
         {
             if (frogs.Count == 0)
             {
                 return;
             }
-            foreach (PhysicsContactEvent contact in World.DrainContactEvents())
+            foreach (PhysicsContactEvent contact in contacts)
             {
                 if (contact.Kind != PhysicsContactEventKind.Begin)
                 {

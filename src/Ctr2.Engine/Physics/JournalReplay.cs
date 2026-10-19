@@ -164,7 +164,7 @@ namespace Ctr2.Engine.Physics
                 unsupported.AsReadOnly(), samples.AsReadOnly());
         }
 
-        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, frogs, Om Nom, then stars.</summary>
+        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, frogs, throwers, Om Nom, then stars.</summary>
         private static List<(string, Func<PhysicsBody?>)> Registry(CandySimulation scene)
         {
             List<(string, Func<PhysicsBody?>)> objects = [];
@@ -188,6 +188,10 @@ namespace Ctr2.Engine.Physics
             {
                 // The frog records its newest tongue body.
                 objects.Add(("frog", () => frog.Bodies.Count == 0 ? null : frog.Bodies[^1]));
+            }
+            foreach (SimulationThrower thrower in scene.Throwers)
+            {
+                objects.Add(("thrower", () => thrower.Body));
             }
             foreach (PhysicsBody character in scene.Characters)
             {

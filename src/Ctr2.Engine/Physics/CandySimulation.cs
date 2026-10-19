@@ -155,6 +155,9 @@ namespace Ctr2.Engine.Physics
                     case "pump":
                         AddPump(placed, design);
                         break;
+                    case "thrower":
+                        AddThrower(placed, design);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
                             kind.StartsWith("polygon", StringComparison.Ordinal))
@@ -261,7 +264,10 @@ namespace Ctr2.Engine.Physics
             CollectStars();
             Gameplay?.BeforeStep();
             World.Step();
-            CloseTouchedTongues();
+            // The scene's contact listener calls each object's delegates during the step; both kinds only record decisions.
+            IReadOnlyList<PhysicsContactEvent> contacts = World.RecordContactEvents ? World.DrainContactEvents() : [];
+            CloseTouchedTongues(contacts);
+            HandleThrowerContacts(contacts);
             // Scene children update after the step: ropes first, then balloons, then frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
@@ -274,6 +280,11 @@ namespace Ctr2.Engine.Physics
             foreach (SimulationFrog frog in frogs)
             {
                 UpdateFrog(frog, PhysicsWorld.TimeStep);
+            }
+            // Throwers update after frogs and before the character, in scene order.
+            foreach (SimulationThrower thrower in throwers)
+            {
+                UpdateThrower(thrower);
             }
             Tick = checked(Tick + 1);
             Gameplay?.AfterStep();
