@@ -22,6 +22,16 @@ namespace Ctr2.Engine.Physics
         /// <summary>Master definition used for a rope's initial material points.</summary>
         private readonly IReadOnlyDictionary<string, string> initialPointDesign;
 
+        /// <summary>Native <c>Rope::cutWithVector</c> tip impulse: the swipe segment in meters, normalized and scaled by 0.001.</summary>
+        /// <param name="start">Previous touch in logical units.</param>
+        /// <param name="end">Current touch in logical units.</param>
+        /// <returns>The impulse applied to each new tip.</returns>
+        internal static Vector2 SwipeImpulse(Vector2 start, Vector2 end)
+        {
+            Vector2 drag = end - start;
+            return PhysicsMath.Normalize(new((float)(drag.X / 200.0), (float)(drag.Y / 200.0))) * .001f;
+        }
+
         /// <summary>Splits one active bone into two disconnected physical fragments.</summary>
         /// <param name="ropeIndex">Zero-based authored rope.</param>
         /// <param name="segment">Zero-based pre-cut bone.</param>
@@ -96,7 +106,7 @@ namespace Ctr2.Engine.Physics
             {
                 return accepted.AsReadOnly();
             }
-            Vector2 impulse = Vector2.Normalize(drag) * .001f;
+            Vector2 impulse = SwipeImpulse(start, end);
             for (int r = 0; r < ropes.Count; r++)
             {
                 RopeChain rope = ropes[r];

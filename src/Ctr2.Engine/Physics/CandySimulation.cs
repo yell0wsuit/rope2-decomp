@@ -167,6 +167,26 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Physics preview requires at least one candy.");
             }
+            // Arbitrary ropes come first in the post-pass: each joins two named bodies, and an unregistered name keeps no rope.
+            foreach (PlacedLevelObject instance in layout.Objects.Where(o => o.Source.Kind == "rope_instance"))
+            {
+                LevelElement source = instance.Source;
+                if (!layout.Named.TryGetValue(source.Attributes.GetValueOrDefault("body1_id", ""), out PlacedLevelObject? first) ||
+                    !layout.Named.TryGetValue(source.Attributes.GetValueOrDefault("body2_id", ""), out PlacedLevelObject? second))
+                {
+                    continue;
+                }
+                bool headCandy = candyBodies.TryGetValue(first, out PhysicsBody? head), tailCandy = candyBodies.TryGetValue(second, out PhysicsBody? tail);
+                if ((!headCandy && !shapeBodies.TryGetValue(first, out head)) || (!tailCandy && !shapeBodies.TryGetValue(second, out tail)))
+                {
+                    throw new InvalidDataException("Ropes support candy and circle/rectangle/polygon shape ends only.");
+                }
+                // The native constructor doubles the authored length twice and the shifts once.
+                float lengthValue = Value(source, "length", 0), x1 = Value(source, "x_shift_1", 0), y1 = Value(source, "y_shift_1", 0),
+                    x2 = Value(source, "x_shift_2", 0), y2 = Value(source, "y_shift_2", 0);
+                ropes.Add(CreateRope(head!, tail!, lengthValue + lengthValue + (lengthValue + lengthValue), new(x1 + x1, y1 + y1), new(x2 + x2, y2 + y2),
+                    headCandy, tailCandy, bone, frequency));
+            }
             // Pins join bodies after every object exists and before the grab ropes are built.
             foreach (PlacedLevelObject pin in pins)
             {

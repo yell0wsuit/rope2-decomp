@@ -77,7 +77,7 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "tutorial_swipe")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "tutorial_swipe")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
@@ -335,22 +335,16 @@ namespace Ctr2.Engine.Physics
 
     public sealed partial class CandySimulation
     {
-        /// <summary>Destroys the single gameplay candy and retires every terminal rope attachment.</summary>
+        /// <summary>Destroys the single gameplay candy like the native body teardown: every rope holding it at either end is
+        /// first cut next to it, which also sends attached balloons flying.</summary>
         internal void RetireCandy()
         {
             PhysicsBody candy = Candies[0];
-            _ = World.RemoveBody(candy);
-            foreach (RopeChain rope in ropes.Where(r => r.Points[^1] == candy))
+            for (int r = 0; r < ropes.Count; r++)
             {
-                if (rope.Stretch != null)
-                {
-                    _ = World.Remove(rope.Stretch);
-                    rope.Stretch = null;
-                }
-                rope.Released = true;
-                // A balloon on a released candy rope flies away.
-                NotifyAttached(rope);
+                CutWithBodyDestroyed(r, candy);
             }
+            _ = World.RemoveBody(candy);
         }
     }
 }

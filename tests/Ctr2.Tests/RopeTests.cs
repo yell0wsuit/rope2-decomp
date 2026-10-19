@@ -90,6 +90,29 @@ namespace Ctr2.Tests
             Assert.Equal(1, scene.RopeCount);
         }
 
+        /// <summary>Arbitrary ropes join two named bodies ahead of grab ropes, with the length doubled twice and the shifts once.</summary>
+        [Fact]
+        public void RopeInstancesJoinNamedBodiesFirst()
+        {
+            const string Level = "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" +
+                "<candy x='160' y='100' id='candy'/><grab x='160' y='20' length='60'/>" +
+                "<circle_materialized x='100' y='60' radius='10' material='wood_dynamic' id='ball'/>" +
+                "<rope_instance x='130' y='80' length='30' body1_id='ball' x_shift_1='5' y_shift_1='0' body2_id='candy' x_shift_2='0' y_shift_2='0'/>" +
+                "<rope_instance x='0' y='0' length='30' body1_id='missing' x_shift_1='0' y_shift_1='0' body2_id='candy' x_shift_2='0' y_shift_2='0'/>" +
+                "</layer></map>";
+            CandySimulation scene = new(LevelReader.Read(Level), LevelReader.Read(Design));
+            Assert.Equal(2, scene.RopeCount);
+            // 30 authored units become 120 logical units: one 0.4 m bone plus a 0.2 m remainder.
+            Assert.Equal([.4f, .6f - .4f], scene.RopeLengths(0));
+            Assert.InRange(Vector2.Distance(new(210, 120), scene.RopePoints(0)[0]), 0, .0001f);
+            Assert.InRange(Vector2.Distance(new(320, 200), scene.RopePoints(0)[^1]), 0, .0001f);
+
+            // Destroying the candy cuts the rope next to it first, as the native body teardown does.
+            scene.RetireCandy();
+            Assert.DoesNotContain(scene.Candies[0], scene.World.Bodies);
+            Assert.Equal(4, scene.RopePoints(0).Count);
+        }
+
         private static void Near(float expected, float actual, string context)
         {
             Assert.True(float.IsFinite(expected) && float.IsFinite(actual) && MathF.Abs(expected - actual) <= .00002f * MathF.Max(1, MathF.Abs(expected)),

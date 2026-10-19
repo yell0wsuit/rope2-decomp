@@ -1129,6 +1129,23 @@ local anchor divided by 200. Material points are spaced between the head and tai
 origins, not the anchors. A rope with no material points gets one joint with
 `collideConnected`. The bone-remainder test compares in double precision.
 
+`rope_instance` objects are arbitrary ropes between two registered names,
+`body1_id` (head) and `body2_id` (tail). They are built first in the scene's
+post-pass, in document order, ahead of pins, grab ropes and balloon ropes, so they
+take the lowest rope and journal indices. The native constructor doubles the
+authored `length` twice (four times the editor value in logical units) and each
+`x_shift_n`/`y_shift_n` once as that end's attach shift. Either end may be candy,
+which then slows down on the rope; an unregistered name keeps no rope. Booka and
+fireball ends remain unsupported.
+
+Destroying a body runs the native `cutWithBodyDestroyed` on every rope before the
+body leaves the world: an intact rope is cut at the joint next to it, with no
+impulse, and the body is dropped from the rope. Eaten or lost candy follows this
+path at either rope end.
+
+A live swipe cut gives each new tip the impulse `normalize(toB2Vector(end - start))
+* 0.001`, from the touch segment that crossed the rope.
+
 Every update after the step, candy (the bodies that slow down on ropes) gets
 linear damping 0.3 while stretched and moving faster than 2 m/s on average, 0.1
 while stretched, and 0 otherwise; a cut or released rope stops updating it.
@@ -1465,9 +1482,17 @@ supported journal becomes unsupported. It is skipped without a local cache
 (`CTR2_CACHE`, or `cache/windows-alpha` at the repository root). Regenerate the
 baseline after an improvement.
 
-The prefixes end at ulp-level differences rather than mechanics. Replaying the port's
-own world mutations against native Box2D 2.2.1 matches bit for bit on every supported
-level for the whole journal, so the remaining divergence comes from the recording
-platform's `sinf`/`cosf`, which rounds a few results differently from the host's: a
-correctly rounded or FreeBSD-style sine and cosine fix some early divergences and
-introduce others. The port keeps the host's float trigonometry.
+Journaled cuts store only the crossing and bone, but the recording cut live, so the
+replay rebuilds the swipe impulse: the recorder logs a cutting move after its cuts,
+so the segment runs from the previous touch to the next move in the same frame.
+
+Replaying the port's own world mutations against native Box2D 2.2.1 matches bit for
+bit on every supported level for the whole journal, so remaining differences come from
+game logic or from the recording platform's float library. Most prefixes now end at
+ulp-level differences that first appear on rotating bodies, consistent with the
+recording platform's `sinf`/`cosf` rounding a few results differently from the
+host's: correctly rounded or FreeBSD-style sine and cosine fix some early divergences
+and introduce others, so the port keeps the host's float trigonometry. Level 1-9 is a
+known exception: in all three variants the candy jumps by millimetres between two
+exact samples while swinging on its ropes, with no input or contact in between, and a
+one-ulp nudge does not reproduce it, so an unported logic detail is still involved.

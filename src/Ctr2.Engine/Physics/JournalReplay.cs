@@ -45,8 +45,8 @@ namespace Ctr2.Engine.Physics
 
     /// <summary>Replays an original hint journal against a scene without forcing its snapshots, measuring drift.</summary>
     /// <remarks>The original hint playback re-applies every snapshot, so it never relies on determinism. This replay applies
-    /// only inputs: cuts by journal rope index with zero impulse, touch presses as scene taps, and touch movement as balloon
-    /// swipes (replayed touches never cut ropes). Events recorded at frame F apply before step F + 1; a snapshot at frame N is
+    /// only inputs: cuts by journal rope index with the live swipe's tip impulse, touch presses as scene taps, and touch
+    /// movement as balloon swipes (replayed touches never cut ropes). Events recorded at frame F apply before step F + 1; a snapshot at frame N is
     /// compared after step N.</remarks>
     public static class JournalReplay
     {
@@ -70,8 +70,10 @@ namespace Ctr2.Engine.Physics
             Vector2? touch = null;
             while (scene.Tick < frames && (scene.Gameplay == null || scene.Gameplay.Result == LevelResult.Running))
             {
-                foreach (JournalEvent e in events[scene.Tick])
+                JournalEvent[] frame = [.. events[scene.Tick]];
+                for (int k = 0; k < frame.Length; k++)
                 {
+                    JournalEvent e = frame[k];
                     Vector2 point = new(e.X, e.Y);
                     switch (e.Type)
                     {
@@ -96,7 +98,10 @@ namespace Ctr2.Engine.Physics
                                 unsupported.Add($"Frame {e.Frame}: cut of journal object {e.Index}");
                                 break;
                             }
-                            _ = scene.Cut(e.Index, e.Segment, point);
+                            // A live cut gave the new tips the swipe's impulse. The recorder logs the cutting move after its
+                            // cuts, so the swipe runs from the previous touch to the next move in this frame.
+                            JournalEvent? move = frame.Skip(k + 1).FirstOrDefault(m => m.Type == JournalEventType.TouchMove);
+                            _ = scene.Cut(e.Index, e.Segment, point, touch is Vector2 from && move != null ? CandySimulation.SwipeImpulse(from, new(move.X, move.Y)) : Vector2.Zero);
                             break;
                         case JournalEventType.StarCatch:
                             _ = catches.TryAdd(e.Index, e.Frame);

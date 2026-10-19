@@ -134,7 +134,8 @@ namespace Ctr2.Tests
             Assert.Equal(CandyState.Removed, scene.Gameplay!.CandyState);
         }
 
-        /// <summary>Body destruction detaches both intact and cut rope tails without invalid solver references.</summary>
+        /// <summary>Body destruction cuts an intact rope next to the candy, as the native teardown does, and detaches both intact
+        /// and cut rope tails without invalid solver references.</summary>
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
@@ -150,7 +151,7 @@ namespace Ctr2.Tests
                 scene.Step();
             }
             Assert.Equal(CandyState.Removed, scene.Gameplay!.CandyState);
-            Assert.True(scene.IsReleased(0));
+            Assert.Equal(2, scene.RopeSegments(0).Count);
             Assert.DoesNotContain(scene.RopeSegments(0).SelectMany(p => p), p => p == scene.Candies[0].Position * 200);
         }
 
