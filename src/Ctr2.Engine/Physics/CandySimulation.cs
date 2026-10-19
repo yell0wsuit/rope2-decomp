@@ -18,8 +18,8 @@ namespace Ctr2.Engine.Physics
     /// <summary>A diagnostic scene with authored candy, grab, rope, stationary star and static terrain design data.</summary>
     public sealed partial class CandySimulation
     {
-        /// <summary>World owning all center bodies and constraints.</summary>
-        private readonly PhysicsWorld world = new();
+        /// <summary>Gets the world owning every scene body and constraint.</summary>
+        internal PhysicsWorld World { get; } = new();
         /// <summary>Authored rope chains in grab order.</summary>
         private readonly List<RopeChain> ropes = [];
         /// <summary>Gets optional gameplay state; null retains diagnostic behavior.</summary>
@@ -92,7 +92,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Rope bone length and stretch frequency must be positive.");
             }
-            Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance);
+            Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance), shapeBodies = new(ReferenceEqualityComparer.Instance);
             List<PhysicsBody> candies = [], characters = [];
             List<GeneralShape> shapes = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
@@ -109,12 +109,12 @@ namespace Ctr2.Engine.Physics
                         {
                             foreach (IReadOnlyList<Vector2> triangle in shape.Triangles)
                             {
-                                world.AddTerrain(triangle, shape.Friction, shape.Restitution);
+                                World.AddTerrain(triangle, shape.Friction, shape.Restitution);
                             }
                         }
                         break;
                     case "candy":
-                        PhysicsBody candy = BodyFactory.Create(world, candyDesign, placed.Position!.Value / 200, 0);
+                        PhysicsBody candy = BodyFactory.Create(World, candyDesign, placed.Position!.Value / 200, 0);
                         candies.Add(candy);
                         candyBodies.Add(placed, candy);
                         break;
@@ -123,7 +123,7 @@ namespace Ctr2.Engine.Physics
                         {
                             throw new InvalidDataException("Balloon-generating grabs are not supported by this physics slice.");
                         }
-                        grabs.Add(placed, BodyFactory.Create(world, grabDesign, placed.Position!.Value / 200, 0));
+                        grabs.Add(placed, BodyFactory.Create(World, grabDesign, placed.Position!.Value / 200, 0));
                         break;
                     case "omnom":
                         characters.Add(AddCharacter(CharacterDefinitions[characterIndex++]));
@@ -135,7 +135,9 @@ namespace Ctr2.Engine.Physics
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal))
                         {
                             IReadOnlyDictionary<string, string> fields = BodyFactory.MaterializedDesign(placed.Source, design);
-                            shapes.Add(new(kind, fields, BodyFactory.Create(world, fields)));
+                            GeneralShape general = new(kind, fields, BodyFactory.Create(World, fields));
+                            shapes.Add(general);
+                            shapeBodies.Add(placed, general.Body);
                         }
                         break;
                 }
@@ -146,44 +148,18 @@ namespace Ctr2.Engine.Physics
             }
             foreach (PlacedLevelObject grab in layout.Objects.Where(o => o.Source.Kind == "grab"))
             {
-                // Like the scene loader, a grab whose target name is not registered keeps no rope.
-                if (!grab.Source.Attributes.TryGetValue("target_id", out string? id) || !layout.Named.TryGetValue(id, out PlacedLevelObject? named))
+                // Like the scene, an absent target name means "candy" and an unregistered name keeps no rope.
+                if (!layout.Named.TryGetValue(grab.Source.Attributes.GetValueOrDefault("target_id", "candy"), out PlacedLevelObject? named))
                 {
                     continue;
                 }
-                if (Value(grab.Source, "target_x", 0) != 0 || Value(grab.Source, "target_y", 0) != 0 ||
-                    !candyBodies.TryGetValue(named, out PhysicsBody? target))
+                bool candy = candyBodies.TryGetValue(named, out PhysicsBody? target);
+                if (!candy && !shapeBodies.TryGetValue(named, out target))
                 {
-                    throw new InvalidDataException("Physics preview supports zero-offset named candy targets only.");
+                    throw new InvalidDataException("Ropes support candy and circle/rectangle shape targets only.");
                 }
-                float length = Value(grab.Source, "length") / 100;
-                int generated = (int)(length / bone);
-                if (length <= 0 || generated > 1024)
-                {
-                    throw new InvalidDataException("Rope length or generated point count exceeds physics bounds.");
-                }
-                float remainder = length - (generated * bone);
-                if (MathF.Abs(remainder) < 1.1920929e-7f)
-                {
-                    generated--;
-                    remainder = bone;
-                }
-                PhysicsBody head = grabs[grab];
-                List<PhysicsBody> points = [head];
-                Vector2 position = head.Position;
-                Vector2 shift = generated > 0 ? (target.Position - head.Position) / generated : Vector2.Zero;
-                for (int i = 0; i < generated; i++)
-                {
-                    position += shift;
-                    points.Add(BodyFactory.Create(world, pointDesign, position, 0));
-                }
-                points.Add(target);
-                List<PhysicsJoint> constraints = [];
-                for (int i = 0; i < points.Count - 1; i++)
-                {
-                    constraints.Add(world.AddRope(points[i], points[i + 1], i == points.Count - 2 ? remainder : bone));
-                }
-                ropes.Add(new(points, constraints, length, frequency));
+                float x = Value(grab.Source, "target_x", 0), y = Value(grab.Source, "target_y", 0), lengthValue = Value(grab.Source, "length");
+                ropes.Add(CreateRope(grabs[grab], target!, lengthValue + lengthValue, Vector2.Zero, new(x + x, y + y), false, candy, bone, frequency));
             }
             Characters = characters.AsReadOnly();
             Candies = candies.AsReadOnly();
@@ -206,17 +182,17 @@ namespace Ctr2.Engine.Physics
             {
                 foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
                 {
-                    _ = world.Remove(rope.Joints[^1]);
+                    _ = World.Remove(rope.Joints[^1]);
                     if (rope.Stretch != null)
                     {
-                        _ = world.Remove(rope.Stretch);
+                        _ = World.Remove(rope.Stretch);
                     }
                     rope.Released = true;
                 }
             }
             CollectStars();
             Gameplay?.BeforeStep();
-            world.Step();
+            World.Step();
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
@@ -230,7 +206,8 @@ namespace Ctr2.Engine.Physics
         /// <returns>A read-only polyline including the original endpoints.</returns>
         public IReadOnlyList<Vector2> RopePoints(int index)
         {
-            return Array.AsReadOnly(ropes[index].Points.Select(p => p.Position * 200).ToArray());
+            RopeChain rope = ropes[index];
+            return Array.AsReadOnly(Enumerable.Range(0, rope.Points.Count).Select(i => BodyPosition(rope, i)).ToArray());
         }
 
         /// <summary>Snapshots the chain's bone limits or spring rest lengths in meters.</summary>
@@ -249,8 +226,55 @@ namespace Ctr2.Engine.Physics
             return ropes[index].Released;
         }
 
-        /// <summary>Applies the traced material-point damping and stretch-joint transitions after the world step.</summary>
-        /// <param name="rope">Unreleased chain.</param>
+        /// <summary>Creates a scene rope between two body origins, with logical attach shifts as end anchors.</summary>
+        /// <param name="head">Head body, normally a grab.</param>
+        /// <param name="tail">Tail body.</param>
+        /// <param name="lengthPx">Rope length in logical units.</param>
+        /// <param name="headShift">Head attach shift in logical units, in the head's local frame.</param>
+        /// <param name="tailShift">Tail attach shift in logical units, in the tail's local frame.</param>
+        /// <param name="slowHead">Whether rope tension damps the head, as candy and Bookas do.</param>
+        /// <param name="slowTail">Whether rope tension damps the tail.</param>
+        /// <param name="bone">Bone length in meters.</param>
+        /// <param name="frequency">Whole-rope stretch frequency.</param>
+        /// <returns>The owned chain.</returns>
+        private RopeChain CreateRope(PhysicsBody head, PhysicsBody tail, float lengthPx, Vector2 headShift, Vector2 tailShift, bool slowHead, bool slowTail,
+            float bone, float frequency)
+        {
+            float length = lengthPx / 200;
+            int generated = (int)(length / bone);
+            if (length <= 0 || generated > 1024)
+            {
+                throw new InvalidDataException("Rope length or generated point count exceeds physics bounds.");
+            }
+            float remainder = length - (generated * bone);
+            // The native comparison runs in double precision.
+            if (Math.Abs((double)remainder) < 0.00000011920929)
+            {
+                generated--;
+                remainder = bone;
+            }
+            // Material points are spaced between the body origins, not the anchors.
+            List<PhysicsBody> points = [head];
+            Vector2 position = head.Origin;
+            Vector2 shift = generated > 0 ? (tail.Origin - head.Origin) / generated : Vector2.Zero;
+            for (int i = 0; i < generated; i++)
+            {
+                position += shift;
+                points.Add(BodyFactory.Create(World, pointDesign, position, 0));
+            }
+            points.Add(tail);
+            List<PhysicsJoint> constraints = [];
+            for (int i = 0; i < points.Count - 1; i++)
+            {
+                bool last = i == points.Count - 2;
+                constraints.Add(World.AddRope(points[i], points[i + 1], new PhysicsRopeDefinition(i == 0 ? Meters(headShift) : Vector2.Zero,
+                    last ? Meters(tailShift) : Vector2.Zero, last ? remainder : bone, i == 0 && last)));
+            }
+            return new(points, constraints, length, bone, frequency, headShift, tailShift, slowHead, slowTail);
+        }
+
+        /// <summary>Applies the scene rope's damping and stretch-joint transitions after the world step.</summary>
+        /// <param name="rope">Unreleased, uncut chain.</param>
         private void UpdateRope(RopeChain rope)
         {
             PhysicsBody head = rope.Points[0], tail = rope.Points[^1];
@@ -269,22 +293,76 @@ namespace Ctr2.Engine.Physics
             {
                 rope.Points[i].LinearDamping = average > 0.5f ? 0 : MathF.Exp(average * -3) * 5;
             }
-            float distance = (tail.Position - head.Position).Length();
-            PhysicsJoint last = rope.Joints[^1];
-            if (rope.Stretch == null && ((last.ReactionForce.Length() > 0.001f && distance > rope.Length) || distance > rope.Length * 1.5))
+            bool stretched = rope.Stretch != null;
+            float slow = stretched && average > 2 ? .3f : stretched ? .1f : 0;
+            if (rope.SlowHead)
             {
-                _ = world.Remove(last);
-                rope.Joints[^1] = world.AddSpring(rope.Points[^2], tail, last.Length, 10, 0.3f);
-                rope.Stretch = world.AddSpring(head, tail, rope.Length, rope.Frequency, 0);
+                head.LinearDamping = slow;
             }
-            if (rope.Stretch != null && Vector2.Dot(rope.Stretch.ReactionForce, head.Position - tail.Position) < 0)
+            if (rope.SlowTail)
             {
-                _ = world.Remove(rope.Stretch);
+                tail.LinearDamping = slow;
+            }
+            float actual = ActualLength(rope);
+            // The native lookup returns the newest joint between the last point and the tail: the whole-rope spring
+            // when a rope without material points is stretched.
+            PhysicsJoint measured = rope.Points.Count == 2 && rope.Stretch != null ? rope.Stretch : rope.Joints[^1];
+            float force = measured.ReactionForce.Length();
+            float lastLength = rope.Length - ((rope.Points.Count - 2) * rope.Bone);
+            Vector2 lastAnchor = rope.Points.Count == 2 ? Meters(rope.HeadShift) : Vector2.Zero;
+            if (!stretched && ((force > 0.001 && actual > rope.Length) || actual > rope.Length * 1.5))
+            {
+                _ = World.Remove(rope.Joints[^1]);
+                rope.Joints[^1] = World.AddDistance(rope.Points[^2], tail, new PhysicsDistanceDefinition(lastAnchor, Meters(rope.TailShift), lastLength, 10, .3f));
+                rope.Stretch = World.AddDistance(head, tail, new PhysicsDistanceDefinition(Meters(rope.HeadShift), Meters(rope.TailShift), rope.Length,
+                    rope.Frequency, 0, true));
+            }
+            // Only the sign matters; native measures this force at 60 Hz and the origins rather than the centers.
+            if (rope.Stretch != null && Vector2.Dot(rope.Stretch.ReactionForce, head.Origin - tail.Origin) < 0)
+            {
+                _ = World.Remove(rope.Stretch);
                 rope.Stretch = null;
-                last = rope.Joints[^1];
-                _ = world.Remove(last);
-                rope.Joints[^1] = world.AddRope(rope.Points[^2], tail, last.Length);
+                _ = World.Remove(rope.Joints[^1]);
+                rope.Joints[^1] = World.AddRope(rope.Points[^2], tail, new PhysicsRopeDefinition(lastAnchor, Meters(rope.TailShift), lastLength));
             }
+        }
+
+        /// <summary>Measures between the rotated attach points of the head and tail, like the native rope.</summary>
+        /// <param name="rope">Chain to measure.</param>
+        /// <returns>The anchor separation in meters.</returns>
+        private static float ActualLength(RopeChain rope)
+        {
+            PhysicsBody head = rope.Points[0], tail = rope.Points[^1];
+            Vector2 a = head.Position + PhysicsMath.Rotate(Meters(rope.HeadShift), head.Angle);
+            Vector2 b = tail.Position + PhysicsMath.Rotate(Meters(rope.TailShift), tail.Angle);
+            return (b - a).Length();
+        }
+
+        /// <summary>Gets a rope body's drawn and cut position in logical units, with the table-rotated attach shift.</summary>
+        /// <param name="rope">Owning chain.</param>
+        /// <param name="index">Index into the chain's bodies.</param>
+        /// <returns>The center, plus the rotated shift for the head or tail.</returns>
+        private static Vector2 BodyPosition(RopeChain rope, int index)
+        {
+            PhysicsBody body = rope.Points[index];
+            Vector2 position = body.Position * 200;
+            if (index == 0)
+            {
+                position += TableRotate(rope.HeadShift, body.Angle);
+            }
+            if (index == rope.Points.Count - 1)
+            {
+                position += TableRotate(rope.TailShift, body.Angle);
+            }
+            return position;
+        }
+
+        /// <summary>Converts logical units to meters as native <c>toB2Vector</c> does.</summary>
+        /// <param name="value">Logical vector.</param>
+        /// <returns>The vector divided by 200.</returns>
+        private static Vector2 Meters(Vector2 value)
+        {
+            return value / 200;
         }
 
         /// <summary>Creates one simulated character from its validated authored definition.</summary>
@@ -292,7 +370,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The owned dynamic body.</returns>
         private PhysicsBody AddCharacter(PolygonBodyDefinition definition)
         {
-            PhysicsBody character = world.AddPolygon(definition.Shape, definition.Origin, definition.Density,
+            PhysicsBody character = World.AddPolygon(definition.Shape, definition.Origin, definition.Density,
                 definition.GravityScale, definition.Angle, definition.FixedRotation);
             character.LinearDamping = definition.LinearDamping;
             character.AngularDamping = definition.AngularDamping;
@@ -333,37 +411,35 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Owns mutable constraints and moving-average state for one authored rope.</summary>
-        private sealed class RopeChain
+        private sealed class RopeChain(List<PhysicsBody> points, List<PhysicsJoint> joints, float length, float bone, float frequency,
+            Vector2 headShift, Vector2 tailShift, bool slowHead, bool slowTail)
         {
-            /// <summary>Head, intermediate material points and candy tail.</summary>
-            internal readonly List<PhysicsBody> Points;
+            /// <summary>Head, intermediate material points and tail.</summary>
+            internal readonly List<PhysicsBody> Points = points;
             /// <summary>One active constraint per adjacent pair, except after diagnostic release.</summary>
-            internal readonly List<PhysicsJoint> Joints;
+            internal readonly List<PhysicsJoint> Joints = joints;
             /// <summary>Native 60-sample endpoint relative-speed history.</summary>
             internal readonly Queue<float> Speeds = new();
             /// <summary>Whole-rope authored rest length in meters.</summary>
-            internal readonly float Length;
+            internal readonly float Length = length;
+            /// <summary>Bone length in meters.</summary>
+            internal readonly float Bone = bone;
             /// <summary>Whole-rope stretch spring frequency.</summary>
-            internal readonly float Frequency;
+            internal readonly float Frequency = frequency;
+            /// <summary>Head attach shift in logical units, in the head's local frame.</summary>
+            internal readonly Vector2 HeadShift = headShift;
+            /// <summary>Tail attach shift in logical units, in the tail's local frame.</summary>
+            internal readonly Vector2 TailShift = tailShift;
+            /// <summary>Whether rope tension damps the head.</summary>
+            internal readonly bool SlowHead = slowHead;
+            /// <summary>Whether rope tension damps the tail.</summary>
+            internal readonly bool SlowTail = slowTail;
             /// <summary>Whole-rope stretch spring, if active.</summary>
             internal PhysicsJoint? Stretch;
             /// <summary>Whether the final attachment has been released diagnostically.</summary>
             internal bool Released;
             /// <summary>Disconnected edge between two cut tips, or -1 before cutting.</summary>
             internal int CutGap = -1;
-
-            /// <summary>Initializes chain ownership and authored spring parameters.</summary>
-            /// <param name="points">Ordered bodies.</param>
-            /// <param name="joints">Ordered segment constraints.</param>
-            /// <param name="length">Whole-rope length in meters.</param>
-            /// <param name="frequency">Whole-rope stretch frequency.</param>
-            internal RopeChain(List<PhysicsBody> points, List<PhysicsJoint> joints, float length, float frequency)
-            {
-                Points = points;
-                Joints = joints;
-                Length = length;
-                Frequency = frequency;
-            }
         }
     }
 

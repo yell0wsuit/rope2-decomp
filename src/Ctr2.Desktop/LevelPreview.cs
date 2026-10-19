@@ -182,10 +182,7 @@ namespace Ctr2.Desktop
                 paint.StrokeWidth = 3;
                 foreach (LevelRope rope in Simulation == null ? Layout.Ropes : [])
                 {
-                    if (rope.End is Vector2 end)
-                    {
-                        canvas.DrawLine(rope.Start.X, rope.Start.Y, end.X, end.Y, paint);
-                    }
+                    canvas.DrawLine(rope.Start.X, rope.Start.Y, rope.End.X, rope.End.Y, paint);
                 }
                 if (Simulation != null)
                 {

@@ -44,7 +44,7 @@ namespace Ctr2.Engine.Physics
     {
         internal bool CharacterTouchesTerrain()
         {
-            return world.TouchesTerrain(Characters[0]);
+            return World.TouchesTerrain(Characters[0]);
         }
     }
 

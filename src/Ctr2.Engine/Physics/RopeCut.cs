@@ -43,23 +43,28 @@ namespace Ctr2.Engine.Physics
             {
                 throw new ArgumentOutOfRangeException(nameof(segment));
             }
-            if (!world.CanAdd(2, 2))
+            if (!World.CanAdd(2, 2))
             {
                 throw new InvalidDataException("Cut fragments exceed physics budgets.");
             }
-            Vector2 position = point / 200;
-            PhysicsBody a = rope.Points[segment], b = rope.Points[segment + 1];
-            PhysicsBody left = BodyFactory.Create(world, pointDesign, position, 0), right = BodyFactory.Create(world, pointDesign, position, 0);
-            left.Velocity = impulse / left.Mass;
-            right.Velocity = impulse / right.Mass;
-            _ = world.Remove(rope.Joints[segment]);
+            // Like the native replay cut: drop the stretch spring and the cut joint, then add two tips at the crossing.
             if (rope.Stretch != null)
             {
-                _ = world.Remove(rope.Stretch);
+                _ = World.Remove(rope.Stretch);
                 rope.Stretch = null;
             }
-            rope.Joints[segment] = world.AddRope(a, left, Vector2.Distance(a.Position, position));
-            rope.Joints.Insert(segment + 1, world.AddRope(right, b, Vector2.Distance(position, b.Position)));
+            _ = World.Remove(rope.Joints[segment]);
+            PhysicsBody a = rope.Points[segment], b = rope.Points[segment + 1];
+            Vector2 first = BodyPosition(rope, segment), second = BodyPosition(rope, segment + 1);
+            Vector2 position = Meters(point);
+            PhysicsBody left = BodyFactory.Create(World, pointDesign, position, 0), right = BodyFactory.Create(World, pointDesign, position, 0);
+            left.ApplyLinearImpulse(impulse, position);
+            right.ApplyLinearImpulse(impulse, position);
+            bool fromHead = segment == 0, toTail = segment + 1 == rope.Points.Count - 1;
+            rope.Joints[segment] = World.AddRope(a, left, new PhysicsRopeDefinition(fromHead ? Meters(rope.HeadShift) : Vector2.Zero, Vector2.Zero,
+                Meters(point - first).Length()));
+            rope.Joints.Insert(segment + 1, World.AddRope(right, b, new PhysicsRopeDefinition(Vector2.Zero, toTail ? Meters(rope.TailShift) : Vector2.Zero,
+                Meters(second - point).Length())));
             rope.Points.InsertRange(segment + 1, [left, right]);
             rope.CutGap = segment + 1;
             // Native divides each interior fixture density by ten, then resets mass data.
@@ -98,7 +103,7 @@ namespace Ctr2.Engine.Physics
                 }
                 for (int i = 0; i < rope.Points.Count - 1; i++)
                 {
-                    Vector2 a = rope.Points[i].Position * 200, bone = (rope.Points[i + 1].Position * 200) - a;
+                    Vector2 a = BodyPosition(rope, i), bone = BodyPosition(rope, i + 1) - a;
                     float denominator = Cross(drag, bone);
                     if (MathF.Abs(denominator) < 1e-8f)
                     {
@@ -128,10 +133,26 @@ namespace Ctr2.Engine.Physics
         public IReadOnlyList<IReadOnlyList<Vector2>> RopeSegments(int index)
         {
             RopeChain rope = ropes[index];
-            Vector2[] points = [.. (rope.Released ? rope.Points.SkipLast(1) : rope.Points).Select(p => p.Position * 200)];
+            Vector2[] points = [.. Enumerable.Range(0, rope.Released ? rope.Points.Count - 1 : rope.Points.Count).Select(i => BodyPosition(rope, i))];
             return rope.CutGap >= 0
                 ? Array.AsReadOnly<IReadOnlyList<Vector2>>([Array.AsReadOnly(points[..(rope.CutGap + 1)]), Array.AsReadOnly(points[(rope.CutGap + 1)..])])
                 : Array.AsReadOnly<IReadOnlyList<Vector2>>([Array.AsReadOnly(points)]);
+        }
+
+        /// <summary>Native 1024-entry sine table, filled in double precision and narrowed.</summary>
+        private static readonly float[] Sines = [.. Enumerable.Range(0, 1024).Select(i => (float)Math.Sin(2 * i * 3.14159265 / 1024.0))];
+        /// <summary>Native 1024-entry cosine table, filled in double precision and narrowed.</summary>
+        private static readonly float[] Cosines = [.. Enumerable.Range(0, 1024).Select(i => (float)Math.Cos(2 * i * 3.14159265 / 1024.0))];
+
+        /// <summary>Rotates a logical vector with the framework's table sine and cosine, as rope body positions do.</summary>
+        /// <param name="value">Logical vector.</param>
+        /// <param name="angle">Clockwise radians.</param>
+        /// <returns>The rotated vector; the table quantizes the angle to 1/1024 of a turn.</returns>
+        private static Vector2 TableRotate(Vector2 value, float angle)
+        {
+            int index = (int)((float)(angle * 1024.0) / 3.14159265 / 2.0) & 0x3FF;
+            float cosine = Cosines[index], sine = Sines[index];
+            return new((value.X * cosine) - (value.Y * sine), (value.X * sine) + (value.Y * cosine));
         }
 
         /// <summary>Validates finite bounded public cut vectors.</summary>

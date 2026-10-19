@@ -294,7 +294,8 @@ compilation nor game assets.
 | `CircleContactReference.json` | 1,800 native per-tick snapshots of static/dynamic circle impacts, oblique friction/spin, restitution, tangent/coincident centers, stacked contact islands, mixed joint/contact islands, joint refiltering and cached material changes. Exact circle/terrain candidate orientation/order/touching plus six body-state components. |
 | `ContactLifecycleReference.json` | 1,680 native per-tick snapshots: corner, bounce, centered/offset rotating compounds, late terrain and body removal/replacement. Exact contact order/identity/touching and proxy IDs; predicted bounds and six body-state components. |
 | `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
-| `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
+| `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates (including candy slowdown) and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
+| `RopeReference.json` | 480 native ticks of scene ropes: end-offset ropes to a rotated plank and a wood circle, a candy rope, a rope with no material points, an exact bone multiple, stretch/restore cycles and two replay cuts. Every body in creation order, including linear damping. |
 | `JointAnchorReference.csv` | Offset circles, shifted-centroid rotating polygons, fixed rotation and two dynamic endpoints for rope and soft-distance constraints. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY` |
 | `JointTopologyReference.csv` | Coincident anchors, zero/short ropes, short springs, multiple attachments, independent islands and joint removal/recreation. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY,jointActive` |
 | `RopeCutReference.csv` | Synthetic `game_cut` chain, cut before zero-based tick 30 with crossing `(30,20)` logical units and tip impulse `(0.001,0)`. Same columns as above; new tips are body indices 4/5. |
@@ -1100,6 +1101,37 @@ Both flags default off, so existing event consumers are unchanged.
 tick 120 (480 snapshots) and is bit-identical on the oracle platform. Fixture
 SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI islands report PostSolve the same way; see the continuous collision section.
 
+## Scene ropes
+
+Each grab rope targets the registered object named by `target_id`, or `candy` when
+the attribute is absent; an unregistered name keeps no rope. Candy and circle or
+rectangle shapes are supported targets. `target_x`/`target_y` double into a
+logical attach shift in the target's local frame, and become the last joint's
+local anchor divided by 200. Material points are spaced between the head and tail
+origins, not the anchors. A rope with no material points gets one joint with
+`collideConnected`. The bone-remainder test compares in double precision.
+
+Every update after the step, candy (the bodies that slow down on ropes) gets
+linear damping 0.3 while stretched and moving faster than 2 m/s on average, 0.1
+while stretched, and 0 otherwise; a cut or released rope stops updating it.
+Stretch measures between the head and tail attach points rotated by the body
+angles. The stretch springs and the restored rope joint carry the attach shifts;
+the head shift also applies to the last joint when the rope has no material
+points. For such a rope, the native force lookup returns the newest joint between
+the head and tail, which is the whole-rope spring while stretched. The rest length
+is recomputed from the rope length and bone count.
+
+Cuts, swipe hit tests and drawing use the native rope body position: the center
+plus the attach shift rotated with the framework's 1024-entry sine/cosine table,
+which quantizes the angle to 1/1024 of a turn. A cut removes the stretch spring
+and the cut joint, adds two tips with a real linear impulse, and measures the new
+joints from those positions to the crossing, keeping the head and tail anchors.
+`RopeReference.json` is bit-identical under exact comparison on macOS arm64.
+Fixture SHA-256: `485a71b59e9a2afeb25320e75681377bdf86dc65e46764bd3869d1865c5633fc`.
+The older chain oracle now includes candy slowdown; its fixtures were regenerated
+(`PhysicsReference.csv` `f6fbc9728ee7efd1dbf2ffe040603a8577265a0988ee00811a538700d021978f`,
+`RopeCutReference.csv` `7caa11746038cd2e7265d857ebb301840ae78537f85c3142c3e6985c0b8d1f8d`).
+
 ## Scene construction order
 
 `CandySimulation` creates bodies the way the scene loader does: one pass over the
@@ -1150,6 +1182,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RopeTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyFactoryTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SleepTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PrismaticJointTests'

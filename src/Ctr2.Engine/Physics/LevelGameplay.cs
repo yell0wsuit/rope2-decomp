@@ -339,12 +339,12 @@ namespace Ctr2.Engine.Physics
         internal void RetireCandy()
         {
             PhysicsBody candy = Candies[0];
-            _ = world.RemoveBody(candy);
+            _ = World.RemoveBody(candy);
             foreach (RopeChain rope in ropes.Where(r => r.Points[^1] == candy))
             {
                 if (rope.Stretch != null)
                 {
-                    _ = world.Remove(rope.Stretch);
+                    _ = World.Remove(rope.Stretch);
                     rope.Stretch = null;
                 }
                 rope.Released = true;

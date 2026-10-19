@@ -51,9 +51,10 @@ input; press Space to resume. The display reports collected stars and the result
 Restart restores the initial physics, stars, animation, input and replay clock.
 
 This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
-a swipe hint, static terrain and static or dynamic wood rectangles and circles in a
-dry level (wood is drawn diagnostically). Gameplay is independent of the
-authored location; currently only pack 1/entries 1, 2 and 4 use nothing but supported
+a swipe hint, static terrain, and static or dynamic wood rectangles and circles,
+including ropes attached to wood at authored offsets, in a dry level (wood is drawn
+diagnostically). Gameplay is independent of the
+authored location; currently only pack 1/entries 1 to 4 use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -87,7 +88,7 @@ original-game physics or visual parity:
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2 --ticks 600 --cut 0:0:0:519.25:343.5 --cut 0:1:0:138.66667:156.33333 --snapshot local/forest-win.png
 ```
 
-Pack 1/entry 1 also completed with 3/3 stars at tick 234 (feeding at tick 104)
+Pack 1/entry 1 also completed with 3/3 stars at tick 237 (feeding at tick 107)
 using `--ticks 600 --cut 30:0:0:400:138`. Leaf randomness is deterministic for
 repeatable diagnostics; native randomness and visual parity remain unverified.
 
@@ -168,7 +169,7 @@ An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
 The supplied Windows 1.0.0.46 content has 168 desktop entries; currently only
-pack 1/entries 1, 2 and 4 pass. Further work includes loader coverage, physical
+pack 1/entries 1 to 4 pass. Further work includes loader coverage, physical
 objects and general collision, moving stars, balloons, pumps, water, magnets,
 the other characters, level selection, progression, audio and saves.
 

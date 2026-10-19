@@ -15,7 +15,7 @@ The local reconstructed Android source provides the initial contracts; Windows m
 - `PhysicsHelper` editor path parsing: double local polygon vertices. The preview translates those raw vertices by the doubled object position. Native smoothing, normalization, inserted center vertices, triangulation and textured decoration are pending; the filled preview outline is not collision geometry.
 - `Omnom::initWith`: center-anchored animation with translation **(-8, -11)** logical units. Preview animation ID 85 is the supported Windows Om Nom resource, with scene `IDLE` and its default costume. The root canvas is centered before the character angle/translation and the shared viewport transform. Texture resolution does not change level coordinates.
 
-For zero-offset grab attachments to a named candy, the preview connects the initial grab and candy centers. Nonzero attachment offsets and other target kinds are reported as unverified and their lines are omitted, rather than assuming a local/world coordinate frame. The original attributes are retained.
+Grab ropes connect the grab to its target's attach point: the target position plus the doubled `target_x`/`target_y` shift rotated by the target's authored angle. An absent `target_id` means `candy`, as in the scene. The original attributes are retained.
 
 Pack 1 level 1 has a 320×480 editor canvas, fitted as **640×960 logical units**. Its candy starts at (394,294), grab at (400,86), rope rest length 210, and Om Nom at **(128,-194)**. The native first-level introduction moves Om Nom from above the scene; the static preview keeps this off-screen starting position. Pack 1 level 2 places Om Nom at (154,684), allowing the character placement to be inspected without implementing the intro.
 

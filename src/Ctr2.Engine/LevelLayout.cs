@@ -17,9 +17,9 @@ namespace Ctr2.Engine
 
     /// <summary>A diagnostic straight rope link, without simulation or sag.</summary>
     /// <param name="Start">Initial grab position in logical units.</param>
-    /// <param name="End">Target center, or null for an unverified offset.</param>
+    /// <param name="End">Target attach point: its position plus the rotated target shift.</param>
     /// <param name="RestLength">Doubled authored rope length in logical units.</param>
-    public sealed record LevelRope(Vector2 Start, Vector2? End, float RestLength);
+    public sealed record LevelRope(Vector2 Start, Vector2 End, float RestLength);
 
     /// <summary>An unsmoothed diagnostic polygon in logical scene coordinates.</summary>
     /// <param name="Vertices">Translated, doubled editor vertices; not collision geometry.</param>
@@ -94,10 +94,11 @@ namespace Ctr2.Engine
             }
             foreach (PlacedLevelObject grab in objects.Where(o => o.Source.Kind == "grab"))
             {
-                if (!grab.Source.Attributes.TryGetValue("target_id", out string? targetId) ||
-                    !named.TryGetValue(targetId, out PlacedLevelObject? target) || target.Position == null)
+                // An absent target name means "candy", as in the scene.
+                string targetId = grab.Source.Attributes.GetValueOrDefault("target_id", "candy");
+                if (!named.TryGetValue(targetId, out PlacedLevelObject? target) || target.Position == null)
                 {
-                    diagnostics.Add("Grab without rope target: " + (targetId ?? "(none)"));
+                    diagnostics.Add("Grab without rope target: " + targetId);
                     continue;
                 }
                 float length = Number(grab.Source, "length") * 2;
@@ -105,14 +106,11 @@ namespace Ctr2.Engine
                 {
                     throw new InvalidDataException("Rope length must be positive.");
                 }
-                float x = Number(grab.Source, "target_x", optional: true), y = Number(grab.Source, "target_y", optional: true);
-                Vector2? end = target.Position;
-                if (x != 0 || y != 0 || target.Source.Kind != "candy")
-                {
-                    diagnostics.Add("Unverified rope attachment: " + targetId);
-                    end = null;
-                }
-                ropes.Add(new(grab.Position!.Value, end, length));
+                // The doubled target shift is local to the target; rotate it by the authored angle.
+                Vector2 shift = new Vector2(Number(grab.Source, "target_x", optional: true), Number(grab.Source, "target_y", optional: true)) * 2;
+                float angle = target.Angle * MathF.PI / 180;
+                Vector2 rotated = new((shift.X * MathF.Cos(angle)) - (shift.Y * MathF.Sin(angle)), (shift.X * MathF.Sin(angle)) + (shift.Y * MathF.Cos(angle)));
+                ropes.Add(new(grab.Position!.Value, target.Position.Value + rotated, length));
             }
             diagnostics.Add("Static layout only: physics, rope sag/cutting, star collection, tutorials, intro, polygon smoothing, backgrounds and gameplay camera are pending.");
             return new(size, objects.AsReadOnly(), ropes.AsReadOnly(), polygons.AsReadOnly(), diagnostics.AsReadOnly(), named.AsReadOnly());

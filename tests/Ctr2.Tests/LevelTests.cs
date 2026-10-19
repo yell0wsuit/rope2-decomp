@@ -112,13 +112,15 @@ namespace Ctr2.Tests
             _ = Assert.Throws<InvalidDataException>(() => LevelLayout.Create(LevelReader.Read(Map.Replace("x=\"100\"", "x=\"1e2\"", StringComparison.Ordinal))));
         }
 
-        /// <summary>Reports untraced offset frames without inventing a rope endpoint.</summary>
+        /// <summary>Places offset attachments at the doubled target shift, in the target's rotated frame.</summary>
         [Fact]
-        public void NonzeroRopeOffsetsRemainExplicitlyUnverified()
+        public void RopeOffsetsUseTheTargetFrame()
         {
-            LevelLayout layout = LevelLayout.Create(LevelReader.Read(Map.Replace("target_x=\"0\"", "target_x=\"2\"", StringComparison.Ordinal)));
-            Assert.Null(Assert.Single(layout.Ropes).End);
-            Assert.Contains(layout.Diagnostics, d => d.Contains("Unverified rope attachment", StringComparison.Ordinal));
+            LevelLayout layout = LevelLayout.Create(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><rectangle_materialized x='100' y='100' width='40' height='10' angle='90' id='p'/><grab x='0' y='0' length='50' target_id='p' target_x='10' target_y='0'/><candy x='10' y='10' id='candy'/><grab x='0' y='0' length='50'/></layer></map>"));
+            Assert.Equal(2, layout.Ropes.Count);
+            Assert.Equal(200, layout.Ropes[0].End.X, .001f);
+            Assert.Equal(220, layout.Ropes[0].End.Y, .001f);
+            Assert.Equal(new Vector2(20, 20), layout.Ropes[1].End);
         }
 
         /// <summary>Rejects excessive XML nesting before constructing the tree.</summary>

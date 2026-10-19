@@ -19,7 +19,7 @@ namespace Ctr2.Engine.Physics
 
     public sealed partial class CandySimulation
     {
-        internal IReadOnlyList<PolygonImpact> CharacterImpacts => world.PolygonImpacts;
+        internal IReadOnlyList<PolygonImpact> CharacterImpacts => World.PolygonImpacts;
     }
 
     public sealed partial class LevelGameplay

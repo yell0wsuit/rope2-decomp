@@ -70,7 +70,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Star radius must be positive and within physics bounds.");
             }
-            _ = BodyFactory.Create(world, attributes.AsReadOnly());
+            _ = BodyFactory.Create(World, attributes.AsReadOnly());
             stars.Add(new(placed.Position!.Value / 200, radius, null));
         }
 
