@@ -41,6 +41,8 @@ namespace Ctr2.Engine.Physics
                 {
                     design[key] = value;
                 }
+                // The master loader stores each design's tag as its shape type; the authored tag replaces it below.
+                design["shapeType"] = matches[0].Kind;
             }
             design["shapeType"] = shape;
             foreach ((string key, string value) in element.Attributes)

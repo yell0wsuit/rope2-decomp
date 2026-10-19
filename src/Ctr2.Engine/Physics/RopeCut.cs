@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 
-using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
@@ -19,7 +18,7 @@ namespace Ctr2.Engine.Physics
     public sealed partial class CandySimulation
     {
         /// <summary>Matching master definition used to create physical cut tips.</summary>
-        private readonly LevelElement pointDesign;
+        private readonly IReadOnlyDictionary<string, string> pointDesign;
 
         /// <summary>Splits one active bone into two disconnected physical fragments.</summary>
         /// <param name="ropeIndex">Zero-based authored rope.</param>
@@ -50,7 +49,7 @@ namespace Ctr2.Engine.Physics
             }
             Vector2 position = point / 200;
             PhysicsBody a = rope.Points[segment], b = rope.Points[segment + 1];
-            PhysicsBody left = CreateBody(pointDesign, position, false), right = CreateBody(pointDesign, position, false);
+            PhysicsBody left = BodyFactory.Create(world, pointDesign, position, 0), right = BodyFactory.Create(world, pointDesign, position, 0);
             left.Velocity = impulse / left.Mass;
             right.Velocity = impulse / right.Mass;
             _ = world.Remove(rope.Joints[segment]);

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Numerics;
 
 using Ctr2.Assets;
@@ -41,36 +40,38 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
-        /// <summary>Loads stationary sensor geometry without adding solver bodies or changing island order.</summary>
-        /// <param name="layout">Logical authored object positions.</param>
+        /// <summary>Creates one stationary star as the scene does: a kinematic sensor body from its merged design.</summary>
+        /// <param name="placed">Authored star placement.</param>
         /// <param name="design">Matching master document.</param>
         /// <exception cref="InvalidDataException">A star has unsupported motion, geometry or collision filtering.</exception>
-        private void LoadStars(LevelLayout layout, LevelDefinition design)
+        private void AddStar(PlacedLevelObject placed, LevelDefinition design)
         {
-            foreach (PlacedLevelObject placed in layout.Objects.Where(o => o.Source.Kind == "star"))
+            LevelElement master = Find(design, "star");
+            Dictionary<string, string> attributes = new(master.Attributes, StringComparer.Ordinal)
             {
-                LevelElement master = Find(design, "star");
-                Dictionary<string, string> attributes = new(master.Attributes, StringComparer.Ordinal);
-                foreach ((string key, string value) in placed.Source.Attributes)
-                {
-                    attributes[key] = value;
-                }
-                LevelElement merged = new(master.Kind, attributes);
-                if (master.Kind != "circle" || attributes.GetValueOrDefault("body_type") != "kinematic" ||
-                    attributes.GetValueOrDefault("isSensor") is not ("true" or "1") ||
-                    Value(merged, "linearVelocityX", 0) != 0 || Value(merged, "linearVelocityY", 0) != 0 || Value(merged, "angularVelocity", 0) != 0 ||
-                    !string.IsNullOrEmpty(attributes.GetValueOrDefault("path")) || !string.IsNullOrEmpty(attributes.GetValueOrDefault("normalizedPath")) ||
-                    attributes.GetValueOrDefault("filter.collideWith", "all") != "all" || Value(merged, "filter.category", 0) != 0)
-                {
-                    throw new InvalidDataException("Star collection supports stationary kinematic circle sensors with default collision filtering only.");
-                }
-                float radius = Value(merged, "radius") / 100;
-                if (radius is <= 0 or > 10000)
-                {
-                    throw new InvalidDataException("Star radius must be positive and within physics bounds.");
-                }
-                stars.Add(new(placed.Position!.Value / 200, radius, null));
+                ["shapeType"] = master.Kind
+            };
+            foreach ((string key, string value) in placed.Source.Attributes)
+            {
+                attributes[key] = value;
             }
+            attributes["normalizeShape"] = "true";
+            LevelElement merged = new(master.Kind, attributes);
+            if (master.Kind != "circle" || attributes.GetValueOrDefault("body_type") != "kinematic" ||
+                attributes.GetValueOrDefault("isSensor") != "true" ||
+                Value(merged, "linearVelocityX", 0) != 0 || Value(merged, "linearVelocityY", 0) != 0 || Value(merged, "angularVelocity", 0) != 0 ||
+                !string.IsNullOrEmpty(attributes.GetValueOrDefault("path")) || !string.IsNullOrEmpty(attributes.GetValueOrDefault("normalizedPath")) ||
+                attributes.GetValueOrDefault("filter.collideWith", "all") != "all" || Value(merged, "filter.category", 0) != 0)
+            {
+                throw new InvalidDataException("Star collection supports stationary kinematic circle sensors with default collision filtering only.");
+            }
+            float radius = Value(merged, "radius") / 100;
+            if (radius is <= 0 or > 10000)
+            {
+                throw new InvalidDataException("Star radius must be positive and within physics bounds.");
+            }
+            _ = BodyFactory.Create(world, attributes.AsReadOnly());
+            stars.Add(new(placed.Position!.Value / 200, radius, null));
         }
 
         /// <summary>Collects overlapping candy sensors at contact-begin time before this tick's integration.</summary>

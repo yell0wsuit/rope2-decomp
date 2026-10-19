@@ -9,6 +9,12 @@ using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
+    /// <summary>An authored circle or rectangle shape and its body.</summary>
+    /// <param name="Kind">Authored element name, such as <c>rectangle_materialized</c>.</param>
+    /// <param name="Design">Merged material and authored design.</param>
+    /// <param name="Body">Static, kinematic or dynamic body.</param>
+    public sealed record GeneralShape(string Kind, IReadOnlyDictionary<string, string> Design, PhysicsBody Body);
+
     /// <summary>A diagnostic scene with authored candy, grab, rope, stationary star and static terrain design data.</summary>
     public sealed partial class CandySimulation
     {
@@ -54,6 +60,13 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
+        /// <summary>Gets authored circle and rectangle shapes, static or dynamic, in authored order.</summary>
+        /// <value>Bodies built by the design body factory, with their merged designs.</value>
+        public IReadOnlyList<GeneralShape> Shapes
+        {
+            get;
+        }
+
         /// <summary>Gets the number of authored grab ropes.</summary>
         /// <value>The number of independent chains, including released chains.</value>
         public int RopeCount => ropes.Count;
@@ -70,15 +83,8 @@ namespace Ctr2.Engine.Physics
             LevelLayout layout = LevelLayout.Create(level);
             CharacterDefinitions = PolygonBodyDefinition.LoadCharacters(level, design);
             Terrain = TerrainGeometry.Build(level, design);
-            foreach (TerrainShape shape in Terrain.Where(s => !s.IsSensor))
-            {
-                foreach (IReadOnlyList<Vector2> triangle in shape.Triangles)
-                {
-                    world.AddTerrain(triangle, shape.Friction, shape.Restitution);
-                }
-            }
-            LevelElement candyDesign = Find(design, "candy"), grabDesign = Find(design, "grab"), pointDesign = Find(design, "ropeMaterialPoint");
-            this.pointDesign = pointDesign;
+            IReadOnlyDictionary<string, string> candyDesign = Fields(Find(design, "candy")), grabDesign = Fields(Find(design, "grab"));
+            pointDesign = Fields(Find(design, "ropeMaterialPoint"));
             LevelElement ropeDesign = Find(design, "rope_design");
             float bone = Value(ropeDesign, "bone_length") / 100;
             float frequency = Value(ropeDesign, "stretch_hertz");
@@ -87,32 +93,51 @@ namespace Ctr2.Engine.Physics
                 throw new InvalidDataException("Rope bone length and stretch frequency must be positive.");
             }
             Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance);
-            List<PhysicsBody> candies = [];
+            List<PhysicsBody> candies = [], characters = [];
+            List<GeneralShape> shapes = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
+            int terrainIndex = 0, characterIndex = 0;
+            // Like the scene loader, every object creates its body in document order; ropes follow in a post-pass.
             foreach (PlacedLevelObject placed in layout.Objects)
             {
-                if (placed.Source.Kind is not ("candy" or "grab"))
+                string kind = placed.Source.Kind;
+                switch (kind)
                 {
-                    continue;
-                }
-                if (placed.Angle != 0)
-                {
-                    throw new InvalidDataException("Angular candy/grab placement is not supported by the center-body physics slice.");
-                }
-                bool isCandy = placed.Source.Kind == "candy";
-                PhysicsBody body = CreateBody(isCandy ? candyDesign : grabDesign, placed.Position!.Value / 200, !isCandy);
-                if (isCandy)
-                {
-                    candies.Add(body);
-                    candyBodies.Add(placed, body);
-                }
-                else
-                {
-                    if (placed.Source.Attributes.TryGetValue("balloons", out string? balloons) && balloons != "0")
-                    {
-                        throw new InvalidDataException("Balloon-generating grabs are not supported by this physics slice.");
-                    }
-                    grabs.Add(placed, body);
+                    case "polygon_materialized":
+                        TerrainShape shape = Terrain[terrainIndex++];
+                        if (!shape.IsSensor)
+                        {
+                            foreach (IReadOnlyList<Vector2> triangle in shape.Triangles)
+                            {
+                                world.AddTerrain(triangle, shape.Friction, shape.Restitution);
+                            }
+                        }
+                        break;
+                    case "candy":
+                        PhysicsBody candy = BodyFactory.Create(world, candyDesign, placed.Position!.Value / 200, 0);
+                        candies.Add(candy);
+                        candyBodies.Add(placed, candy);
+                        break;
+                    case "grab":
+                        if (placed.Source.Attributes.TryGetValue("balloons", out string? balloons) && balloons != "0")
+                        {
+                            throw new InvalidDataException("Balloon-generating grabs are not supported by this physics slice.");
+                        }
+                        grabs.Add(placed, BodyFactory.Create(world, grabDesign, placed.Position!.Value / 200, 0));
+                        break;
+                    case "omnom":
+                        characters.Add(AddCharacter(CharacterDefinitions[characterIndex++]));
+                        break;
+                    case "star":
+                        AddStar(placed, design);
+                        break;
+                    default:
+                        if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal))
+                        {
+                            IReadOnlyDictionary<string, string> fields = BodyFactory.MaterializedDesign(placed.Source, design);
+                            shapes.Add(new(kind, fields, BodyFactory.Create(world, fields)));
+                        }
+                        break;
                 }
             }
             if (candies.Count == 0)
@@ -150,7 +175,7 @@ namespace Ctr2.Engine.Physics
                 for (int i = 0; i < generated; i++)
                 {
                     position += shift;
-                    points.Add(CreateBody(pointDesign, position, false));
+                    points.Add(BodyFactory.Create(world, pointDesign, position, 0));
                 }
                 points.Add(target);
                 List<PhysicsJoint> constraints = [];
@@ -160,20 +185,9 @@ namespace Ctr2.Engine.Physics
                 }
                 ropes.Add(new(points, constraints, length, frequency));
             }
-            List<PhysicsBody> characters = [];
-            foreach (PolygonBodyDefinition definition in CharacterDefinitions)
-            {
-                PhysicsBody character = world.AddPolygon(definition.Shape, definition.Origin, definition.Density,
-                    definition.GravityScale, definition.Angle, definition.FixedRotation);
-                character.LinearDamping = definition.LinearDamping;
-                character.AngularDamping = definition.AngularDamping;
-                character.Friction = definition.Friction;
-                character.Restitution = definition.Restitution;
-                characters.Add(character);
-            }
             Characters = characters.AsReadOnly();
             Candies = candies.AsReadOnly();
-            LoadStars(layout, design);
+            Shapes = shapes.AsReadOnly();
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
             Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival) : null;
@@ -273,33 +287,26 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        /// <summary>Creates a supported zero-velocity circle body from the matching authored design.</summary>
-        /// <param name="design">Circle design record.</param>
-        /// <param name="position">Center in meters.</param>
-        /// <param name="isStatic">Whether a static grab is expected.</param>
-        /// <returns>The owned body.</returns>
-        private PhysicsBody CreateBody(LevelElement design, Vector2 position, bool isStatic)
+        /// <summary>Creates one simulated character from its validated authored definition.</summary>
+        /// <param name="definition">Authored compound polygon definition.</param>
+        /// <returns>The owned dynamic body.</returns>
+        private PhysicsBody AddCharacter(PolygonBodyDefinition definition)
         {
-            string expected = isStatic ? "static" : "dynamic";
-            if (design.Kind != "circle" || !design.Attributes.TryGetValue("body_type", out string? type) || type != expected ||
-                Value(design, "linearVelocityX") != 0 || Value(design, "linearVelocityY") != 0 || Value(design, "angularVelocity") != 0)
-            {
-                throw new InvalidDataException("Unsupported physics body design or nonzero initial velocity.");
-            }
-            float density = Value(design, "density"), radius = Value(design, "radius") / 100;
-            if (density <= 0 || radius <= 0)
-            {
-                throw new InvalidDataException("Physics circle density and radius must be positive.");
-            }
-            PhysicsBody body = world.AddCircle(position, radius, isStatic ? 0 : density, Value(design, "gravityScale"));
-            body.LinearDamping = Value(design, "linearDamping");
-            body.AngularDamping = Value(design, "angularDamping");
-            body.Friction = Value(design, "friction", .2f);
-            body.Restitution = Value(design, "restitution", 0);
-            body.IsSensor = isStatic || design.Attributes.GetValueOrDefault("id", "") == "ropeMaterialPoint";
-            return body.AngularDamping < 0 || body.Friction < 0 || body.Friction > 100 || body.Restitution < 0 || body.Restitution > 10
-                ? throw new InvalidDataException("Unsupported circle material coefficients.")
-                : body;
+            PhysicsBody character = world.AddPolygon(definition.Shape, definition.Origin, definition.Density,
+                definition.GravityScale, definition.Angle, definition.FixedRotation);
+            character.LinearDamping = definition.LinearDamping;
+            character.AngularDamping = definition.AngularDamping;
+            character.Friction = definition.Friction;
+            character.Restitution = definition.Restitution;
+            return character;
+        }
+
+        /// <summary>Copies a master design like the master loader: its attributes plus its tag as <c>shapeType</c>.</summary>
+        /// <param name="design">Master design record.</param>
+        /// <returns>A read-only attribute dictionary.</returns>
+        private static IReadOnlyDictionary<string, string> Fields(LevelElement design)
+        {
+            return new Dictionary<string, string>(design.Attributes, StringComparer.Ordinal) { ["shapeType"] = design.Kind }.AsReadOnly();
         }
 
         /// <summary>Finds one uniquely named master design.</summary>

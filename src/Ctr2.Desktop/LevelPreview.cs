@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Numerics;
 
@@ -158,6 +159,25 @@ namespace Ctr2.Desktop
                     using SKPath outline = path.Detach();
                     canvas.DrawPath(outline, paint);
                 }
+                foreach (GeneralShape shape in Simulation?.Shapes ?? [])
+                {
+                    // Diagnostic fill until wood and land shape artwork is ported.
+                    PhysicsBody body = shape.Body;
+                    paint.Color = body.Type == PhysicsBodyType.Static ? new SKColor(132, 96, 64) : new SKColor(196, 150, 96);
+                    Vector2 origin = body.Origin * 200;
+                    if (body.Radius > 0)
+                    {
+                        canvas.DrawCircle(origin.X, origin.Y, body.Radius * 200, paint);
+                        continue;
+                    }
+                    float halfWidth = float.Parse(shape.Design["width"], CultureInfo.InvariantCulture);
+                    float halfHeight = float.Parse(shape.Design["height"], CultureInfo.InvariantCulture);
+                    int restore = canvas.Save();
+                    canvas.Translate(origin.X, origin.Y);
+                    canvas.RotateRadians(body.Angle);
+                    canvas.DrawRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, paint);
+                    canvas.RestoreToCount(restore);
+                }
                 paint.Color = SKColors.Wheat;
                 paint.StrokeWidth = 3;
                 foreach (LevelRope rope in Simulation == null ? Layout.Ropes : [])
@@ -189,7 +209,8 @@ namespace Ctr2.Desktop
                     {
                         continue;
                     }
-                    if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized")
+                    if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
+                        (Simulation != null && (placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

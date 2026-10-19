@@ -183,8 +183,10 @@ collect. Collection stores an immutable star snapshot and a zero-based
 star/candy order as a deterministic diagnostic tie-break; native callback order
 is not claimed. Sensor overlap accepts ten floating-point epsilons of distance,
 as Box2D's sensor distance test does. Sensors are not swept: a fast candy can pass
-between contact samples without collecting a star. Star sensors add no solver
-bodies and cannot alter candy/rope trajectories or island traversal.
+between contact samples without collecting a star. As in the scene, each star
+also owns a kinematic sensor body built by the design body factory and kept after
+collection. It cannot push the candy, but its proxy takes broadphase IDs and so
+takes part in pair ordering. Collection itself still uses the geometric test above.
 
 The preview hides collected markers and reports events/counts on the console.
 Star animation/particles/audio, moving stars, Om Nom collection and score/save
@@ -1097,6 +1099,19 @@ Both flags default off, so existing event consumers are unchanged.
 `ContactReportReference.json` compares four independent native scenes through
 tick 120 (480 snapshots) and is bit-identical on the oracle platform. Fixture
 SHA-256: `dab320bd6b2415b61203f88bd7099428e6e85ce3da144e4d27ed379561ee4034`. TOI islands report PostSolve the same way; see the continuous collision section.
+
+## Scene construction order
+
+`CandySimulation` creates bodies the way the scene loader does: one pass over the
+authored objects in document order (terrain polygons, candy, grabs, Om Nom, stars
+and circle/rectangle shapes), then the grab ropes and their material points in a
+post-pass. Proxy IDs, body traversal and contact creation order therefore follow
+the source. Candy, grab and rope-point bodies come from their master designs through
+the design body factory; the master loader's tag becomes `shapeType`, and absent
+fields read zero or false. Candy and grab placement angles are ignored, as in the
+source. Authored `circle*`/`rectangle*` shapes are exposed as `Shapes` and drawn
+diagnostically until their artwork is ported. Om Nom keeps its dedicated compound
+polygon path, and static terrain polygons keep theirs.
 
 ## Design body factory
 

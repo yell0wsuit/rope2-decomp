@@ -14,12 +14,12 @@ namespace Ctr2.Tests
     /// <summary>Exercises authored rope topology and fixed-tick diagnostic replay without game assets.</summary>
     public sealed class CandySimulationTests
     {
-        /// <summary>Invented master design with the supported center-body fields.</summary>
+        /// <summary>Invented master design; absent fields read zero or false, as in the game.</summary>
         internal const string Design = """
             <map><layer name="settings"><map width="320" height="480"/></layer><layer name="Objects">
-            <circle id="candy" body_type="dynamic" radius="16" density="0.5" gravityScale="0.7" linearDamping="0" angularDamping="1" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
-            <circle id="grab" body_type="static" radius="8" density="0.4" gravityScale="1" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
-            <circle id="ropeMaterialPoint" body_type="dynamic" radius="3" density="0.6" gravityScale="0.6" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
+            <circle id="candy" friction="0.2" isSensor="false" body_type="dynamic" radius="16" density="0.5" gravityScale="0.7" linearDamping="0" angularDamping="1" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
+            <circle id="grab" friction="0.2" isSensor="true" body_type="static" radius="8" density="0.4" gravityScale="1" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
+            <circle id="ropeMaterialPoint" friction="0.2" isSensor="true" body_type="dynamic" radius="3" density="0.6" gravityScale="0.6" linearDamping="0" angularDamping="0" linearVelocityX="0" linearVelocityY="0" angularVelocity="0"/>
             <rope_design id="rope_design" bone_length="40" stretch_hertz="5"/>
             </layer></map>
             """;
@@ -39,6 +39,25 @@ namespace Ctr2.Tests
             CandySimulation scene = new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='100' y='147'/><candy id='c' x='200' y='147'/><grab x='200' y='43' length='105' target_id='c'/><grab x='50' y='43' length='105' target_id='missing'/></layer></map>"), LevelReader.Read(Design));
             Assert.Equal(1, scene.RopeCount);
             Assert.Equal(new Vector2(400, 294), scene.RopePoints(0)[^1]);
+        }
+
+        /// <summary>Builds authored wood shapes with the design factory, including static ones, and admits them to play.</summary>
+        [Fact]
+        public void MaterializedShapesBecomeSceneBodies()
+        {
+            string design = Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master +
+                "<polygon id='wood_dynamic' body_type='dynamic' density='0.2' gravityScale='0.9' friction='0.2'/><polygon id='wood' body_type='static' density='0.4' friction='0.3'/></layer></map>");
+            CandySimulation scene = new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='100' y='100'/><omnom x='100' y='100'/>" +
+                "<rectangle_materialized x='200' y='100' material='wood_dynamic' width='40' height='10' angle='90' id='b'/><rectangle_materialized x='200' y='300' material='wood' width='60' height='10' id='b'/>" +
+                "<circle_materialized x='250' y='50' material='wood_dynamic' radius='10'/></layer></map>"), LevelReader.Read(design), play: true);
+            Assert.Equal(["rectangle_materialized", "rectangle_materialized", "circle_materialized"], scene.Shapes.Select(s => s.Kind));
+            Assert.Equal([PhysicsBodyType.Dynamic, PhysicsBodyType.Static, PhysicsBodyType.Dynamic], scene.Shapes.Select(s => s.Body.Type));
+            Assert.Equal(new Vector2(2, 1), scene.Shapes[0].Body.Position);
+            Assert.Equal(.1f, scene.Shapes[2].Body.Radius);
+            Assert.NotNull(scene.Gameplay);
+            scene.Step();
+            Assert.True(scene.Shapes[0].Body.Position.Y > 1);
+            Assert.Equal(new Vector2(2, 3), scene.Shapes[1].Body.Position);
         }
 
         /// <summary>Checks chain damping, stretch transitions and diagnostic release against the independent C++ reference.</summary>
