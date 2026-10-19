@@ -119,8 +119,8 @@ namespace Ctr2.Engine.Physics
                 }
                 return true;
             }
-            // Balloons were added to the scene before frogs, so they see the tap afterwards.
-            return TapBalloon(point);
+            // Balloons, then pumps, were added to the scene before frogs, so they see the tap afterwards in reverse order.
+            return TapBalloon(point) || TapPump(point);
         }
 
         /// <summary>Creates an authored frog; a frog with an authored open tongue extends it during construction.</summary>

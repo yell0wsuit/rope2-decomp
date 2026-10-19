@@ -214,6 +214,20 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(body.Position.X * 200, body.Position.Y * 200, body.Radius * 200, paint);
                     }
                 }
+                foreach (SimulationPump pump in Simulation?.Pumps ?? [])
+                {
+                    // Diagnostic pump and blow direction until its artwork is ported.
+                    paint.Color = SKColors.SlateBlue;
+                    canvas.DrawCircle(pump.Position.X, pump.Position.Y, 30, paint);
+                    float radians = pump.Angle * MathF.PI / 180;
+                    using SKPaint nozzle = new()
+                    {
+                        Color = SKColors.SlateBlue,
+                        StrokeWidth = 10,
+                        IsAntialias = true
+                    };
+                    canvas.DrawLine(pump.Position.X, pump.Position.Y, pump.Position.X + (MathF.Sin(radians) * 60), pump.Position.Y - (MathF.Cos(radians) * 60), nozzle);
+                }
                 foreach (SimulationFrog frog in Simulation?.Frogs ?? [])
                 {
                     // Diagnostic frog and tongue until their artwork is ported.
@@ -274,7 +288,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" or "pump" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

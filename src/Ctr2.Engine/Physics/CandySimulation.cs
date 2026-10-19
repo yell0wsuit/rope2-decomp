@@ -149,6 +149,9 @@ namespace Ctr2.Engine.Physics
                     case "balloon":
                         AddBalloon(placed, design);
                         break;
+                    case "pump":
+                        AddPump(placed, design);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
                             kind.StartsWith("polygon", StringComparison.Ordinal))
@@ -333,6 +336,7 @@ namespace Ctr2.Engine.Physics
             {
                 position += shift;
                 points.Add(BodyFactory.Create(World, initialPointDesign, position, 0));
+                _ = materialPoints.Add(points[^1]);
             }
             points.Add(tail);
             List<PhysicsJoint> constraints = [];

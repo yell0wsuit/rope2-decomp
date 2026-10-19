@@ -1241,6 +1241,20 @@ motorized and limit-locked world hinges, a lone body, three bodies and an empty
 pin) is bit-identical under exact comparison on macOS arm64. Fixture SHA-256:
 `d3fcb70b987f2ea43cad3ededd5e4c345afeb08d985a8181e39f36e46afe4832`.
 
+## Scene pumps
+
+A `pump` owns no body. The `pump_design` master supplies every pump's `power`,
+`cone_height` and `cone_width`; an authored `power` attribute is ignored. A press
+within 90 logical units of the pump (newest first, after frogs and balloons) casts
+five world rays from the pump at `position / 200`, rotated by the authored degree
+angle converted in double precision: to `(0, -h)`, `(-w/2, -h)`, `(-w/2, -h/2)`,
+`(w/2, -h)` and `(w/2, -h/2)`. Every reported fixture, sensors included, is kept
+and the ray continues. Its body is collected once, up to nine bodies, unless it has
+no game object (frog tongue anchors) or is a rope material point. Each collected
+body then receives the impulse `R * (0, -power) * (1 - d / h)` at its center when its
+center lies within `h` of the pump; static and kinematic bodies are unaffected but
+still take a slot. The press is consumed.
+
 ## Scene construction order
 
 `CandySimulation` creates bodies the way the scene loader does: one pass over the

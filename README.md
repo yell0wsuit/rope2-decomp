@@ -53,10 +53,10 @@ Restart restores the initial physics, stars, animation, input and replay clock.
 This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
 a tap or swipe hint, static terrain, and static or dynamic wood rectangles and circles,
 including ropes attached to wood at authored offsets, free-standing ropes between
-named bodies, pins (hinges between bodies
+named bodies, pumps, pins (hinges between bodies
 or to the world), frogs whose tongues form bridges and balloons, in a dry level (wood,
-pins, frogs and balloons are drawn diagnostically). Gameplay is independent of the
-authored location; currently 17 levels across the forest and canyon packs use nothing but supported
+pins, frogs, balloons and pumps are drawn diagnostically). Gameplay is independent of the
+authored location; currently 21 levels across the forest and canyon packs use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows

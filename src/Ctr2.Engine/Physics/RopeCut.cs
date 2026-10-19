@@ -70,6 +70,8 @@ namespace Ctr2.Engine.Physics
             Vector2 first = BodyPosition(rope, segment), second = BodyPosition(rope, segment + 1);
             Vector2 position = Meters(point);
             PhysicsBody left = BodyFactory.Create(World, pointDesign, position, 0), right = BodyFactory.Create(World, pointDesign, position, 0);
+            _ = materialPoints.Add(left);
+            _ = materialPoints.Add(right);
             left.ApplyLinearImpulse(impulse, position);
             right.ApplyLinearImpulse(impulse, position);
             bool fromHead = segment == 0, toTail = segment + 1 == rope.Points.Count - 1;
