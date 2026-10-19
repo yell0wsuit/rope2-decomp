@@ -178,6 +178,31 @@ namespace Ctr2.Desktop
                     canvas.DrawRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, paint);
                     canvas.RestoreToCount(restore);
                 }
+                foreach (SimulationFrog frog in Simulation?.Frogs ?? [])
+                {
+                    // Diagnostic frog and tongue until their artwork is ported.
+                    paint.Color = SKColors.SeaGreen;
+                    canvas.DrawCircle(frog.Position.X, frog.Position.Y, 28, paint);
+                    paint.Color = SKColors.HotPink;
+                    foreach (PhysicsBody body in frog.Bodies)
+                    {
+                        if (body.Radius > 0)
+                        {
+                            canvas.DrawCircle(body.Position.X * 200, body.Position.Y * 200, body.Radius * 200, paint);
+                            continue;
+                        }
+                        IReadOnlyList<Vector2> vertices = body.PolygonFixtures[0].WorldVertices(body.Origin, body.Angle);
+                        using SKPathBuilder tongue = new();
+                        tongue.MoveTo(vertices[0].X * 200, vertices[0].Y * 200);
+                        foreach (Vector2 vertex in vertices.Skip(1))
+                        {
+                            tongue.LineTo(vertex.X * 200, vertex.Y * 200);
+                        }
+                        tongue.Close();
+                        using SKPath path = tongue.Detach();
+                        canvas.DrawPath(path, paint);
+                    }
+                }
                 paint.Color = SKColors.LightSlateGray;
                 foreach (PhysicsRevoluteJoint pin in Simulation?.PinJoints ?? [])
                 {
@@ -213,7 +238,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind == "pin" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

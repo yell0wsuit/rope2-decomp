@@ -292,14 +292,15 @@ namespace Ctr2.Engine.Physics
             newFixtures = true;
         }
 
-        private void RegisterTerrainProxy(TerrainFixture fixture, bool isSensor)
+        private void RegisterTerrainProxy(TerrainFixture fixture, bool isSensor, PhysicsCollisionFilter filter)
         {
             PhysicsAabb bounds = PolygonBounds(fixture.Points, Vector2.Zero, 0);
             bounds.Validate();
             FixtureProxy proxy = new(++fixtureLabel, null, fixture, 0)
             {
                 IsSensor = isSensor,
-                Bounds = bounds
+                Bounds = bounds,
+                Filter = filter
             };
             proxy.Id = broadPhase.CreateProxy(bounds, proxy.Label);
             proxies.Add(proxy.Label, proxy);

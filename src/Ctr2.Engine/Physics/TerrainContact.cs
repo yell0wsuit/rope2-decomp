@@ -20,8 +20,9 @@ namespace Ctr2.Engine.Physics
         /// <param name="friction">Finite nonnegative friction coefficient.</param>
         /// <param name="restitution">Finite nonnegative restitution coefficient.</param>
         /// <param name="isSensor">Whether to initialize the terrain fixture as a sensor.</param>
+        /// <param name="filter">Creation-time collision filter, or null for the native default.</param>
         /// <exception cref="ArgumentException">Geometry or coefficients are invalid or exceed budgets.</exception>
-        public void AddTerrain(IReadOnlyList<Vector2> vertices, float friction, float restitution, bool isSensor = false)
+        public void AddTerrain(IReadOnlyList<Vector2> vertices, float friction, float restitution, bool isSensor = false, PhysicsCollisionFilter? filter = null)
         {
             ThrowIfLocked();
             if (terrain.Count >= 4096 || vertices.Count is < 3 or > 8 ||
@@ -32,7 +33,7 @@ namespace Ctr2.Engine.Physics
             }
             ConvexPolygon polygon = new(vertices);
             TerrainFixture fixture = new([.. polygon.Vertices], [.. polygon.Normals], friction, restitution, polygon.ComputeMass(0).Center, polygon);
-            RegisterTerrainProxy(fixture, isSensor);
+            RegisterTerrainProxy(fixture, isSensor, filter ?? PhysicsCollisionFilter.Default);
             terrain.Add(fixture);
         }
 

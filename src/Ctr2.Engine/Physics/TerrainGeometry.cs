@@ -15,8 +15,9 @@ namespace Ctr2.Engine.Physics
     /// <param name="Friction">Authored material friction.</param>
     /// <param name="Restitution">Authored material restitution.</param>
     /// <param name="IsSensor">Whether geometry is visual-only for this solid-contact subset.</param>
+    /// <param name="Filter">Collision filter from the merged material and authored attributes.</param>
     public sealed record TerrainShape(IReadOnlyList<Vector2> Outline, IReadOnlyList<IReadOnlyList<Vector2>> Triangles,
-        float Friction, float Restitution, bool IsSensor);
+        float Friction, float Restitution, bool IsSensor, PhysicsCollisionFilter Filter);
 
     /// <summary>Builds bounded static material geometry using periodic Akima sampling and ear clipping.</summary>
     public static class TerrainGeometry
@@ -96,7 +97,12 @@ namespace Ctr2.Engine.Physics
                     throw new InvalidDataException("Terrain fixture budget exceeded.");
                 }
 
-                result.Add(new(outline.AsReadOnly(), triangles.AsReadOnly(), friction, restitution, sensor == "true"));
+                Dictionary<string, string> merged = new(definition.Attributes, StringComparer.Ordinal);
+                foreach ((string key, string value) in element.Attributes)
+                {
+                    merged[key] = value;
+                }
+                result.Add(new(outline.AsReadOnly(), triangles.AsReadOnly(), friction, restitution, sensor == "true", BodyFactory.Filter(merged)));
             }
             return result.AsReadOnly();
         }

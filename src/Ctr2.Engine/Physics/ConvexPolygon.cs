@@ -93,6 +93,31 @@ namespace Ctr2.Engine.Physics
                 [new(0, -1), new(1, 0), new(0, 1), new(-1, 0)]);
         }
 
+        /// <summary>Creates a box like native <c>SetAsBox</c> with a center and angle: axis-aligned corners and normals, then transformed.</summary>
+        /// <param name="halfWidth">Positive half width in meters.</param>
+        /// <param name="halfHeight">Positive half height in meters.</param>
+        /// <param name="center">Local box center in meters.</param>
+        /// <param name="angle">Local box rotation in radians.</param>
+        /// <returns>The transformed box in native vertex order.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">A half extent, the center or the angle is invalid.</exception>
+        public static ConvexPolygon Box(float halfWidth, float halfHeight, Vector2 center, float angle)
+        {
+            ConvexPolygon box = Box(halfWidth, halfHeight);
+            if (!ValidPoint(center) || !float.IsFinite(angle) || MathF.Abs(angle) > 1000000)
+            {
+                throw new ArgumentOutOfRangeException(nameof(angle));
+            }
+            float sine = MathF.Sin(angle), cosine = MathF.Cos(angle);
+            Vector2[] points = new Vector2[4], normals = new Vector2[4];
+            for (int i = 0; i < 4; i++)
+            {
+                Vector2 p = box.points[i], n = box.normals[i];
+                points[i] = new((cosine * p.X) - (sine * p.Y) + center.X, (sine * p.X) + (cosine * p.Y) + center.Y);
+                normals[i] = new((cosine * n.X) - (sine * n.Y), (sine * n.X) + (cosine * n.Y));
+            }
+            return new(points, normals);
+        }
+
         /// <summary>Computes fixture mass and moments of inertia about the origin and centroid.</summary>
         /// <param name="density">Nonnegative fixture density.</param>
         /// <returns>Local mass data.</returns>

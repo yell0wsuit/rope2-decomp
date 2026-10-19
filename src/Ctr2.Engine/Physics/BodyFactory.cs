@@ -161,7 +161,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Builds the fixture filter from the authored category, collide-with mode and excluded categories.</summary>
         /// <param name="design">Merged design dictionary.</param>
         /// <returns>The native 16-bit filter with group zero.</returns>
-        private static PhysicsCollisionFilter Filter(IReadOnlyDictionary<string, string> design)
+        internal static PhysicsCollisionFilter Filter(IReadOnlyDictionary<string, string> design)
         {
             ushort category = (ushort)(1 << Integer(design.GetValueOrDefault("filter.category")));
             ushort mask = design.GetValueOrDefault("filter.collideWith") switch

@@ -93,7 +93,8 @@ SDL primary mouse coordinates convert from window units into drawable pixels,
 then through the same viewport inverse used for rendering. Presses in letterbox
 margins are ignored. Swipes queue in event order and apply before the next fixed
 tick; focus loss, minimization, resize and queue overflow cancel held/queued input.
-The queue is capped at 1024 segments. Accepted cut records print on normal exit as
+A press inside the canvas also queues a scene tap ahead of its swipe segments, so frogs see it
+before the next tick; consumed taps print as `--tap tick:x:y`. The queue is capped at 1024 entries. Accepted cut records print on normal exit as
 `--cut tick:rope:segment:x:y:impulseX:impulseY`. Touch input is pending.
 
 `--release-at` remains a separate diagnostic: it removes final candy attachments
@@ -295,6 +296,7 @@ compilation nor game assets.
 | `ContactLifecycleReference.json` | 1,680 native per-tick snapshots: corner, bounce, centered/offset rotating compounds, late terrain and body removal/replacement. Exact contact order/identity/touching and proxy IDs; predicted bounds and six body-state components. |
 | `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates (including candy slowdown) and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
+| `FrogReference.json` | 720 native ticks of frog tongues: tap open/close bridge with candy, a block closing the opening tongue, and an authored open tongue. Tongue state and extension plus every alive body. |
 | `PinReference.json` | 240 native ticks of scene pins: locked, rotating, motorized and limit-locked hinges, plus pins that find one, three or no bodies. Every body including the main static body. |
 | `RopeReference.json` | 480 native ticks of scene ropes: end-offset ropes to a rotated plank and a wood circle, a candy rope, a rope with no material points, an exact bone multiple, stretch/restore cycles and two replay cuts. Every body in creation order, including linear damping. |
 | `JointAnchorReference.csv` | Offset circles, shifted-centroid rotating polygons, fixed rotation and two dynamic endpoints for rope and soft-distance constraints. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY` |
@@ -1133,6 +1135,33 @@ The older chain oracle now includes candy slowdown; its fixtures were regenerate
 (`PhysicsReference.csv` `f6fbc9728ee7efd1dbf2ffe040603a8577265a0988ee00811a538700d021978f`,
 `RopeCutReference.csv` `7caa11746038cd2e7265d857ebb301840ae78537f85c3142c3e6985c0b8d1f8d`).
 
+## Scene frogs
+
+A frog's tongue runs from 40 logical units in front of the frog to its doubled
+`path` target. A tap within 78 logical units opens an idle tongue or closes an
+extended one; frogs are tried newest first and a tap in range is consumed even
+mid-motion. The tongue extends at 3400 and retracts at 3000 logical units per
+second. Whenever the extension changes it is rebuilt: while moving, one static
+sensor box along the extended part; when fully extended, static end circles
+(9 logical units wide, without a game object) and `max(3, length/80)` dynamic
+segments joined by revolutes, with damping 2, category 2 and a mask that ignores
+categories 2 and 14 (static wood terrain). Boxes use the rotated native
+`SetAsBox` (`ConvexPolygon.Box(hx, hy, center, angle)`). An opening tongue closes
+when a Begin contact pairs it with a solid game object other than a frog;
+the port reads queued Begin events right after the step, before the update, which
+is when the native handler's state change takes effect. Frogs update after ropes,
+following the scene's child order. `tongueOut="true"` opens the tongue and runs a
+one-second update during construction, so its bridge is built in document order.
+
+Terrain fixtures now carry the collision filter of their merged material and
+authored attributes (wood is category 14), as the scene's polygons do; masks are
+unchanged, so existing levels are unaffected.
+
+`FrogReference.json` (720 native ticks: tap open/close with a candy on the bridge,
+a dynamic block closing the opening tongue three times, and an authored open
+tongue over static wood) is bit-identical under exact comparison on macOS arm64.
+Fixture SHA-256: `4aa69e9e96ad1d55fa5093e28d245046a8a08c83bb0c2f8ccdead76914413014`.
+
 ## Scene pins
 
 Before any object, the scene creates a fixtureless static body at the bottom center
@@ -1207,6 +1236,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*FrogTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PinTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RopeTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyFactoryTests'

@@ -126,7 +126,7 @@ namespace Ctr2.Engine.Physics
                         {
                             foreach (IReadOnlyList<Vector2> triangle in shape.Triangles)
                             {
-                                World.AddTerrain(triangle, shape.Friction, shape.Restitution);
+                                World.AddTerrain(triangle, shape.Friction, shape.Restitution, false, shape.Filter);
                             }
                         }
                         break;
@@ -150,6 +150,9 @@ namespace Ctr2.Engine.Physics
                         break;
                     case "pin":
                         pins.Add(placed);
+                        break;
+                    case "frog":
+                        AddFrog(placed);
                         break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal))
@@ -219,9 +222,15 @@ namespace Ctr2.Engine.Physics
             CollectStars();
             Gameplay?.BeforeStep();
             World.Step();
+            CloseTouchedTongues();
+            // Scene children update after the step: ropes first, then frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
+            }
+            foreach (SimulationFrog frog in frogs)
+            {
+                UpdateFrog(frog, PhysicsWorld.TimeStep);
             }
             Tick = checked(Tick + 1);
             Gameplay?.AfterStep();

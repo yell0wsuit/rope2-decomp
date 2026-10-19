@@ -25,6 +25,7 @@ namespace Ctr2.Desktop
             int width = 640, height = 960, frames = 0, resolution = 2, ticks = 0;
             string? snapshot = null;
             List<RopeCut> cuts = [];
+            List<FrogTap> taps = [];
             for (int i = 4; i < args.Length; i += 2)
             {
                 if (i + 1 == args.Length)
@@ -52,6 +53,13 @@ namespace Ctr2.Desktop
                     case "--snapshot":
                         snapshot = value;
                         break;
+                    case "--tap":
+                        if (taps.Count >= 1024)
+                        {
+                            throw new ArgumentException("Too many taps.");
+                        }
+                        taps.Add(ParseTap(value));
+                        break;
                     case "--cut":
                         if (cuts.Count >= 1024)
                         {
@@ -71,8 +79,14 @@ namespace Ctr2.Desktop
                 int.Parse(args[3], CultureInfo.InvariantCulture), resolution, play: true).Preview;
             GameSession session = preview.Session!;
             Queue<RopeCut> replay = new(cuts.OrderBy(c => c.Tick));
+            Queue<FrogTap> tapReplay = new(taps.OrderBy(t => t.Tick));
             session.Stepping += () =>
             {
+                while (tapReplay.TryPeek(out FrogTap? tap) && tap.Tick == session.Simulation.Tick)
+                {
+                    _ = tapReplay.Dequeue();
+                    _ = session.Simulation.Tap(tap.Point);
+                }
                 while (replay.TryPeek(out RopeCut? cut) && cut.Tick == session.Simulation.Tick)
                 {
                     _ = replay.Dequeue();
@@ -82,7 +96,7 @@ namespace Ctr2.Desktop
                     }
                 }
             };
-            Console.WriteLine("Play: swipe to cut; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
+            Console.WriteLine("Play: swipe to cut, tap frogs; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
             for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == LevelResult.Running; i++)
             {
                 session.Step();
@@ -142,11 +156,25 @@ namespace Ctr2.Desktop
             {
                 Console.WriteLine($"Candy consumed: tick {eaten.Tick}.");
             }
+            foreach (FrogTap tap in session.Input.Taps)
+            {
+                Console.WriteLine(FormattableString.Invariant($"Tap replay: --tap {tap.Tick}:{tap.Point.X:R}:{tap.Point.Y:R}"));
+            }
             foreach (RopeCut cut in session.Input.Cuts)
             {
                 Console.WriteLine(FormattableString.Invariant($"Cut replay: --cut {cut.Tick}:{cut.Rope}:{cut.Segment}:{cut.Point.X:R}:{cut.Point.Y:R}:{cut.Impulse.X:R}:{cut.Impulse.Y:R}"));
             }
             return 0;
+        }
+
+        private static FrogTap ParseTap(string value)
+        {
+            string[] parts = value.Split(':');
+            return parts.Length != 3 || !int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int tick) || tick > 36000 ||
+                !float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float x) || !float.IsFinite(x) || MathF.Abs(x) > 1000000 ||
+                !float.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out float y) || !float.IsFinite(y) || MathF.Abs(y) > 1000000
+                ? throw new ArgumentException("Invalid tap tick or position.")
+                : new(tick, new(x, y));
         }
 
         private static RopeCut ParseCut(string value)
@@ -187,7 +215,7 @@ namespace Ctr2.Desktop
             };
             canvas.DrawText($"{status}   Stars: {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}", 12, 27, SKTextAlign.Left, font, text);
             font.Size *= .75f;
-            canvas.DrawText("Swipe to cut | R: restart | Space: pause | Esc: exit", 12, 52, SKTextAlign.Left, font, text);
+            canvas.DrawText("Swipe to cut, tap frogs | R: restart | Space: pause | Esc: exit", 12, 52, SKTextAlign.Left, font, text);
         }
     }
 }

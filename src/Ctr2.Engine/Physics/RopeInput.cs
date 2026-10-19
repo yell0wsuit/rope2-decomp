@@ -4,13 +4,20 @@ using System.Numerics;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>Queues fitted pointer swipes for application immediately before a fixed simulation tick.</summary>
+    /// <summary>One accepted tap that a frog consumed.</summary>
+    /// <param name="Tick">Zero-based tick before which the tap applied.</param>
+    /// <param name="Point">Tap position in logical units.</param>
+    public sealed record FrogTap(int Tick, Vector2 Point);
+
+    /// <summary>Queues fitted pointer presses and swipes for application immediately before a fixed simulation tick.</summary>
     /// <param name="simulation">Scene receiving accepted cuts.</param>
     /// <param name="canvasSize">Authored logical canvas dimensions.</param>
     public sealed class RopeInput(CandySimulation simulation, Vector2 canvasSize)
     {
-        /// <summary>Bounded pending logical pointer segments in event order.</summary>
-        private readonly Queue<(Vector2 Start, Vector2 End)> pending = new();
+        /// <summary>Bounded pending logical presses and pointer segments in event order.</summary>
+        private readonly Queue<(Vector2 Start, Vector2 End, bool Tap)> pending = new();
+        /// <summary>Accepted taps in application order.</summary>
+        private readonly List<FrogTap> taps = [];
         /// <summary>Accepted immutable replay records in application order.</summary>
         private readonly List<RopeCut> cuts = [];
         /// <summary>Previous logical pointer position while held.</summary>
@@ -20,6 +27,8 @@ namespace Ctr2.Engine.Physics
         /// <summary>Gets accepted tick-indexed cuts, including impulses.</summary>
         /// <value>A read-only view updated only when pending input is applied.</value>
         public IReadOnlyList<RopeCut> Cuts => cuts.AsReadOnly();
+        /// <summary>Gets accepted tick-indexed taps that frogs consumed.</summary>
+        public IReadOnlyList<FrogTap> Taps => taps.AsReadOnly();
 
         /// <summary>Begins a primary-pointer drag only inside the fitted canvas.</summary>
         /// <param name="screen">Pointer position in output pixels.</param>
@@ -33,6 +42,11 @@ namespace Ctr2.Engine.Physics
             {
                 previous = logical;
                 dimensions = (width, height);
+                // A press is a scene tap before it becomes a swipe.
+                if (pending.Count < 1024)
+                {
+                    pending.Enqueue((logical, logical, true));
+                }
             }
         }
 
@@ -58,7 +72,7 @@ namespace Ctr2.Engine.Physics
                 Cancel();
                 return;
             }
-            pending.Enqueue((start, end));
+            pending.Enqueue((start, end, false));
             previous = end;
         }
 
@@ -78,9 +92,17 @@ namespace Ctr2.Engine.Physics
         /// <summary>Applies queued segments in event order before the current fixed tick.</summary>
         public void ApplyPending()
         {
-            while (pending.TryDequeue(out (Vector2 Start, Vector2 End) segment))
+            while (pending.TryDequeue(out (Vector2 Start, Vector2 End, bool Tap) item))
             {
-                cuts.AddRange(simulation.Swipe(segment.Start, segment.End));
+                if (item.Tap)
+                {
+                    if (simulation.Tap(item.Start))
+                    {
+                        taps.Add(new(simulation.Tick, item.Start));
+                    }
+                    continue;
+                }
+                cuts.AddRange(simulation.Swipe(item.Start, item.End));
             }
         }
     }

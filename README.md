@@ -45,16 +45,17 @@ After importing a full Windows package, start with pack 1, entry 1 or 2:
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2
 ```
 
-Drag the primary mouse button across ropes. **R** restarts, **Space** pauses or
+Drag the primary mouse button across ropes; click a frog to open or close its tongue. **R** restarts, **Space** pauses or
 resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.
 Restart restores the initial physics, stars, animation, input and replay clock.
 
 This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
 a swipe hint, static terrain, and static or dynamic wood rectangles and circles,
-including ropes attached to wood at authored offsets and pins (hinges between bodies
-or to the world), in a dry level (wood and pins are drawn diagnostically). Gameplay is independent of the
-authored location; currently only pack 1/entries 1 to 4 use nothing but supported
+including ropes attached to wood at authored offsets, pins (hinges between bodies
+or to the world) and frogs whose tongues form bridges, in a dry level (wood, pins and
+frogs are drawn diagnostically). Gameplay is independent of the
+authored location; currently pack 1/entries 1 to 4 and four canyon frog levels use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -74,7 +75,8 @@ star glow blend overrides and periodic flare, sound, saves and original-game par
 remain pending. Terrain and ropes still use diagnostic drawing; static and
 simulation previews retain their diagnostic presentation.
 
-`--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]`,
+`--ticks`, repeatable `--cut tick:rope:segment:x:y[:impulseX:impulseY]` and
+`--tap tick:x:y`,
 `--width`, `--height`, `--resolution`, `--snapshot` and `--frames` support
 deterministic checks. Animation completion uses fixed ticks rather than render
 cadence. A terminal result freezes session ticks. Restart replays scheduled cuts
@@ -87,6 +89,9 @@ original-game physics or visual parity:
 ```sh
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2 --ticks 600 --cut 0:0:0:519.25:343.5 --cut 0:1:0:138.66667:156.33333 --snapshot local/forest-win.png
 ```
+
+Canyon pack 2/entry 2 completed with 3/3 stars at tick 376 (feeding at tick 246)
+using `--tap 1:92:694 --cut 10:0:0:382:170 --tap 150:556:358`.
 
 Pack 1/entry 1 also completed with 3/3 stars at tick 237 (feeding at tick 107)
 using `--ticks 600 --cut 30:0:0:400:138`. Leaf randomness is deterministic for
@@ -169,7 +174,7 @@ An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
 The supplied Windows 1.0.0.46 content has 168 desktop entries; currently only
-pack 1/entries 1 to 4 pass. Further work includes loader coverage, physical
+eight pass (pack 1/entries 1 to 4; pack 2/entries 2, 4, 11 and 17). Further work includes loader coverage, physical
 objects and general collision, moving stars, balloons, pumps, water, magnets,
 the other characters, level selection, progression, audio and saves.
 
