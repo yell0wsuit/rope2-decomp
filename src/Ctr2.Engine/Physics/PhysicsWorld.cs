@@ -203,6 +203,24 @@ namespace Ctr2.Engine.Physics
             return body;
         }
 
+        /// <summary>Adds a static body without fixtures, such as the scene's main static body that anchors world pins.</summary>
+        /// <param name="origin">Body origin in meters.</param>
+        /// <returns>The owned body; it has no broadphase proxy and never takes part in contacts.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">The origin or the body budget is invalid.</exception>
+        public PhysicsBody AddStaticBody(Vector2 origin)
+        {
+            ThrowIfLocked();
+            if (bodies.Count >= 4096 || !float.IsFinite(origin.X) || !float.IsFinite(origin.Y) || MathF.Abs(origin.X) > 10000 || MathF.Abs(origin.Y) > 10000)
+            {
+                throw new ArgumentOutOfRangeException(nameof(origin));
+            }
+            PhysicsBody body = new(origin, 0, 0, 0, PhysicsBodyType.Static, false);
+            body.Center0 = body.Position;
+            bodyProxies.Add(body, []);
+            bodies.Add(body);
+            return body;
+        }
+
         /// <summary>Adds a center-anchor maximum-length constraint.</summary>
         /// <param name="a">First owned body.</param>
         /// <param name="b">Second owned body.</param>

@@ -15,7 +15,7 @@ namespace Ctr2.Tests
     public sealed class RopeTests
     {
         /// <summary>Invented master designs matching the oracle's synthetic definitions.</summary>
-        private const string Design = """
+        internal const string Design = """
             <map><layer name="settings"><map width="320" height="480"/></layer><layer name="Objects">
             <circle id="candy" body_type="dynamic" radius="16" density="0.5" gravityScale="0.7" angularDamping="1" friction="0.3" restitution="0.4"/>
             <circle id="grab" body_type="static" radius="8" density="0.4" gravityScale="1" friction="0.8" restitution="0.2" isSensor="true"/>

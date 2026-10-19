@@ -178,6 +178,12 @@ namespace Ctr2.Desktop
                     canvas.DrawRect(-halfWidth, -halfHeight, halfWidth * 2, halfHeight * 2, paint);
                     canvas.RestoreToCount(restore);
                 }
+                paint.Color = SKColors.LightSlateGray;
+                foreach (PhysicsRevoluteJoint pin in Simulation?.PinJoints ?? [])
+                {
+                    // Diagnostic marker until pin artwork is ported.
+                    canvas.DrawCircle(pin.AnchorB.X * 200, pin.AnchorB.Y * 200, 6, paint);
+                }
                 paint.Color = SKColors.Wheat;
                 paint.StrokeWidth = 3;
                 foreach (LevelRope rope in Simulation == null ? Layout.Ropes : [])
@@ -207,7 +213,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind == "pin" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

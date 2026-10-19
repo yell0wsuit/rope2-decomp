@@ -22,6 +22,8 @@ namespace Ctr2.Engine.Physics
         internal PhysicsWorld World { get; } = new();
         /// <summary>Authored rope chains in grab order.</summary>
         private readonly List<RopeChain> ropes = [];
+        /// <summary>Pin hinges in creation order.</summary>
+        private readonly List<PhysicsRevoluteJoint> pinJoints = [];
         /// <summary>Gets optional gameplay state; null retains diagnostic behavior.</summary>
         public LevelGameplay? Gameplay
         {
@@ -67,6 +69,18 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
+        /// <summary>Gets the fixtureless static body that anchors world pins.</summary>
+        internal PhysicsBody MainStaticBody
+        {
+            get;
+        }
+
+        /// <summary>Gets pin hinges in creation order: body-to-body hinges and world hinges.</summary>
+        public IReadOnlyList<PhysicsRevoluteJoint> PinJoints
+        {
+            get;
+        }
+
         /// <summary>Gets the number of authored grab ropes.</summary>
         /// <value>The number of independent chains, including released chains.</value>
         public int RopeCount => ropes.Count;
@@ -81,6 +95,8 @@ namespace Ctr2.Engine.Physics
         public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool firstLevelArrival = false)
         {
             LevelLayout layout = LevelLayout.Create(level);
+            // The scene first creates a fixtureless static body at the bottom center of its logical screen; world pins anchor to it.
+            MainStaticBody = World.AddStaticBody(new((float)(layout.Size.X / 2.0 / 200.0), (float)(layout.Size.Y / 200.0)));
             CharacterDefinitions = PolygonBodyDefinition.LoadCharacters(level, design);
             Terrain = TerrainGeometry.Build(level, design);
             IReadOnlyDictionary<string, string> candyDesign = Fields(Find(design, "candy")), grabDesign = Fields(Find(design, "grab"));
@@ -96,6 +112,7 @@ namespace Ctr2.Engine.Physics
             List<PhysicsBody> candies = [], characters = [];
             List<GeneralShape> shapes = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
+            List<PlacedLevelObject> pins = [];
             int terrainIndex = 0, characterIndex = 0;
             // Like the scene loader, every object creates its body in document order; ropes follow in a post-pass.
             foreach (PlacedLevelObject placed in layout.Objects)
@@ -131,6 +148,9 @@ namespace Ctr2.Engine.Physics
                     case "star":
                         AddStar(placed, design);
                         break;
+                    case "pin":
+                        pins.Add(placed);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal))
                         {
@@ -146,6 +166,12 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Physics preview requires at least one candy.");
             }
+            // Pins join bodies after every object exists and before the grab ropes are built.
+            foreach (PlacedLevelObject pin in pins)
+            {
+                AddPin(pin);
+            }
+            PinJoints = pinJoints.AsReadOnly();
             foreach (PlacedLevelObject grab in layout.Objects.Where(o => o.Source.Kind == "grab"))
             {
                 // Like the scene, an absent target name means "candy" and an unregistered name keeps no rope.
@@ -363,6 +389,56 @@ namespace Ctr2.Engine.Physics
         private static Vector2 Meters(Vector2 value)
         {
             return value / 200;
+        }
+
+        /// <summary>Joins the dynamic bodies under a pin, as the scene's pin does.</summary>
+        /// <param name="placed">Authored pin.</param>
+        /// <remarks>The native search collects bodies into a set ordered by address. Bodies created one after another
+        /// get increasing addresses from Box2D's block allocator, so creation order stands in for that order.</remarks>
+        private void AddPin(PlacedLevelObject placed)
+        {
+            IReadOnlyDictionary<string, string> attributes = placed.Source.Attributes;
+            float x = Value(placed.Source, "x", 0), y = Value(placed.Source, "y", 0);
+            Vector2 position = new(x + x, y + y);
+            bool fixedRotation = attributes.GetValueOrDefault("fixed_rotation") == "true", pinToWorld = attributes.GetValueOrDefault("pin_to_world") == "true";
+            bool enableMotor = attributes.GetValueOrDefault("enable_motor") == "true";
+            float speed = Value(placed.Source, "motor_speed", 0), torque = Value(placed.Source, "max_force", 0);
+            List<PhysicsBody> found = [];
+            World.QueryAabb(new(Meters(position - Vector2.One), Meters(position + Vector2.One)), fixture =>
+            {
+                if (World.GetFixtureBody(fixture) is PhysicsBody body && body.Type == PhysicsBodyType.Dynamic && !found.Contains(body))
+                {
+                    found.Add(body);
+                }
+                return true;
+            });
+            List<PhysicsBody> order = [.. World.Bodies.Reverse()];
+            found.Sort((a, b) => order.IndexOf(a).CompareTo(order.IndexOf(b)));
+            Vector2 anchor = Meters(position);
+            PhysicsRevoluteDefinition Hinge(PhysicsBody a, PhysicsBody b)
+            {
+                // A fixed-rotation pin enables the zero angular limit; only a trigger's motor start releases it.
+                return new(PhysicsMath.InverseRotate(anchor - a.Origin, a.Angle), PhysicsMath.InverseRotate(anchor - b.Origin, b.Angle), b.Angle - a.Angle,
+                    EnableLimit: fixedRotation, EnableMotor: enableMotor, MotorSpeed: speed, MaxMotorTorque: torque);
+            }
+            try
+            {
+                if (found.Count == 2)
+                {
+                    pinJoints.Add(World.AddRevolute(found[0], found[1], Hinge(found[0], found[1])));
+                }
+                if (pinToWorld)
+                {
+                    foreach (PhysicsBody body in found)
+                    {
+                        pinJoints.Add(World.AddRevolute(MainStaticBody, body, Hinge(MainStaticBody, body)));
+                    }
+                }
+            }
+            catch (ArgumentException error)
+            {
+                throw new InvalidDataException("Unsupported pin motor or hinge values.", error);
+            }
         }
 
         /// <summary>Creates one simulated character from its validated authored definition.</summary>

@@ -52,8 +52,8 @@ Restart restores the initial physics, stars, animation, input and replay clock.
 
 This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
 a swipe hint, static terrain, and static or dynamic wood rectangles and circles,
-including ropes attached to wood at authored offsets, in a dry level (wood is drawn
-diagnostically). Gameplay is independent of the
+including ropes attached to wood at authored offsets and pins (hinges between bodies
+or to the world), in a dry level (wood and pins are drawn diagnostically). Gameplay is independent of the
 authored location; currently only pack 1/entries 1 to 4 use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.

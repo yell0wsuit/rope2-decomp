@@ -295,6 +295,7 @@ compilation nor game assets.
 | `ContactLifecycleReference.json` | 1,680 native per-tick snapshots: corner, bounce, centered/offset rotating compounds, late terrain and body removal/replacement. Exact contact order/identity/touching and proxy IDs; predicted bounds and six body-state components. |
 | `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates (including candy slowdown) and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
+| `PinReference.json` | 240 native ticks of scene pins: locked, rotating, motorized and limit-locked hinges, plus pins that find one, three or no bodies. Every body including the main static body. |
 | `RopeReference.json` | 480 native ticks of scene ropes: end-offset ropes to a rotated plank and a wood circle, a candy rope, a rope with no material points, an exact bone multiple, stretch/restore cycles and two replay cuts. Every body in creation order, including linear damping. |
 | `JointAnchorReference.csv` | Offset circles, shifted-centroid rotating polygons, fixed rotation and two dynamic endpoints for rope and soft-distance constraints. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY` |
 | `JointTopologyReference.csv` | Coincident anchors, zero/short ropes, short springs, multiple attachments, independent islands and joint removal/recreation. `scenario,tick,body,centerX,centerY,vx,vy,angle,angularVelocity,anchorX,anchorY,forceX,forceY,jointActive` |
@@ -1127,10 +1128,34 @@ which quantizes the angle to 1/1024 of a turn. A cut removes the stretch spring
 and the cut joint, adds two tips with a real linear impulse, and measures the new
 joints from those positions to the crossing, keeping the head and tail anchors.
 `RopeReference.json` is bit-identical under exact comparison on macOS arm64.
-Fixture SHA-256: `485a71b59e9a2afeb25320e75681377bdf86dc65e46764bd3869d1865c5633fc`.
+Fixture SHA-256: `30f0331e4c1c8c6dbd8613a6d0db462501ae863c13dff15016e6bbadcdd9678d`.
 The older chain oracle now includes candy slowdown; its fixtures were regenerated
 (`PhysicsReference.csv` `f6fbc9728ee7efd1dbf2ffe040603a8577265a0988ee00811a538700d021978f`,
 `RopeCutReference.csv` `7caa11746038cd2e7265d857ebb301840ae78537f85c3142c3e6985c0b8d1f8d`).
+
+## Scene pins
+
+Before any object, the scene creates a fixtureless static body at the bottom center
+of its logical screen; the port assumes the 640x960 level canvas, which only
+affects static-anchor rounding. `PhysicsWorld.AddStaticBody` creates it without a
+proxy, and the native rope oracle confirms it changes no other body.
+
+After all objects exist and before grab ropes, each pin, in authored order, queries
+predicted proxy bounds within one logical unit of its doubled position and keeps
+dynamic bodies. With exactly two, it hinges them at the pin; with `pin_to_world`
+it also hinges every found body to the main static body. Each hinge uses native
+world-anchor initialization; `fixed_rotation` enables a zero angular limit, and
+`enable_motor`, `motor_speed` and `max_force` set the motor. Booleans follow the
+C++ stream with `boolalpha`, so only `true` is true. Only a trigger releases a
+locked motor (triggers are pending), and `is_spring`/`spring_gain` are never read.
+The native search orders bodies by address; consecutive Box2D block allocations
+increase, so the port uses creation order, which the oracle (using real
+pointers) agrees with. Negative motor torque fails explicitly.
+
+`PinReference.json` (240 native ticks: locked body-to-body hinge, rotating,
+motorized and limit-locked world hinges, a lone body, three bodies and an empty
+pin) is bit-identical under exact comparison on macOS arm64. Fixture SHA-256:
+`d3fcb70b987f2ea43cad3ededd5e4c345afeb08d985a8181e39f36e46afe4832`.
 
 ## Scene construction order
 
@@ -1182,6 +1207,7 @@ From the repository root (after the normal package restore), run:
 
 ```sh
 dotnet build Ctr2.slnx -c Release --no-restore --disable-build-servers -m:1
+dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*PinTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*RopeTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*BodyFactoryTests'
 dotnet tests/Ctr2.Tests/bin/Release/net10.0/Ctr2.Tests.dll -class '*SleepTests'
