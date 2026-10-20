@@ -293,6 +293,12 @@ namespace Ctr2.Desktop
                     // Diagnostic marker until pin artwork is ported.
                     canvas.DrawCircle(pin.AnchorB.X * 200, pin.AnchorB.Y * 200, 6, paint);
                 }
+                foreach (SimulationTrigger trigger in Simulation?.Triggers ?? [])
+                {
+                    // Diagnostic marker until trigger artwork is ported.
+                    paint.Color = trigger.Pushed ? SKColors.LimeGreen : SKColors.OrangeRed;
+                    canvas.DrawCircle(trigger.Body.Origin.X * 200, trigger.Body.Origin.Y * 200, 16, paint);
+                }
                 paint.Color = SKColors.Wheat;
                 paint.StrokeWidth = 3;
                 foreach (LevelRope rope in Simulation == null ? Layout.Ropes : [])
@@ -343,7 +349,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "trigger" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

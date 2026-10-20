@@ -1239,7 +1239,7 @@ it also hinges every found body to the main static body. Each hinge uses native
 world-anchor initialization; `fixed_rotation` enables a zero angular limit, and
 `enable_motor`, `motor_speed` and `max_force` set the motor. Booleans follow the
 C++ stream with `boolalpha`, so only `true` is true. Only a trigger releases a
-locked motor (triggers are pending), and `is_spring`/`spring_gain` are never read.
+locked motor, and `is_spring`/`spring_gain` are never read.
 The native search orders bodies by address; consecutive Box2D block allocations
 increase, so the port uses creation order, which the oracle (using real
 pointers) agrees with. Negative motor torque fails explicitly.
@@ -1703,6 +1703,27 @@ any finished scene ends the slide without a new scene. Static terrain impacts ab
 0.2 bump a sliding character like a falling one, so a bump that ends while spinning
 rolls. In level 1-16 this reproduces the recording's pump-driven slide, roll and
 delayed stand-up bit for bit.
+
+## Scene triggers
+
+Windows `Trigger::initWith` (0x4AB190) merges the master `trigger` design with
+the placement, then forces `normalizeShape=true`. Its sensor body participates in
+the broadphase in authored order, but is not registered in the hint journal.
+`handlePreSolveCollision` (0x4AB420) actually runs from BeginContact, including
+sensor contacts, before the current solve. The first dynamic game body to touch it
+pushes it permanently; rope material points, frog tongues and fixtureless tongue
+anchors cannot push it. Static and kinematic bodies cannot push it either.
+
+The trigger calls every pin's `startMotor` (0x4A08B0), which releases the angular
+limit only when the motor is already enabled. A world pin releases its world
+hinges only, retaining the separate body-to-body hinge; a pin without world
+attachments releases its body-to-body hinge. Destroyed hinges are ignored.
+Invented-fixture tests exercise contact-step motor motion, one-shot activation,
+normalization, body exclusions and both hinge groups. The desktop draws a diagnostic
+marker; artwork, sound, achievements and challenge scoring remain pending.
+
+Triggers bring the Windows desktop construction audit to 67 of 168 entries,
+adding 4-12, 4-13, 4-17, 5-8, 5-10, 5-13, 5-18, 5-19, 5-21 and 7-8.
 
 ## Hint journal regression baseline
 

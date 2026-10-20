@@ -174,6 +174,9 @@ namespace Ctr2.Engine.Physics
                     case "pin":
                         pins.Add(placed);
                         break;
+                    case "trigger":
+                        AddTrigger(placed, design);
+                        break;
                     case "frog":
                         AddFrog(placed);
                         break;
@@ -555,13 +558,20 @@ namespace Ctr2.Engine.Physics
             {
                 if (found.Count == 2)
                 {
-                    pinJoints.Add(World.AddRevolute(found[0], found[1], Hinge(found[0], found[1])));
+                    PhysicsRevoluteJoint hinge = World.AddRevolute(found[0], found[1], Hinge(found[0], found[1]));
+                    pinJoints.Add(hinge);
+                    if (!pinToWorld)
+                    {
+                        triggerMotorJoints.Add(hinge);
+                    }
                 }
                 if (pinToWorld)
                 {
                     foreach (PhysicsBody body in found)
                     {
-                        pinJoints.Add(World.AddRevolute(MainStaticBody, body, Hinge(MainStaticBody, body)));
+                        PhysicsRevoluteJoint hinge = World.AddRevolute(MainStaticBody, body, Hinge(MainStaticBody, body));
+                        pinJoints.Add(hinge);
+                        triggerMotorJoints.Add(hinge);
                     }
                 }
             }

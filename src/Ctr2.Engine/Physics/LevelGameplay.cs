@@ -104,7 +104,7 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "tutorial_swipe" or "tutorial_tap")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "trigger" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "tutorial_swipe" or "tutorial_tap")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");

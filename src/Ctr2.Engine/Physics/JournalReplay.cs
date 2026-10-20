@@ -144,6 +144,7 @@ namespace Ctr2.Engine.Physics
         /// journal.</summary>
         private static List<(string, Func<PhysicsBody?>)> Registry(CandySimulation scene)
         {
+            // Native loadMap never registers triggers; their bodies must not shift journal object indices.
             List<(string, Func<PhysicsBody?>)> objects = [];
             for (int i = 0; i < scene.RopeCount; i++)
             {

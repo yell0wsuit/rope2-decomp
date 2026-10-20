@@ -185,9 +185,9 @@ location, whether construction succeeds, and the first failure for each entry.
 An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
-The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 57 pass
+The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 67 pass
 (pack 1/entries 1–7, 9–13, 15–17 and 19–24; pack 2/entries 1–5, 7, 11, 13, 17, 20, 22
-and 23; pack 4/entries 1, 3, 6, 9, 11, 19 and 21–24; pack 5/entries 1, 4, 7, 15, 22 and 24; pack 7/entries 1–3, 6, 11, 13, 15 and 23). Further work includes loader coverage, physical
+and 23; pack 4/entries 1, 3, 6, 9, 11–13, 17, 19 and 21–24; pack 5/entries 1, 4, 7–8, 10, 13, 15, 18–19, 21–22 and 24; pack 7/entries 1–3, 6, 8, 11, 13, 15 and 23). Further work includes loader coverage, physical
 objects and general collision, water, magnets,
 the other characters, level selection, progression, audio and saves.
 

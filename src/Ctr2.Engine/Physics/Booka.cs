@@ -69,6 +69,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>The scene's contact listener inside the step, for the delegates whose effects reach the current solve.</summary>
         private void HandleContactsInStep(IReadOnlyList<PhysicsContactEvent> events)
         {
+            HandleTriggerContacts(events);
             HandleFireballContacts(events);
             HandleBookaContacts(events);
         }
