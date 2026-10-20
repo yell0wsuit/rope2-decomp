@@ -71,7 +71,6 @@ namespace Ctr2.Tests
         [InlineData("angularDamping='NaN'")]
         [InlineData("friction='-1'")]
         [InlineData("restitution='11'")]
-        [InlineData("fixedRotation='maybe'")]
         [InlineData("isSensor='true'")]
         [InlineData("bullet='true'")]
         [InlineData("smoothFactor='2'")]

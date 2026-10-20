@@ -1,6 +1,4 @@
-using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Numerics;
 
 namespace Ctr2.Engine.Physics
@@ -157,14 +155,13 @@ namespace Ctr2.Engine.Physics
 
         private static float Float(IReadOnlyDictionary<string, string> fields, string key)
         {
-            return fields.TryGetValue(key, out string? text) && float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) ? value : 0;
+            return NativeText.FloatValue(fields.GetValueOrDefault(key));
         }
 
-        /// <summary>Like <c>ZString::boolValue</c> for the authored forms: <c>true</c> or a nonzero integer.</summary>
+        /// <summary><c>ZString::boolValue</c>: only <c>true</c> is true; <c>0</c>, <c>1</c> and <c>false</c> all read false.</summary>
         private static bool Bool(IReadOnlyDictionary<string, string> fields, string key)
         {
-            string text = fields.GetValueOrDefault(key, "");
-            return text.Equals("true", StringComparison.OrdinalIgnoreCase) || (int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int value) && value != 0);
+            return NativeText.BoolValue(fields.GetValueOrDefault(key));
         }
     }
 }

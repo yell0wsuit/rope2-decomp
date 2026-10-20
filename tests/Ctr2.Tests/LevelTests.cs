@@ -34,14 +34,14 @@ namespace Ctr2.Tests
             Assert.Equal(new Vector2(200, 80), Assert.Single(layout.Ropes).Start);
             Assert.Equal(new Vector2(200, 280), layout.Ropes[0].End);
             Assert.Equal(210, layout.Ropes[0].RestLength);
-            Assert.Equal(new Vector2(36, 62), Assert.Single(layout.Polygons).Vertices[0]);
+            Assert.Equal([new Vector2(40, 60), new Vector2(36, 62), new Vector2(48, 62), new Vector2(48, 70)], Assert.Single(layout.Polygons).Vertices);
             Assert.Equal("retained", level.Objects.Last().Attributes["mystery"]);
             Assert.Equal("forest", level.Settings.Single(s => s.Kind == "gameDesign").Attributes["location"]);
             Assert.Contains(layout.Diagnostics, d => d.Contains("future_object", StringComparison.Ordinal));
             Assert.Contains(layout.Diagnostics, d => d.Contains("off-screen", StringComparison.Ordinal));
         }
 
-        /// <summary>Rejects malformed or unbounded scenes instead of guessing absent coordinates or targets.</summary>
+        /// <summary>Rejects malformed or unbounded scenes instead of reading malformed numbers as zero.</summary>
         /// <param name="xml">Invented invalid level document.</param>
         [Theory]
         [InlineData("<!DOCTYPE map [<!ENTITY e SYSTEM 'file:///etc/passwd'>]><map>&e;</map>")]
@@ -105,11 +105,23 @@ namespace Ctr2.Tests
             }
         }
 
-        /// <summary>Rejects integer positions expressed as floating-point syntax.</summary>
+        /// <summary>Candy and grabs keep the integer digits of their position, as the scene loader's <c>2 * intValue</c> does;
+        /// other objects read floats, and absent coordinates read zero.</summary>
         [Fact]
-        public void IntegerCoordinatesRejectExponentSyntax()
+        public void PositionsReadLikeTheSceneLoader()
         {
-            _ = Assert.Throws<InvalidDataException>(() => LevelLayout.Create(LevelReader.Read(Map.Replace("x=\"100\"", "x=\"1e2\"", StringComparison.Ordinal))));
+            LevelLayout layout = LevelLayout.Create(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" +
+                "<candy x='1e2' y='-7.9'/><grab x='100.9' length='5'/><pump x='280.25' y='10.5'/><omnom y='3'/></layer></map>"));
+            Assert.Equal([new Vector2(2, -14), new Vector2(200, 0), new Vector2(560.5f, 21), new Vector2(0, 6)], layout.Objects.Select(o => o.Position!.Value));
+        }
+
+        /// <summary>A polygon path of two authored points is a triangle with the implicit origin, as in the smooth path reader.</summary>
+        [Fact]
+        public void TwoPointPolygonsAreTriangles()
+        {
+            LevelLayout layout = LevelLayout.Create(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" +
+                "<polygon_materialized x='10' y='20' material='wood' polygon='67,99,69,1,' smoothFactor='4'/></layer></map>"));
+            Assert.Equal([new Vector2(20, 40), new Vector2(154, 238), new Vector2(158, 42)], Assert.Single(layout.Polygons).Vertices);
         }
 
         /// <summary>Places offset attachments at the doubled target shift, in the target's rotated frame.</summary>

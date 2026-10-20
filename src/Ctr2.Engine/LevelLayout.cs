@@ -11,7 +11,8 @@ namespace Ctr2.Engine
 {
     /// <summary>An object and its initial logical position; unknown objects can lack coordinates.</summary>
     /// <param name="Source">Unmodified authored attributes.</param>
-    /// <param name="Position">Doubled editor position, or null when an unknown object has no position.</param>
+    /// <param name="Position">Doubled editor position, or null when an unknown object has no position. Candy and grabs read
+    /// whole editor units, as the scene loader's <c>2 * intValue</c> does; every other object reads its position as a float.</param>
     /// <param name="Angle">Authored clockwise degrees in the downward-positive logical scene.</param>
     public sealed record PlacedLevelObject(LevelElement Source, Vector2? Position, float Angle);
 
@@ -22,7 +23,8 @@ namespace Ctr2.Engine
     public sealed record LevelRope(Vector2 Start, Vector2 End, float RestLength);
 
     /// <summary>An unsmoothed diagnostic polygon in logical scene coordinates.</summary>
-    /// <param name="Vertices">Translated, doubled editor vertices; not collision geometry.</param>
+    /// <param name="Vertices">The placement origin, the path's implicit first vertex, then the translated, doubled editor
+    /// vertices; not collision geometry.</param>
     public sealed record LevelPolygon(IReadOnlyList<Vector2> Vertices);
 
     /// <summary>Initial logical layout prepared without constructing a physics world.</summary>
@@ -47,9 +49,10 @@ namespace Ctr2.Engine
         }
 
         /// <summary>Creates logical diagnostic geometry while preserving authored data and negative positions.</summary>
+        /// <remarks>Numbers read like the native accessors: absent ones are zero, but malformed text fails.</remarks>
         /// <param name="level">Parsed editor-space definition.</param>
         /// <returns>A bounded static layout with explicit diagnostics for pending behavior.</returns>
-        /// <exception cref="InvalidDataException">Coordinates, references, lengths or polygon data are invalid.</exception>
+        /// <exception cref="InvalidDataException">Numbers, lengths or polygon data are invalid.</exception>
         public static LevelLayout Create(LevelDefinition level)
         {
             List<PlacedLevelObject> objects = [];
@@ -62,8 +65,10 @@ namespace Ctr2.Engine
             {
                 bool known = element.Kind is "candy" or "omnom" or "star" or "grab" or "polygon_materialized";
                 bool hasPosition = element.Attributes.ContainsKey("x") || element.Attributes.ContainsKey("y");
-                Vector2? position = known || hasPosition ? new Vector2(Number(element, "x", integer: true), Number(element, "y", integer: true)) * 2 : null;
-                PlacedLevelObject placed = new(element, position, Number(element, "angle", optional: true));
+                Vector2? position = !known && !hasPosition ? null
+                    : element.Kind is "candy" or "grab" ? new Vector2(NativeText.IntValue(Text(element, "x")), NativeText.IntValue(Text(element, "y"))) * 2
+                    : new Vector2(NativeText.FloatValue(Text(element, "x")), NativeText.FloatValue(Text(element, "y"))) * 2;
+                PlacedLevelObject placed = new(element, position, NativeText.FloatValue(Text(element, "angle")));
                 objects.Add(placed);
                 if (RegistersName(element.Kind) && element.Attributes.TryGetValue("id", out string? id))
                 {
@@ -79,15 +84,18 @@ namespace Ctr2.Engine
                 }
                 if (element.Kind == "polygon_materialized")
                 {
-                    string[] parts = Required(element, "polygon").TrimEnd(',').Split(',');
-                    if (parts.Length < 6 || parts.Length > 8192 || parts.Length % 2 != 0)
+                    // As the smooth path reader: the origin is an implicit vertex, so two authored points make a triangle,
+                    // one trailing empty component is dropped and a missing final y reads zero.
+                    string path = Text(element, "polygon") ?? "";
+                    string[] parts = (path.EndsWith(',') ? path[..^1] : path).Split(',');
+                    if (path.Length == 0 || parts.Length < 4 || parts.Length > 8192)
                     {
                         throw new InvalidDataException("Invalid polygon vertex count.");
                     }
-                    List<Vector2> vertices = [];
+                    List<Vector2> vertices = [position!.Value];
                     for (int i = 0; i < parts.Length; i += 2)
                     {
-                        vertices.Add(position!.Value + (new Vector2(Parse(parts[i]), Parse(parts[i + 1])) * 2));
+                        vertices.Add(position.Value + (new Vector2(NativeText.FloatValue(parts[i]), i + 1 < parts.Length ? NativeText.FloatValue(parts[i + 1]) : 0) * 2));
                     }
                     polygons.Add(new(vertices.AsReadOnly()));
                 }
@@ -101,13 +109,13 @@ namespace Ctr2.Engine
                     diagnostics.Add("Grab without rope target: " + targetId);
                     continue;
                 }
-                float length = Number(grab.Source, "length") * 2;
+                float length = NativeText.FloatValue(Text(grab.Source, "length")) * 2;
                 if (length <= 0)
                 {
                     throw new InvalidDataException("Rope length must be positive.");
                 }
                 // The doubled target shift is local to the target; rotate it by the authored angle.
-                Vector2 shift = new Vector2(Number(grab.Source, "target_x", optional: true), Number(grab.Source, "target_y", optional: true)) * 2;
+                Vector2 shift = new Vector2(NativeText.FloatValue(Text(grab.Source, "target_x")), NativeText.FloatValue(Text(grab.Source, "target_y"))) * 2;
                 float angle = target.Angle * MathF.PI / 180;
                 Vector2 rotated = new((shift.X * MathF.Cos(angle)) - (shift.Y * MathF.Sin(angle)), (shift.X * MathF.Sin(angle)) + (shift.Y * MathF.Cos(angle)));
                 ropes.Add(new(grab.Position!.Value, target.Position.Value + rotated, length));
@@ -116,41 +124,13 @@ namespace Ctr2.Engine
             return new(size, objects.AsReadOnly(), ropes.AsReadOnly(), polygons.AsReadOnly(), diagnostics.AsReadOnly(), named.AsReadOnly());
         }
 
-        /// <summary>Reads a required nonempty authored attribute.</summary>
-        /// <param name="element">Object record.</param>
-        /// <param name="name">Required attribute name.</param>
-        /// <returns>The authored text.</returns>
-        private static string Required(LevelElement element, string name)
-        {
-            return !element.Attributes.TryGetValue(name, out string? value) || value.Length == 0
-                ? throw new InvalidDataException($"Missing {element.Kind} attribute: {name}") : value;
-        }
-
-        /// <summary>Parses a bounded finite editor number with optional integer enforcement.</summary>
+        /// <summary>Reads an authored attribute, or null when it is absent.</summary>
         /// <param name="element">Object record.</param>
         /// <param name="name">Attribute name.</param>
-        /// <param name="integer">Whether fractional coordinates are invalid.</param>
-        /// <param name="optional">Whether an absent attribute defaults to zero.</param>
-        /// <returns>The numeric editor value.</returns>
-        private static float Number(LevelElement element, string name, bool integer = false, bool optional = false)
+        /// <returns>The authored text.</returns>
+        private static string? Text(LevelElement element, string name)
         {
-            if (optional && !element.Attributes.ContainsKey(name))
-            {
-                return 0;
-            }
-            string text = Required(element, name);
-            return integer && !int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)
-                ? throw new InvalidDataException("Expected integer coordinate: " + name)
-                : Parse(text);
-        }
-
-        /// <summary>Converts an invariant number, rejecting nonfinite or excessive magnitudes.</summary>
-        /// <param name="text">Authored number.</param>
-        /// <returns>A finite value within one million editor units.</returns>
-        private static float Parse(string text)
-        {
-            return !float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) || !float.IsFinite(value) || MathF.Abs(value) > 1000000
-                ? throw new InvalidDataException("Invalid level number: " + text) : value;
+            return element.Attributes.GetValueOrDefault(name);
         }
     }
 }

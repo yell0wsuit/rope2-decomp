@@ -151,19 +151,13 @@ namespace Ctr2.Engine.Physics
                 ? value : throw new InvalidDataException("Invalid character body number: " + text);
         }
 
-        /// <summary>Reads an authored Boolean flag using Windows text and integer forms.</summary>
+        /// <summary>Reads an authored flag as the native body factory does: only the exact text <c>true</c> is true.</summary>
         /// <param name="fields">Merged master and placement attributes.</param>
         /// <param name="name">Flag name.</param>
-        /// <returns>The requested flag, defaulting to false when absent.</returns>
-        /// <exception cref="InvalidDataException">The flag is neither a Boolean nor zero/one.</exception>
+        /// <returns>The requested flag, false when absent.</returns>
         private static bool Flag(IReadOnlyDictionary<string, string> fields, string name)
         {
-            return fields.GetValueOrDefault(name, "false") switch
-            {
-                "true" or "1" => true,
-                "false" or "0" => false,
-                _ => throw new InvalidDataException("Invalid character body flag: " + name)
-            };
+            return fields.GetValueOrDefault(name) == "true";
         }
     }
 }
