@@ -344,6 +344,11 @@ namespace Ctr2.Desktop
                 int characterIndex = 0;
                 foreach (PlacedLevelObject placed in Layout.Objects)
                 {
+                    if (placed.Source.Kind == "clover")
+                    {
+                        // The Windows loader leaves authored clover placements out of the scene.
+                        continue;
+                    }
                     if (Session != null && placed.Source.Kind is "tutorial_swipe" or "tutorial_tap")
                     {
                         continue;

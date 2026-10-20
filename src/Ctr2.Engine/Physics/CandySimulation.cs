@@ -171,6 +171,10 @@ namespace Ctr2.Engine.Physics
                     case "star":
                         AddStar(placed, design);
                         break;
+                    case "clover":
+                        // Windows loadMap (0x4ECF00) compares this tag but creates no object.
+                        // The premium mobile Clover implementation is absent from the Windows loader.
+                        break;
                     case "pin":
                         pins.Add(placed);
                         break;

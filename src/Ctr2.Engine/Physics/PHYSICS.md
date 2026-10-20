@@ -1725,6 +1725,23 @@ marker; artwork, sound, achievements and challenge scoring remain pending.
 Triggers bring the Windows desktop construction audit to 67 of 168 entries,
 adding 4-12, 4-13, 4-17, 5-8, 5-10, 5-13, 5-18, 5-19, 5-21 and 7-8.
 
+## Windows clover placements
+
+The Windows `GameScene::loadMap` (0x4ECF00) compares the `clover` tag but discards
+the result and proceeds directly to `rope_instance`; it never constructs a Clover.
+The mobile source instead instantiates clovers behind `ZBuildConfig::premium`.
+Shipping resource 18 and the master `clover` definition does not establish that
+the Windows loader enables that object. The port therefore accepts authored
+clovers but gives them no body, journal entry, collection callback or drawing.
+Fruit challenges still use the clover master design to build their fruit sensors,
+as the Windows fruit constructor does; this does not instantiate map clovers.
+
+Invented-fixture tests compare all bodies bit for bit for 180 ticks with and
+without clover placements in all three variants, including fruit-grid occupancy,
+and verify that an ordinary level needs no clover design. This raises the desktop
+construction audit to 78 of 168 entries, adding 1-14, 1-18, 2-6, 4-2, 4-4, 4-14,
+5-9, 7-5, 7-9, 7-16 and 7-20 to the trigger checkpoint's 67.
+
 ## Hint journal regression baseline
 
 The original developer hint journals double as playtests. `replay-check` replays one
