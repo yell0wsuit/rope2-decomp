@@ -1,6 +1,5 @@
 using System;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Text.Json;
 
@@ -50,20 +49,9 @@ namespace Ctr2.Desktop
             }
             LevelDefinition level = LevelReader.LoadWindows(cache, pack, entry);
             LevelDefinition design = LevelReader.LoadWindowsDesign(cache);
-            string assets = Path.Combine(Path.GetFullPath(cache), "assets");
-            string xml = File.ReadAllText(Path.Combine(assets, "maps", level.FileName));
-            FileInfo journalFile = new(Path.Combine(assets, "replays", "lightweight", level.FileName + variant + ".rep.lw"));
-            if (!journalFile.Exists || journalFile.Length > 16 * 1024 * 1024)
-            {
-                throw new InvalidDataException("No bounded replay journal for this level.");
-            }
-            ReplayJournal journal = ReplayJournal.Read(File.ReadAllBytes(journalFile.FullName));
-            string levelHash = ReplayJournal.ComputeLevelHash(xml);
-            if (!string.Equals(levelHash, journal.LevelHash, StringComparison.Ordinal))
-            {
-                throw new InvalidDataException($"Journal level hash {journal.LevelHash} does not match the level ({levelHash}).");
-            }
             LevelVariant mode = variant.Length == 0 ? LevelVariant.Main : LevelVariants.Parse(variant.TrimStart('.'));
+            ReplayJournal journal = JournalInputPlayer.LoadHint(cache, level, mode);
+            string levelHash = journal.LevelHash;
             CandySimulation scene = new(level, design, play: true, firstLevelArrival: pack == 1 && entry == 1, SceneTimings.Load(cache, level, mode), mode);
             JournalReplayResult result = JournalReplay.Run(scene, journal, threshold);
             Console.WriteLine(JsonSerializer.Serialize(new

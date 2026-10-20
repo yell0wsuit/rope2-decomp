@@ -71,59 +71,19 @@ namespace Ctr2.Engine.Physics
             Dictionary<int, Accumulator> drift = [];
             Dictionary<int, int> catches = [], fruitCatches = [];
             List<JournalSample> samples = [];
-            int frames = Math.Max(journal.Events.Count == 0 ? 0 : journal.Events.Max(e => e.Frame), journal.Snapshots.Count == 0 ? 0 : journal.Snapshots.Max(s => s.Frame));
-            ILookup<int, JournalEvent> events = journal.Events.ToLookup(e => e.Frame);
+            JournalInputPlayer player = new(journal);
             ILookup<int, JournalSnapshot> snapshots = journal.Snapshots.ToLookup(s => s.Frame);
-            Vector2? touch = null;
-            while (scene.Tick < frames && (scene.Gameplay == null || scene.Gameplay.Result == LevelResult.Running))
+            while (scene.Tick < player.LastFrame && (scene.Gameplay == null || scene.Gameplay.Result == LevelResult.Running))
             {
-                JournalEvent[] frame = [.. events[scene.Tick]];
-                for (int k = 0; k < frame.Length; k++)
+                foreach (JournalEvent e in player.Apply(scene))
                 {
-                    JournalEvent e = frame[k];
-                    Vector2 point = new(e.X, e.Y);
-                    switch (e.Type)
+                    if (e.Type == JournalEventType.StarCatch)
                     {
-                        case JournalEventType.TouchDown:
-                            scene.Gameplay?.NotifyTouchDown();
-                            _ = scene.Tap(point);
-                            touch = point;
-                            break;
-                        case JournalEventType.TouchMove:
-                            if (touch is Vector2 start)
-                            {
-                                scene.SwipeBalloons(start, point);
-                            }
-                            touch = point;
-                            break;
-                        case JournalEventType.TouchUp:
-                            touch = null;
-                            break;
-                        case JournalEventType.RopeCut:
-                            if (e.Index < 0 || e.Index >= scene.RopeCount || objects[e.Index].Kind != "rope")
-                            {
-                                unsupported.Add($"Frame {e.Frame}: cut of journal object {e.Index}");
-                                break;
-                            }
-                            // A live cut gave the new tips the swipe's impulse. The recorder logs the cutting move after its
-                            // cuts, so the swipe runs from the previous touch to the next move in this frame.
-                            JournalEvent? move = frame.Skip(k + 1).FirstOrDefault(m => m.Type == JournalEventType.TouchMove);
-                            _ = scene.Cut(e.Index, e.Segment, point, touch is Vector2 from && move != null ? CandySimulation.SwipeImpulse(from, new(move.X, move.Y)) : Vector2.Zero);
-                            break;
-                        case JournalEventType.StarCatch:
-                            _ = catches.TryAdd(e.Index, e.Frame);
-                            break;
-                        case JournalEventType.None:
-                            break;
-                        case JournalEventType.PauseTap:
-                            break;
-                        case JournalEventType.PauseSwipe:
-                            break;
-                        case JournalEventType.FruitCatch:
-                            _ = fruitCatches.TryAdd(e.Index, e.Frame);
-                            break;
-                        default:
-                            break;
+                        _ = catches.TryAdd(e.Index, e.Frame);
+                    }
+                    else if (e.Type == JournalEventType.FruitCatch)
+                    {
+                        _ = fruitCatches.TryAdd(e.Index, e.Frame);
                     }
                 }
                 scene.Step();
@@ -176,7 +136,7 @@ namespace Ctr2.Engine.Physics
             })];
             return new(scene.Tick, Array.AsReadOnly(drift.OrderBy(d => d.Key).Select(d => new JournalDrift(d.Key, d.Value.Kind, d.Value.Samples, d.Value.Missing, d.Value.Max,
                 d.Value.Samples == 0 ? 0 : d.Value.Sum / d.Value.Samples, d.Value.MaxAngle, d.Value.First)).ToArray()), Array.AsReadOnly(stars), Array.AsReadOnly(fruits), scene.Gameplay?.Result,
-                unsupported.AsReadOnly(), samples.AsReadOnly());
+                Array.AsReadOnly([.. player.Unsupported, .. unsupported]), samples.AsReadOnly());
         }
 
         /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, fireballs, frogs, Bookas, throwers, Om Nom,

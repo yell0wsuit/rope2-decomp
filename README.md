@@ -48,6 +48,11 @@ dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2
 Add `--variant challenge` or `--variant fruit_challenge` to play a level's challenge: both hide the tutorial finger, and
 the fruit challenge replaces the stars with the fruit grid (drawn diagnostically).
 
+Add `--replay` to watch the level's original developer hint journal play itself (for the chosen variant): its recorded taps,
+swipes and cuts are fed to the port frame by frame, open loop, exactly as `replay-check` feeds them, so the run shows how
+the port's physics follows the recorded solution. **R** restarts the replay; mouse input still works on top of it. It also
+works headless, for example `play-level cache/windows-alpha 7 23 --replay --ticks 1400 --snapshot local/7-23.png`.
+
 Drag the primary mouse button across ropes or balloons; click a frog to open or close its tongue, or a balloon to pop it. **R** restarts, **Space** pauses or
 resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.

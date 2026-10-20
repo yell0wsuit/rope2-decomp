@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 
+using Ctr2.Assets;
 using Ctr2.Engine;
 using Ctr2.Engine.Physics;
 
@@ -29,8 +30,15 @@ namespace Ctr2.Desktop
             List<SceneTap> taps = [];
             List<BalloonPop> pops = [];
             LevelVariant variant = LevelVariant.Main;
+            bool replayHint = false;
             for (int i = 4; i < args.Length; i += 2)
             {
+                if (args[i] == "--replay")
+                {
+                    replayHint = true;
+                    i--;
+                    continue;
+                }
                 if (i + 1 == args.Length)
                 {
                     throw new ArgumentException("Missing option value.");
@@ -94,11 +102,21 @@ namespace Ctr2.Desktop
             using LevelPreview preview = LevelPreview.Load(args[1], int.Parse(args[2], CultureInfo.InvariantCulture),
                 int.Parse(args[3], CultureInfo.InvariantCulture), resolution, play: true, variant: variant).Preview;
             GameSession session = preview.Session!;
+            ReplayJournal? journal = null;
+            JournalInputPlayer? hint = null;
+            if (replayHint)
+            {
+                journal = JournalInputPlayer.LoadHint(args[1], LevelReader.LoadWindows(args[1], int.Parse(args[2], CultureInfo.InvariantCulture),
+                    int.Parse(args[3], CultureInfo.InvariantCulture)), variant);
+                hint = new(journal);
+                Console.WriteLine($"Replaying the {variant.Name()} hint journal: {hint.LastFrame} frames of recorded input, applied open loop; R restarts it.");
+            }
             Queue<RopeCut> replay = new(cuts.OrderBy(c => c.Tick));
             Queue<SceneTap> tapReplay = new(taps.OrderBy(t => t.Tick));
             Queue<BalloonPop> popReplay = new(pops.OrderBy(p => p.Tick));
             session.Stepping += () =>
             {
+                _ = hint?.Apply(session.Simulation);
                 while (tapReplay.TryPeek(out SceneTap? tap) && tap.Tick == session.Simulation.Tick)
                 {
                     _ = tapReplay.Dequeue();
@@ -152,6 +170,9 @@ namespace Ctr2.Desktop
                         {
                             session.Restart();
                             replay = new(cuts.OrderBy(c => c.Tick));
+                            tapReplay = new(taps.OrderBy(t => t.Tick));
+                            popReplay = new(pops.OrderBy(p => p.Tick));
+                            hint = journal == null ? null : new(journal);
                         }
                         else if (evt.Key.Key == SDL.Keycode.Space)
                         {
@@ -173,6 +194,10 @@ namespace Ctr2.Desktop
                 }, title: "Cut the Rope 2 — play");
             }
             LevelGameplay game = session.Simulation.Gameplay!;
+            foreach (string skipped in hint?.Unsupported ?? [])
+            {
+                Console.WriteLine("Replay input not applied: " + skipped);
+            }
             Console.WriteLine($"Result: {game.Result}; tick {session.Simulation.Tick}; stars {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}; candy {game.CandyState}.");
             foreach (CandyConsumption eaten in game.Consumptions)
             {
