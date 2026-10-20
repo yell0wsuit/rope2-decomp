@@ -120,6 +120,14 @@ namespace Ctr2.Engine.Physics
                             helicopter.CapturedObject = other;
                             helicopter.OmnomForced = true;
                         }
+                        // A fireball keeps upright like Om Nom.
+                        if (fireballs.Any(f => f.Body == other) && !carriedBy.ContainsKey(other))
+                        {
+                            helicopter.NeedAngleCorrect = true;
+                            scheduled = other;
+                            helicopter.CapturedObject = other;
+                            helicopter.OmnomForced = false;
+                        }
                     }
                     if (scheduled != null)
                     {
@@ -211,7 +219,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Each object's <c>helicopterAnchorPoint</c>.</summary>
         private Vector2 AnchorPoint(PhysicsBody body)
         {
-            return Candies.Contains(body) ? new(0, -.2f) : Characters.Contains(body) ? new(0, -.32f) :
+            return Candies.Contains(body) || fireballs.Any(f => f.Body == body) ? new(0, -.2f) : Characters.Contains(body) ? new(0, -.32f) :
                 body.PolygonFixtures.Count == 0 ? new(0, (float)(-0.02 - body.Radius)) : new(0, -.3f);
         }
 
@@ -270,10 +278,10 @@ namespace Ctr2.Engine.Physics
             return false;
         }
 
-        /// <summary>Native <c>removeObjectFromCaptured</c>, as eaten candy calls it.</summary>
+        /// <summary>Releases a disappearing object, including a capture scheduled during this step but not yet started.</summary>
         internal void DropFromHelicopter(PhysicsBody body)
         {
-            if (carriedBy.TryGetValue(body, out SimulationHelicopter? helicopter) && helicopter.CapturedObject == body)
+            foreach (SimulationHelicopter helicopter in helicopters.Where(h => h.CapturedObject == body))
             {
                 ReleaseCarried(helicopter, false);
             }

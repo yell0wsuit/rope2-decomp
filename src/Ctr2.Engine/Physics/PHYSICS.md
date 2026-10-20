@@ -1143,8 +1143,8 @@ post-pass, in document order, ahead of pins, grab ropes and balloon ropes, so th
 take the lowest rope and journal indices. The native constructor doubles the
 authored `length` twice (four times the editor value in logical units) and each
 `x_shift_n`/`y_shift_n` once as that end's attach shift. Either end may be candy,
-which then slows down on the rope; an unregistered name keeps no rope. Booka and
-fireball ends remain unsupported.
+which then slows down on the rope; an unregistered name keeps no rope. Fireball
+ends are supported without candy's slowdown; Booka ends remain unsupported.
 
 Destroying a body runs the native `cutWithBodyDestroyed` on every rope before the
 body leaves the world: an intact rope is cut at the joint next to it, with no
@@ -1326,6 +1326,48 @@ exactly. Recorded `PauseTap` positions match the helicopter after the step of th
 tap frame in both, so tap timing is not the cause. The port keeps the source order.
 Om Nom shows the `WITH_HELICOPTER_*` scenes while carried, opening his mouth near
 candy, and falls (chewing if he was) when dropped; eating carried candy releases it.
+
+## Scene fireballs
+
+Fireballs merge the Windows `fireball` master design with authored fields and can
+attach to grab, balloon and free-standing ropes. An idle fireball's begin contact
+with a dynamic general shape starts a burn, makes the fireball a sensor and clears
+its linear velocity before solving. The burn traverses joints newest first to
+connected general shapes, including static shapes. Shape removal follows the
+0.1-second command timeline and the scene's next post-step removal phase.
+
+The Windows implementation differs from the Android reference: its first fade
+update releases both carriers and destroys its physics body, cutting all attached
+ropes. The visual holds its last pose until animation resource 25's `FADE_FIRE`
+scene finishes. Android turns the body static instead. The journal retains the
+fireball's registration slot but reports no live body during this visual fade.
+Destroyed bodies also leave scheduled helicopter captures and every thrower's
+pending collision list, preventing later captures of retired bodies.
+
+Windows thrower capture clears angular velocity as well as linear velocity. Its
+fireball anchor is 0.15 m, as in the Android reference. The matching package's
+7-13 hint journal instead shows 0.26 m spacing: a diagnostic-only 0.26 m experiment
+reduced the frame-210 fireball position difference from 0.11019 m to below
+0.000001 m. Production keeps the executable's 0.15 m value. Matching a level hash
+does not establish that a hint recording used this executable's behavior. A reused
+recording is only a hypothesis; object mapping and runtime/playback logic still
+need to be ruled out before attributing the discrepancy to a different build.
+
+`FireballTests` covers burns, propagation, rope cuts, visual/body lifetimes,
+carrier release (including same-step capture), Windows spin reset, missing journal
+bodies and queued-capture cleanup. The seven supported bakery levels add 21 hint
+journals to the regression baseline. These checks do not establish original-game
+trajectory parity: rolling contacts amplify small numerical differences and some
+recordings differ from the inspected executable's mechanics.
+
+The supplied iOS 1.6.4 code independently agrees with Windows on the 0.15 m
+fireball anchor, capture spin reset and first-fade body destruction. Its revised
+`fire17` level has a replacement journal with measured 0.15000004 m spacing at
+frame 186, while the Windows journal has 0.25999996 m at frame 210. A headless
+comparison using the matching iOS level, master and timelines reproduces that
+iOS fireball position within approximately 0.000002 m without applying snapshots.
+This supports the capture implementation; it does not resolve later numerical
+drift or identify the build that produced the Windows recording.
 
 ## Scene construction order
 

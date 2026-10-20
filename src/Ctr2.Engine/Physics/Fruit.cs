@@ -30,24 +30,10 @@ namespace Ctr2.Engine.Physics
     {
         private readonly List<SimulationFruit> fruits = [];
         private readonly List<FruitCollection> fruitCollections = [];
-        private readonly IReadOnlyList<double>? fruitScenes;
-
-        /// <summary>Windows animation resource of the fruits, whose scenes 0, 1 and 2 are the apple, grape and strawberry.</summary>
-        public const int FruitAnimationId = 30;
-
         /// <summary>Updates a collected fruit's particle burst runs before it reports finished: native <c>FruitParticles</c>
         /// emit six particles with a 0.7 second life and no variance, stop emitting once 0.7 seconds have elapsed, drop dead
         /// particles on the update after their life runs out and report on the first update with none left.</summary>
         internal static readonly int ParticleUpdates = CountParticleUpdates();
-
-        /// <summary>Loads each native fruit type's scene duration: types 0, 1 and 2 play scenes 0, 2 and 1.</summary>
-        /// <param name="cache">Local game cache.</param>
-        /// <returns>Durations in seconds by fruit type.</returns>
-        public static IReadOnlyList<double> LoadFruitScenes(string cache)
-        {
-            AnimationElement root = AnimationReader.LoadWindows(cache, FruitAnimationId);
-            return Array.AsReadOnly([AnimationPose.Duration(root, 0), AnimationPose.Duration(root, 2), AnimationPose.Duration(root, 1)]);
-        }
 
         private static int CountParticleUpdates()
         {
@@ -200,7 +186,7 @@ namespace Ctr2.Engine.Physics
         /// <remarks>Without scene durations, as in tests, collected fruits stay in the world.</remarks>
         private void RemoveFinishedFruits()
         {
-            if (fruitScenes == null)
+            if (timings?.Fruit is not IReadOnlyList<double> scenes)
             {
                 return;
             }
@@ -210,12 +196,7 @@ namespace Ctr2.Engine.Physics
                 {
                     continue;
                 }
-                int sceneUpdates = 1;
-                while (sceneUpdates * (double)PhysicsWorld.TimeStep < fruitScenes[fruit.Type])
-                {
-                    sceneUpdates++;
-                }
-                int finished = collected + sceneUpdates - 1;
+                int finished = collected + SceneTimings.Updates(scenes[fruit.Type]) - 1;
                 if (Tick == finished + ParticleUpdates + 1)
                 {
                     _ = World.RemoveBody(fruit.Body);

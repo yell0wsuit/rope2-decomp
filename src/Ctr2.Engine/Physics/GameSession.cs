@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 using Ctr2.Assets;
 
@@ -11,9 +10,8 @@ namespace Ctr2.Engine.Physics
         private readonly LevelDefinition level;
         private readonly LevelDefinition design;
         private readonly bool firstLevelArrival;
-        private readonly IReadOnlyDictionary<string, double>? characterScenes;
+        private readonly SceneTimings? timings;
         private readonly LevelVariant variant;
-        private readonly IReadOnlyList<double>? fruitScenes;
         private SimulationClock clock = new();
         private double hostTime;
         private double activeTime;
@@ -23,19 +21,17 @@ namespace Ctr2.Engine.Physics
         /// <param name="level">Original editor-space level.</param>
         /// <param name="design">Matching master design document.</param>
         /// <param name="firstLevelArrival">Whether the host selected the first production level.</param>
-        /// <param name="characterScenes">Optional Om Nom scene durations; see <see cref="CandySimulation"/>.</param>
+        /// <param name="timings">Optional animation durations; see <see cref="CandySimulation"/>.</param>
         /// <param name="variant">Game mode to build the scene for.</param>
-        /// <param name="fruitScenes">Optional fruit scene durations; see <see cref="CandySimulation"/>.</param>
-        public GameSession(LevelDefinition level, LevelDefinition design, bool firstLevelArrival = false, IReadOnlyDictionary<string, double>? characterScenes = null,
-            LevelVariant variant = LevelVariant.Main, IReadOnlyList<double>? fruitScenes = null)
+        public GameSession(LevelDefinition level, LevelDefinition design, bool firstLevelArrival = false, SceneTimings? timings = null,
+            LevelVariant variant = LevelVariant.Main)
         {
             this.variant = variant;
-            this.fruitScenes = fruitScenes;
             this.level = level;
             this.design = design;
             this.firstLevelArrival = firstLevelArrival;
-            this.characterScenes = characterScenes;
-            Simulation = new(level, design, play: true, firstLevelArrival: firstLevelArrival, characterScenes, variant, fruitScenes);
+            this.timings = timings;
+            Simulation = new(level, design, play: true, firstLevelArrival: firstLevelArrival, timings, variant);
             Input = new(Simulation, LevelLayout.Create(level).Size);
         }
         /// <summary>Gets the current simulation, replaced on restart.</summary>
@@ -70,7 +66,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Restores the initial level and cancels held and queued input.</summary>
         public void Restart()
         {
-            CandySimulation replacement = new(level, design, play: true, firstLevelArrival: firstLevelArrival, characterScenes, variant, fruitScenes);
+            CandySimulation replacement = new(level, design, play: true, firstLevelArrival: firstLevelArrival, timings, variant);
             Input.Cancel();
             Simulation = replacement;
             Input = new(Simulation, LevelLayout.Create(level).Size);

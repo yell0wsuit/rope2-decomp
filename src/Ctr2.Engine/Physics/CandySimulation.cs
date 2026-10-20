@@ -61,12 +61,17 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
-        /// <summary>Gets authored circle and rectangle shapes, static or dynamic, in authored order.</summary>
+        /// <summary>Authored shapes still in the scene; burned ones leave it.</summary>
+        private readonly List<GeneralShape> shapes = [];
+
+        /// <summary>Gets authored circle and rectangle shapes, static or dynamic, in authored order, without removed ones.</summary>
         /// <value>Bodies built by the design body factory, with their merged designs.</value>
         public IReadOnlyList<GeneralShape> Shapes
         {
             get;
         }
+
+        private readonly SceneTimings? timings;
 
         /// <summary>Gets the game mode the scene was built for.</summary>
         public LevelVariant Variant
@@ -95,18 +100,16 @@ namespace Ctr2.Engine.Physics
         /// <param name="design">Matching master design document.</param>
         /// <param name="play">Whether to enable the supported gameplay slice.</param>
         /// <param name="firstLevelArrival">Whether the host selected the first production level, which has a special arrival.</param>
-        /// <param name="characterScenes">Om Nom scene durations by name, which let gameplay complete authored scenes on its own
-        /// fixed clock; without them only a presentation callback completes scenes.</param>
+        /// <param name="timings">Animation durations that time game logic (see <see cref="SceneTimings"/>); without them,
+        /// scenes finish only through a presentation callback and timed removals never happen.</param>
         /// <param name="variant">Game mode the scene is built for.</param>
-        /// <param name="fruitScenes">Fruit scene durations by native fruit type (see <see cref="LoadFruitScenes"/>), which time a
-        /// collected fruit's removal; without them collected fruits stay.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
         /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
         public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool firstLevelArrival = false,
-            IReadOnlyDictionary<string, double>? characterScenes = null, LevelVariant variant = LevelVariant.Main, IReadOnlyList<double>? fruitScenes = null)
+            SceneTimings? timings = null, LevelVariant variant = LevelVariant.Main)
         {
             Variant = variant;
-            this.fruitScenes = fruitScenes;
+            this.timings = timings;
             LevelLayout layout = LevelLayout.Create(level);
             // The scene first creates a fixtureless static body at the bottom center of its logical screen; world pins anchor to it.
             MainStaticBody = World.AddStaticBody(new((float)(layout.Size.X / 2.0 / 200.0), (float)(layout.Size.Y / 200.0)));
@@ -124,9 +127,9 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Rope bone length and stretch frequency must be positive.");
             }
+            // Rope ends: candy slows its ropes; shapes and fireballs (in shapeBodies) do not.
             Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance), shapeBodies = new(ReferenceEqualityComparer.Instance);
             List<PhysicsBody> candies = [], characters = [];
-            List<GeneralShape> shapes = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
             List<PlacedLevelObject> pins = [];
             // Like the scene loader, every object creates its body in document order; ropes follow in a post-pass.
@@ -171,6 +174,9 @@ namespace Ctr2.Engine.Physics
                     case "helicopter":
                         AddHelicopter(placed, design);
                         break;
+                    case "fireball":
+                        shapeBodies.Add(placed, AddFireball(placed, design));
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
                             kind.StartsWith("polygon", StringComparison.Ordinal))
@@ -208,6 +214,8 @@ namespace Ctr2.Engine.Physics
                     x2 = Value(source, "x_shift_2"), y2 = Value(source, "y_shift_2");
                 ropes.Add(CreateRope(head!, tail!, lengthValue + lengthValue + (lengthValue + lengthValue), new(x1 + x1, y1 + y1), new(x2 + x2, y2 + y2),
                     headCandy, tailCandy, bone, frequency));
+                AttachRopeToFireball(ropes.Count - 1, head!);
+                AttachRopeToFireball(ropes.Count - 1, tail!);
             }
             // Pins join bodies after every object exists and before the grab ropes are built.
             foreach (PlacedLevelObject pin in pins)
@@ -229,6 +237,7 @@ namespace Ctr2.Engine.Physics
                 }
                 float x = Value(grab.Source, "target_x"), y = Value(grab.Source, "target_y"), lengthValue = Value(grab.Source, "length");
                 ropes.Add(CreateRope(grabs[grab], target!, lengthValue + lengthValue, Vector2.Zero, new(x + x, y + y), false, candy, bone, frequency));
+                AttachRopeToFireball(ropes.Count - 1, target!);
             }
             // Balloon ropes follow the grab ropes; a balloon has no default target.
             foreach (SimulationBalloon balloon in balloons)
@@ -244,6 +253,7 @@ namespace Ctr2.Engine.Physics
                 }
                 float x = Value(balloon.Placed.Source, "target_x"), y = Value(balloon.Placed.Source, "target_y"), lengthValue = Value(balloon.Placed.Source, "length");
                 ropes.Add(CreateRope(balloon.Body!, target!, lengthValue + lengthValue, new(0, 45), new(x + x, y + y), false, candy, bone, frequency));
+                AttachRopeToFireball(ropes.Count - 1, target!);
             }
             // A fruit challenge then adds its fruit grid and schedules every star for removal after the first step.
             if (variant == LevelVariant.FruitChallenge)
@@ -256,7 +266,7 @@ namespace Ctr2.Engine.Physics
             Shapes = shapes.AsReadOnly();
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
-            Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival, characterScenes) : null;
+            Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival, timings?.Character) : null;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>
@@ -295,7 +305,8 @@ namespace Ctr2.Engine.Physics
                 RemoveStars();
             }
             RemoveFinishedFruits();
-            // Scene children update after the step: ropes first, then balloons, then frogs.
+            RemoveBurnedObjects();
+            // Scene children update after the step: ropes first, then balloons, fireballs and frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
@@ -304,6 +315,7 @@ namespace Ctr2.Engine.Physics
             {
                 UpdateBalloon(balloon);
             }
+            UpdateFireballs();
             foreach (SimulationFrog frog in frogs)
             {
                 UpdateFrog(frog, PhysicsWorld.TimeStep);

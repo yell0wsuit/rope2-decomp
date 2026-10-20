@@ -20,7 +20,7 @@ namespace Ctr2.Tests
         {
             string design = CandySimulationTests.Design.Replace("</layer></map>", Clover + "</layer></map>").Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"");
             return new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" + objects + "</layer></map>"),
-                LevelReader.Read(design), variant: variant, fruitScenes: scenes);
+                LevelReader.Read(design), timings: scenes == null ? null : new SceneTimings(Fruit: scenes), variant: variant);
         }
 
         /// <summary>Eleven columns of twelve fruits cover the screen, except where a fixture already holds the point; each

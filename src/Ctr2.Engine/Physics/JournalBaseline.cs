@@ -51,11 +51,10 @@ namespace Ctr2.Engine.Physics
         public static IReadOnlyList<JournalOutcome> RunAll(string cache)
         {
             LevelDefinition design = LevelReader.LoadWindowsDesign(cache);
-            IReadOnlyDictionary<string, double> scenes = LevelGameplay.LoadCharacterScenes(cache);
-            IReadOnlyList<double> fruitScenes = CandySimulation.LoadFruitScenes(cache);
+            SceneTimings timings = SceneTimings.LoadAll(cache);
             (WindowsLevelEntry Entry, string Variant)[] work = [.. LevelReader.LoadWindowsIndex(cache).SelectMany(e => Variants.Select(v => (e, v)))];
             JournalOutcome?[] results = new JournalOutcome?[work.Length];
-            _ = Parallel.For(0, work.Length, i => results[i] = Run(cache, work[i].Entry, work[i].Variant, design, scenes, fruitScenes));
+            _ = Parallel.For(0, work.Length, i => results[i] = Run(cache, work[i].Entry, work[i].Variant, design, timings));
             return [.. results.OfType<JournalOutcome>()];
         }
 
@@ -64,11 +63,9 @@ namespace Ctr2.Engine.Physics
         /// <param name="entry">Desktop level entry.</param>
         /// <param name="variant">Journal variant.</param>
         /// <param name="design">Master design document.</param>
-        /// <param name="characterScenes">Om Nom scene durations.</param>
-        /// <param name="fruitScenes">Fruit scene durations by native fruit type.</param>
+        /// <param name="timings">Animation durations.</param>
         /// <returns>The outcome, or null when the level has no journal for the variant.</returns>
-        public static JournalOutcome? Run(string cache, WindowsLevelEntry entry, string variant, LevelDefinition design, IReadOnlyDictionary<string, double>? characterScenes = null,
-            IReadOnlyList<double>? fruitScenes = null)
+        public static JournalOutcome? Run(string cache, WindowsLevelEntry entry, string variant, LevelDefinition design, SceneTimings? timings = null)
         {
             ArgumentNullException.ThrowIfNull(entry);
             string assets = Path.Combine(Path.GetFullPath(cache), "assets");
@@ -85,8 +82,8 @@ namespace Ctr2.Engine.Physics
             CandySimulation scene;
             try
             {
-                scene = new(LevelReader.LoadWindows(cache, entry.Pack, entry.Entry), design, play: true, firstLevelArrival: entry.Pack == 1 && entry.Entry == 1, characterScenes,
-                    LevelVariants.Parse(variant), fruitScenes);
+                scene = new(LevelReader.LoadWindows(cache, entry.Pack, entry.Entry), design, play: true, firstLevelArrival: entry.Pack == 1 && entry.Entry == 1, timings,
+                    LevelVariants.Parse(variant));
             }
             catch (InvalidDataException)
             {

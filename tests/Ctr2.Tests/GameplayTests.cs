@@ -22,7 +22,7 @@ namespace Ctr2.Tests
                 .Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"")
                 .Replace("gravityScale='0.7'", "gravityScale='0'");
             return new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" + objects + "</layer></map>"),
-                LevelReader.Read(design), play, characterScenes: scenes);
+                LevelReader.Read(design), play, timings: scenes == null ? null : new SceneTimings(scenes));
         }
 
         /// <summary>Contact consumes once, retains a fading sensor briefly, then completes after chewing.</summary>

@@ -42,7 +42,8 @@ namespace Ctr2.Engine.Physics
             GeneralPolygon = 3,
             Candy = 4,
             Character = 6,
-            Thrower = 8
+            Thrower = 8,
+            Fireball = 13
         }
 
         private readonly List<SimulationThrower> throwers = [];
@@ -88,6 +89,10 @@ namespace Ctr2.Engine.Physics
             if (throwers.Any(t => t.Body == body))
             {
                 return GameBodyType.Thrower;
+            }
+            if (fireballs.Any(f => f.Body == body))
+            {
+                return GameBodyType.Fireball;
             }
             if (Shapes.FirstOrDefault(s => s.Body == body) is GeneralShape shape)
             {
@@ -155,7 +160,8 @@ namespace Ctr2.Engine.Physics
                     {
                         (candidate, circle) = (first, firstCircle);
                     }
-                    if (first == thrower.Body && secondType == GameBodyType.Thrower)
+                    // Higher game body types capture from the thrower's side: throwers and fireballs (Bookas and gremlins pending).
+                    if (first == thrower.Body && secondType is GameBodyType.Thrower or GameBodyType.Fireball)
                     {
                         (candidate, circle) = (second, secondCircle);
                     }
@@ -225,6 +231,7 @@ namespace Ctr2.Engine.Physics
                 GameBodyType.GeneralPolygon => body.Radius + -.06f,
                 GameBodyType.Candy => .1f,
                 GameBodyType.Character => .23f,
+                GameBodyType.Fireball => .15f,
                 // Throwers, and the source's other default capture types, hang farther out.
                 GameBodyType.Thrower or null => .26f,
                 _ => .26f
@@ -236,6 +243,8 @@ namespace Ctr2.Engine.Physics
                 Gameplay?.CharacterCaptured();
             }
             PlaceCaptured(thrower);
+            // Windows capture (0x4AA080) also clears spin; the Android reference only clears linear velocity.
+            body.SetAngularVelocity(0);
             thrower.Joint = World.AddRevolute(thrower.Body, body, new PhysicsRevoluteDefinition(Vector2.Zero, new(0, thrower.JointLength), 0, EnableLimit: true));
             return true;
         }
@@ -323,9 +332,14 @@ namespace Ctr2.Engine.Physics
                 Release(thrower, body, false);
                 thrower.NoCaptureTimer = .3f;
             }
-            foreach (SimulationThrower pending in throwers.Where(t => t.ToCapture == body))
+            foreach (SimulationThrower pending in throwers)
             {
-                pending.ToCapture = null;
+                if (pending.ToCapture == body)
+                {
+                    pending.ToCapture = null;
+                }
+                // Destruction clears fixture lookup before End events are drained; those events cannot erase this entry.
+                _ = pending.Collided.Remove(body);
             }
         }
     }

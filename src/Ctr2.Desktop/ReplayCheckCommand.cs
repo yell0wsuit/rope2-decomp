@@ -63,9 +63,8 @@ namespace Ctr2.Desktop
             {
                 throw new InvalidDataException($"Journal level hash {journal.LevelHash} does not match the level ({levelHash}).");
             }
-            CandySimulation scene = new(level, design, play: true, firstLevelArrival: pack == 1 && entry == 1, LevelGameplay.LoadCharacterScenes(cache),
-                variant.Length == 0 ? LevelVariant.Main : LevelVariants.Parse(variant.TrimStart('.')),
-                variant == ".fruit_challenge" ? CandySimulation.LoadFruitScenes(cache) : null);
+            LevelVariant mode = variant.Length == 0 ? LevelVariant.Main : LevelVariants.Parse(variant.TrimStart('.'));
+            CandySimulation scene = new(level, design, play: true, firstLevelArrival: pack == 1 && entry == 1, SceneTimings.Load(cache, level, mode), mode);
             JournalReplayResult result = JournalReplay.Run(scene, journal, threshold);
             Console.WriteLine(JsonSerializer.Serialize(new
             {

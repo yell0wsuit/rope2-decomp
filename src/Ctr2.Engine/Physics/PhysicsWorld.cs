@@ -310,6 +310,10 @@ namespace Ctr2.Engine.Physics
             return true;
         }
 
+        /// <summary>Called inside <see cref="Step"/> with the step's contact events after the narrowphase and before the
+        /// solver, like native contact listener callbacks; it may change sensor flags and velocities, not the world's topology.</summary>
+        internal Action<IReadOnlyList<PhysicsContactEvent>>? ContactsUpdated;
+
         /// <summary>Advances exactly one original game tick using 15 velocity and 30 position iterations.</summary>
         public void Step()
         {
@@ -327,6 +331,14 @@ namespace Ctr2.Engine.Physics
 
             // Merge this traversal only. Earlier queued batches keep chronological order.
             contactEvents.Sort(eventStart, contactEvents.Count - eventStart, ContactEventOrder);
+            if (ContactsUpdated != null && contactEvents.Count > eventStart)
+            {
+                // Native contact callbacks run inside the step, before the solver; islands read sensor flags only when they
+                // solve, so a contact whose fixture a callback just made a sensor is not solved.
+                ContactsUpdated(contactEvents.GetRange(eventStart, contactEvents.Count - eventStart));
+                _ = touching.RemoveAll(c => (proxies.TryGetValue(c.FirstFixture, out FixtureProxy? a) && a.IsSensor) ||
+                    (proxies.TryGetValue(c.SecondFixture, out FixtureProxy? b) && b.IsSensor));
+            }
             List<List<PhysicsJoint>> islands = SolverOrder(touching, out List<List<PhysicsContact>> contactIslands, out HashSet<PhysicsBody> islandStatics,
                 out List<List<PhysicsBody>> bodyIslands);
             HashSet<PhysicsBody> islandBodies = [.. bodyIslands.SelectMany(island => island)];

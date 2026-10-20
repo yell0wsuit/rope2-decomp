@@ -75,8 +75,7 @@ namespace Ctr2.Desktop
                 if (play)
                 {
                     preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), firstLevelArrival: pack == 1 && level == 1,
-                        LevelGameplay.LoadCharacterScenes(cache), variant,
-                        variant == LevelVariant.FruitChallenge ? CandySimulation.LoadFruitScenes(cache) : null);
+                        SceneTimings.Load(cache, definition, variant), variant);
                     if (preview.Session.Simulation.Gameplay!.ArrivalLeaves != null)
                     {
                         preview.forestLeaves = new ForestLeafSprites(cache, resolution);
@@ -321,6 +320,12 @@ namespace Ctr2.Desktop
                     {
                         canvas.DrawCircle(fruit.Position.X * 200, fruit.Position.Y * 200, fruit.Radius * 200, paint);
                     }
+                    // Fireball artwork is pending: idle fireballs are drawn red, fading ones dark red.
+                    foreach (SimulationFireball fireball in Simulation.Fireballs.Where(f => !f.Removed))
+                    {
+                        paint.Color = fireball.Fading ? SKColors.DarkRed : SKColors.Red;
+                        canvas.DrawCircle(fireball.Body.Position.X * 200, fireball.Body.Position.Y * 200, fireball.Body.Radius * 200, paint);
+                    }
                 }
                 int candyIndex = 0;
                 int starIndex = 0;
@@ -332,7 +337,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }
