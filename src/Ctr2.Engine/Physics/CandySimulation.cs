@@ -73,6 +73,18 @@ namespace Ctr2.Engine.Physics
 
         private readonly SceneTimings? timings;
 
+        /// <summary>Gets the master <c>omnom_design</c> fields, such as the Booka jump, or none when the design lacks them.</summary>
+        internal IReadOnlyDictionary<string, string> CharacterDesign
+        {
+            get;
+        }
+
+        /// <summary>Gets the logical screen size, the doubled editor canvas.</summary>
+        internal Vector2 Screen
+        {
+            get;
+        }
+
         /// <summary>Gets the game mode the scene was built for.</summary>
         public LevelVariant Variant
         {
@@ -110,6 +122,9 @@ namespace Ctr2.Engine.Physics
         {
             Variant = variant;
             this.timings = timings;
+            Screen = LevelLayout.Create(level).Size;
+            CharacterDesign = design.Objects.FirstOrDefault(o => o.Attributes.GetValueOrDefault("id") == "omnom_design")?.Attributes ??
+                new Dictionary<string, string>(StringComparer.Ordinal);
             LevelLayout layout = LevelLayout.Create(level);
             // The scene first creates a fixtureless static body at the bottom center of its logical screen; world pins anchor to it.
             MainStaticBody = World.AddStaticBody(new((float)(layout.Size.X / 2.0 / 200.0), (float)(layout.Size.Y / 200.0)));
@@ -127,7 +142,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Rope bone length and stretch frequency must be positive.");
             }
-            // Rope ends: candy slows its ropes; shapes and fireballs (in shapeBodies) do not.
+            // Rope ends: candy and Bookas (in candyBodies) slow their ropes; shapes and fireballs (in shapeBodies) do not.
             Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance), shapeBodies = new(ReferenceEqualityComparer.Instance);
             List<PhysicsBody> candies = [], characters = [];
             Dictionary<PlacedLevelObject, PhysicsBody> grabs = [];
@@ -176,6 +191,9 @@ namespace Ctr2.Engine.Physics
                         break;
                     case "fireball":
                         shapeBodies.Add(placed, AddFireball(placed, design));
+                        break;
+                    case "booka":
+                        candyBodies.Add(placed, AddBooka(placed, design));
                         break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
@@ -306,6 +324,7 @@ namespace Ctr2.Engine.Physics
             }
             RemoveFinishedFruits();
             RemoveBurnedObjects();
+            RemoveBookas();
             // Scene children update after the step: ropes first, then balloons, fireballs and frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
@@ -320,6 +339,7 @@ namespace Ctr2.Engine.Physics
             {
                 UpdateFrog(frog, PhysicsWorld.TimeStep);
             }
+            UpdateBookas();
             // Throwers update after frogs and before the character, in scene order.
             foreach (SimulationThrower thrower in throwers)
             {

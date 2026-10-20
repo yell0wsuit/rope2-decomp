@@ -11,8 +11,9 @@ namespace Ctr2.Engine.Physics
     /// <param name="Character">Om Nom scene durations by scene name, from animation 85.</param>
     /// <param name="Fruit">Fruit scene durations by native fruit type, from animation 30 (types 0, 1 and 2 play scenes 0, 2 and 1).</param>
     /// <param name="Fireball">Fireball scene durations by native scene index, from animation 25.</param>
+    /// <param name="Booka">Booka scene durations by native scene index, from animation 13.</param>
     public sealed record SceneTimings(IReadOnlyDictionary<string, double>? Character = null, IReadOnlyList<double>? Fruit = null,
-        IReadOnlyList<double>? Fireball = null)
+        IReadOnlyList<double>? Fireball = null, IReadOnlyList<double>? Booka = null)
     {
         /// <summary>Windows animation resource of Om Nom.</summary>
         public const int CharacterAnimationId = 85;
@@ -23,12 +24,15 @@ namespace Ctr2.Engine.Physics
         /// <summary>Windows animation resource of the fireball: IDLE, IDLE_2, FADE_WATER and FADE_FIRE.</summary>
         public const int FireballAnimationId = 25;
 
+        /// <summary>Windows animation resource of the Booka: IDLE, KNOT_IDLE, ACTION and KNOT_ACTION.</summary>
+        public const int BookaAnimationId = 13;
+
         /// <summary>Loads every timing the simulation uses.</summary>
         /// <param name="cache">Local game cache.</param>
         /// <returns>All timings.</returns>
         public static SceneTimings LoadAll(string cache)
         {
-            return new(LoadCharacter(cache), LoadFruit(cache), LoadFireball(cache));
+            return new(LoadCharacter(cache), LoadFruit(cache), LoadFireball(cache), LoadScenes(cache, BookaAnimationId));
         }
 
         /// <summary>Loads Om Nom's timings and only the object timings a level needs in a variant.</summary>
@@ -40,7 +44,8 @@ namespace Ctr2.Engine.Physics
         {
             ArgumentNullException.ThrowIfNull(level);
             return new(LoadCharacter(cache), variant == LevelVariant.FruitChallenge ? LoadFruit(cache) : null,
-                level.Objects.Any(o => o.Kind == "fireball") ? LoadFireball(cache) : null);
+                level.Objects.Any(o => o.Kind == "fireball") ? LoadFireball(cache) : null,
+                level.Objects.Any(o => o.Kind == "booka") ? LoadScenes(cache, BookaAnimationId) : null);
         }
 
         /// <summary>Loads Om Nom's scene durations by name.</summary>
@@ -59,7 +64,12 @@ namespace Ctr2.Engine.Physics
 
         private static double[] LoadFireball(string cache)
         {
-            AnimationElement root = AnimationReader.LoadWindows(cache, FireballAnimationId);
+            return LoadScenes(cache, FireballAnimationId);
+        }
+
+        private static double[] LoadScenes(string cache, int animation)
+        {
+            AnimationElement root = AnimationReader.LoadWindows(cache, animation);
             return [.. Enumerable.Range(0, 4).Select(scene => AnimationPose.Duration(root, scene))];
         }
 

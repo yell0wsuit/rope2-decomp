@@ -320,6 +320,12 @@ namespace Ctr2.Desktop
                     {
                         canvas.DrawCircle(fruit.Position.X * 200, fruit.Position.Y * 200, fruit.Radius * 200, paint);
                     }
+                    // Booka artwork is pending: Bookas are drawn purple, caught ones light purple.
+                    foreach (SimulationBooka booka in Simulation.Bookas.Where(k => !k.Removed))
+                    {
+                        paint.Color = booka.Booed ? SKColors.Plum : SKColors.Purple;
+                        canvas.DrawCircle(booka.Body.Position.X * 200, booka.Body.Position.Y * 200, booka.Body.Radius * 200, paint);
+                    }
                     // Fireball artwork is pending: idle fireballs are drawn red, fading ones dark red.
                     foreach (SimulationFireball fireball in Simulation.Fireballs.Where(f => !f.Removed))
                     {
@@ -337,7 +343,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

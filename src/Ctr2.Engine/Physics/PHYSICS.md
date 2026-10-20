@@ -1144,7 +1144,7 @@ take the lowest rope and journal indices. The native constructor doubles the
 authored `length` twice (four times the editor value in logical units) and each
 `x_shift_n`/`y_shift_n` once as that end's attach shift. Either end may be candy,
 which then slows down on the rope; an unregistered name keeps no rope. Fireball
-ends are supported without candy's slowdown; Booka ends remain unsupported.
+ends are supported without candy's slowdown, and Booka ends slow down like candy.
 
 Destroying a body runs the native `cutWithBodyDestroyed` on every rope before the
 body leaves the world: an intact rope is cut at the joint next to it, with no
@@ -1368,6 +1368,39 @@ comparison using the matching iOS level, master and timelines reproduces that
 iOS fireball position within approximately 0.000002 m without applying snapshots.
 This supports the capture implementation; it does not resolve later numerical
 drift or identify the build that produced the Windows recording.
+
+## Scene Bookas
+
+A Booka merges the master `booka` design with its authored fields, can hang from
+grab, balloon and free-standing ropes, and slows those ropes like candy. Om Nom's
+contact delegate runs inside the step: a begin contact between Om Nom (game body
+type 6) and an uncaught Booka (11), while Om Nom's boo cooldown is not positive,
+boos Om Nom from the Booka's center and catches the Booka. The caught Booka cuts its
+ropes in its next update (as `cutWithBodyDestroyed`, keeping its body), becomes a
+stopped sensor kicked by 0.11 along a heading of -110 to -70 degrees, and becomes a
+default game body, so Om Nom, throwers and helicopters ignore it. The heading comes
+from the unseeded `arc4random`; the port draws it from a fixed xorshift sequence, so
+no recording can match a caught Booka's flight. Booka updates run after the frogs: a
+Booka beyond the screen grown by 40 + 150 logical units, or one whose ACTION scene
+(animation 13) has finished, is destroyed after the next step. Throwers hold uncaught
+Bookas on a 0.1 m hinge and helicopters carry them upright from (0, -0.2).
+
+A booed Om Nom that is chewing jumps at once; otherwise, unless he failed, he shows
+WITH_BOOKA and ignores Bookas for 0.15 seconds, and the end of that scene makes him
+jump. The jump stops him and applies `vectRotate((0, -0.3 * boo_jump_power),
+add)`, where `add` is `90 - boo_jump_angle` degrees from `omnom_design`, negated when
+the Booka is to his right (the 2D cross of straight up and the Booka offset is not
+negative), in which case he faces right. He then falls (chewing if he was) with
+WITH_BOOKA_JUMP and FALLING. The Android build rotates with 1024-entry `fmSin`/`fmCos`
+tables, which tilt 20 degrees to 19.69; the iOS build calls `__sincosf_stret`, and
+with float sine and cosine Om Nom's jump matches the 5-1 and 5-15 recordings exactly,
+so the port uses float trigonometry. The iOS build also keeps a thrower-held Om Nom
+in his thrower state when booed; the port follows the Android order there.
+
+Some recordings keep reporting a caught Booka far below the screen (5-7's reaches
+77 m), although the Android and iOS builds both remove off-screen Bookas; the port
+keeps the executables' removal, which only shows as missing samples because a caught
+Booka is a sensor.
 
 ## Scene construction order
 

@@ -72,7 +72,7 @@ namespace Ctr2.Engine.Physics
             PhysicsBody body = BodyFactory.Create(World, fields);
             fireballs.Add(new(body));
             World.RecordContactEvents = true;
-            World.ContactsUpdated = HandleFireballContacts;
+            World.ContactsUpdated = HandleContactsInStep;
             return body;
         }
 

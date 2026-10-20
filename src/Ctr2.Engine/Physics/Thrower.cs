@@ -43,6 +43,7 @@ namespace Ctr2.Engine.Physics
             Candy = 4,
             Character = 6,
             Thrower = 8,
+            Booka = 11,
             Fireball = 13
         }
 
@@ -89,6 +90,11 @@ namespace Ctr2.Engine.Physics
             if (throwers.Any(t => t.Body == body))
             {
                 return GameBodyType.Thrower;
+            }
+            // A caught Booka becomes a default game body.
+            if (bookas.Any(k => k.Body == body && !k.Booed))
+            {
+                return GameBodyType.Booka;
             }
             if (fireballs.Any(f => f.Body == body))
             {
@@ -161,7 +167,7 @@ namespace Ctr2.Engine.Physics
                         (candidate, circle) = (first, firstCircle);
                     }
                     // Higher game body types capture from the thrower's side: throwers and fireballs (Bookas and gremlins pending).
-                    if (first == thrower.Body && secondType is GameBodyType.Thrower or GameBodyType.Fireball)
+                    if (first == thrower.Body && secondType is GameBodyType.Thrower or GameBodyType.Booka or GameBodyType.Fireball)
                     {
                         (candidate, circle) = (second, secondCircle);
                     }
@@ -232,6 +238,7 @@ namespace Ctr2.Engine.Physics
                 GameBodyType.Candy => .1f,
                 GameBodyType.Character => .23f,
                 GameBodyType.Fireball => .15f,
+                GameBodyType.Booka => .1f,
                 // Throwers, and the source's other default capture types, hang farther out.
                 GameBodyType.Thrower or null => .26f,
                 _ => .26f

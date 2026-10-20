@@ -120,6 +120,14 @@ namespace Ctr2.Engine.Physics
                             helicopter.CapturedObject = other;
                             helicopter.OmnomForced = true;
                         }
+                        // An uncaught Booka keeps upright like Om Nom.
+                        if (bookas.Any(k => k.Body == other && !k.Booed) && !carriedBy.ContainsKey(other))
+                        {
+                            helicopter.NeedAngleCorrect = true;
+                            scheduled = other;
+                            helicopter.CapturedObject = other;
+                            helicopter.OmnomForced = false;
+                        }
                         // A fireball keeps upright like Om Nom.
                         if (fireballs.Any(f => f.Body == other) && !carriedBy.ContainsKey(other))
                         {
@@ -219,7 +227,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Each object's <c>helicopterAnchorPoint</c>.</summary>
         private Vector2 AnchorPoint(PhysicsBody body)
         {
-            return Candies.Contains(body) || fireballs.Any(f => f.Body == body) ? new(0, -.2f) : Characters.Contains(body) ? new(0, -.32f) :
+            return Candies.Contains(body) || fireballs.Any(f => f.Body == body) || bookas.Any(k => k.Body == body) ? new(0, -.2f) : Characters.Contains(body) ? new(0, -.32f) :
                 body.PolygonFixtures.Count == 0 ? new(0, (float)(-0.02 - body.Radius)) : new(0, -.3f);
         }
 

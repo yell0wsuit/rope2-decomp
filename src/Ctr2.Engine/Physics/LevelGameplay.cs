@@ -76,7 +76,9 @@ namespace Ctr2.Engine.Physics
         /// <summary>Cheering after the candy collected a star, until that scene ends.</summary>
         Excited,
         /// <summary>Cheering while carried by a helicopter, until that scene ends.</summary>
-        HelicopterExcited
+        HelicopterExcited,
+        /// <summary>Scared by a Booka, until the WITH_BOOKA scene ends and the character jumps away.</summary>
+        Booed
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -97,11 +99,12 @@ namespace Ctr2.Engine.Physics
         private int completedRevision = -1;
         private float lastSlideAngle = 3.4028e38f;
         private int excitedTimes;
+        private Vector2 booPosition;
 
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "tutorial_swipe" or "tutorial_tap")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "tutorial_swipe" or "tutorial_tap")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
@@ -251,6 +254,7 @@ namespace Ctr2.Engine.Physics
             AdvanceProcedure();
             CompleteAuthoredScene();
             motion.Sample(character.Velocity, character.AngularVelocity);
+            BooTimer -= PhysicsWorld.TimeStep;
             collidedWithTerrain |= simulation.CharacterTouchesTerrain();
             if (Outside(character.Origin, 70))
             {
@@ -343,7 +347,16 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
-            if (CharacterState == CharacterState.Fail)
+            // The source finishes the Booka scenes by index before any state check.
+            if (scene == "WITH_BOOKA")
+            {
+                JumpOfBoo();
+            }
+            else if (scene == "WITH_BOOKA_JUMP")
+            {
+                SetScene("FALLING");
+            }
+            else if (CharacterState == CharacterState.Fail)
             {
                 Finish(LevelResult.Lost);
             }
@@ -478,6 +491,67 @@ namespace Ctr2.Engine.Physics
                 SetScene("FALLING");
             }
             collidedWithTerrain = false;
+        }
+
+        /// <summary>Gets the Booka cooldown: Om Nom ignores Bookas while it is positive.</summary>
+        internal float BooTimer
+        {
+            get; private set;
+        }
+
+        /// <summary>Native <c>Omnom::scheduleBooFromPosition</c>: a chewing character jumps away from the Booka at once; any
+        /// other character except a failed one shows WITH_BOOKA and ignores Bookas for 0.15 seconds.</summary>
+        /// <param name="booka">The Booka's center in meters.</param>
+        /// <remarks>The iOS build keeps a thrower-held character in its thrower state instead; this follows the Android source.</remarks>
+        internal void BooFrom(Vector2 booka)
+        {
+            booPosition = booka;
+            if (Chewing)
+            {
+                JumpOfBoo();
+            }
+            else if (CharacterState != CharacterState.Fail)
+            {
+                BooTimer = .15f;
+                CharacterState = CharacterState.Booed;
+                SetScene("WITH_BOOKA");
+            }
+        }
+
+        /// <summary>Native <c>Omnom::jumpOfBoo</c>: the character falls (chewing if it was), faces away from the Booka and is
+        /// stopped and kicked by <c>boo_jump_power * 0.3</c>, tilted <c>90 - boo_jump_angle</c> degrees from straight up away
+        /// from it, using the game's float rotation.</summary>
+        private void JumpOfBoo()
+        {
+            if (Chewing)
+            {
+                CharacterState = CharacterState.FallingChewing;
+                SetScene("FALLING_CHEWING");
+            }
+            else
+            {
+                CharacterState = CharacterState.Falling;
+                SetScene("WITH_BOOKA_JUMP");
+            }
+            collidedWithTerrain = false;
+            float editorAngle = NativeText.FloatValue(simulation.CharacterDesign.GetValueOrDefault("boo_jump_angle"));
+            float editorPower = NativeText.FloatValue(simulation.CharacterDesign.GetValueOrDefault("boo_jump_power"));
+            float add = (float)((float)(90.0 - editorAngle) * 3.14159265 / 180.0), angle = 0;
+            Vector2 up = NativeVector.Rotate(new(0, -1), angle);
+            PhysicsBody character = simulation.Characters[0];
+            Vector2 away = booPosition - character.Position;
+            if ((up.X * away.Y) - (up.Y * away.X) >= 0)
+            {
+                add = -add;
+                FacingRight = ArtFacingRight = true;
+            }
+            else
+            {
+                FacingRight = ArtFacingRight = false;
+            }
+            Vector2 impulse = NativeVector.Rotate(new(0, (float)(editorPower * -0.3)), angle + add);
+            character.SetLinearVelocity(Vector2.Zero);
+            character.ApplyLinearImpulse(impulse, character.Position);
         }
 
         /// <summary>Native <c>Omnom::excite</c> for a star the candy collected: an idle character cheers, more with each star,
