@@ -10,7 +10,7 @@ namespace Ctr2.Tests
     /// <summary>Checks fireball burning, rope cutting and timed removal against the source rules, using an invented level.</summary>
     public sealed class FireballTests
     {
-        private const string Fireball = "<circle id='fireball' body_type='dynamic' radius='16' density='0.4' gravityScale='1' friction='0.2' restitution='0.3' " +
+        internal const string Fireball = "<circle id='fireball' body_type='dynamic' radius='16' density='0.4' gravityScale='1' friction='0.2' restitution='0.3' " +
             "isSensor='false' linearDamping='0' angularDamping='0' linearVelocityX='0' linearVelocityY='0' angularVelocity='0' filter.category='0' filter.collideWith='all'/>" +
             "<polygon id='wood' body_type='static' friction='0.2' restitution='0.1' density='0.2'/>";
 

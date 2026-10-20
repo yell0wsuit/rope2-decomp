@@ -312,6 +312,7 @@ compilation nor game assets.
 | `BroadPhaseReference.json` | 110 standalone native proxy snapshots: pool growth/reuse, motion, query order, candidate generation and teardown. |
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates (including candy slowdown) and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `BalloonReference.json` | 600 native ticks of balloons: tap and swipe pops, stratosphere gravity/damping blending, and fly-away on rope cut. Activity flags plus every alive body including gravity scale and damping. |
+| `BalloonGeneratorReference.json` | 600 native ticks of balloon generators: a swinging candy spawning three fanned balloons (one born dead inside a static block), an untouched generator, a cut and a tap of generated balloons, and a falling candy beside an authored balloon. Rope count, balloon and generator flags plus every alive body including gravity scale and damping. |
 | `FrogReference.json` | 720 native ticks of frog tongues: tap open/close bridge with candy, a block closing the opening tongue, and an authored open tongue. Tongue state and extension plus every alive body. |
 | `PinReference.json` | 240 native ticks of scene pins: locked, rotating, motorized and limit-locked hinges, plus pins that find one, three or no bodies. Every body including the main static body. |
 | `RopeReference.json` | 480 native ticks of scene ropes: end-offset ropes to a rotated plank and a wood circle, a candy rope, a rope with no material points, an exact bone multiple, stretch/restore cycles and two replay cuts. Every body in creation order, including linear damping. |
@@ -1825,6 +1826,67 @@ Snails raise the construction audit to 113 of 168 entries, adding 6-1 through 6-
 journals run. In the 19 newly supported main journals the largest snail-origin
 drift is below 0.000002 m, but other bodies still diverge later; this is not a
 claim of full original-runtime parity.
+
+## Scene balloon generators
+
+Windows `BalloonGenerator::initWith` (0x485420) reads `balloons` with `intValue`
+and doubles `rope_length`, then builds the master `balloonGenerator` design (a
+static sensor circle) at `(2 * intValue(x)) * 0.005f`, not through the factory's
+division by 200. Generators are created in document order, are added as children
+after balloons and before candies, and never enter the hint journal. Their
+begin-contact delegate (0x4859B0) accepts only game-body type 4, the candy, and
+stores its body; native `BeginContact` dispatches these "pre-solve" delegates for
+sensors as well. Every earlier delegate returns false for this pair.
+
+The generator updates after balloons and before snails (0x4857C0). A stored candy
+schedules the generator for removal (destroyed first in the next step's removal
+phase) and activates its balloons at the generator's origin times 200. The inlined
+`activate` and `createBalloonWithRope` (0x484F20) start at `(count - 1) * -0.25f`
+radians and add 0.5 per balloon. Each rotates the point one rope length above the
+generator using float `sinf`/`cosf`, as `x + (c * dx - s * dy)`, `y + (c * dy + s * dx)`,
+with `dx = x - x` and `dy = (y - length) - y`. It then stores `(int)(v * 0.5f)` as
+the balloon's editor coordinates in the merged master `balloon` design.
+
+Before the body exists, `checkIsBornDead` (0x483920, 0x483B00, 0x483C40) queries the
+AABB of the balloon circle. The circle is built from the design values times
+`2.0 * 0.005f`, with fourteen rim points stepped by `0.44879895f` plus the center.
+Every static non-sensor fixture removes the points it contains (exact `TestPoint`);
+ten or fewer remaining points make the balloon born dead. A born-dead balloon
+flies away at once: it is inactive and its body is destroyed, with no rope. Any
+other balloon gets a rope from its (0, 45) shift to the candy's origin, slowing
+the candy like grab ropes. As with authored ropes, the rope's points use the menu
+material design.
+
+`GameScene::addRope` appends the rope's journal slot and child, then `addBalloon`
+(0x4F3A00) appends the balloon's, born dead or not. Late children (gremlin clones
+and generated ropes and balloons) share one list in this order. They first update
+in the step after their creation, since the scene caches its child count, after
+every initial child. They take presses before every other child, newest first,
+and journaled cuts address generated ropes by their appended slots. Above ten
+balloons, `addBalloon` sends the oldest active generated balloon flying. Native
+code drops finished balloons from that list after their animations, while the
+port keeps every balloon for its index, so above the limit the port counts more
+balloons than native. No supplied level comes near the limit: each level has at
+most five generators, and each fires once. Grab-generated balloons
+(`GrabGeneric::generateBalloons`, late in the Windows post-pass) remain rejected,
+because every supplied grab has `balloons="0"`.
+
+`BalloonGeneratorReference.json` was generated independently with the local native
+Box2D 2.2.1 profile. All eight body components, including gravity scale and damping,
+match bit for bit over 600 ticks, along with balloon activity, generator removal and
+rope counts. Fixture SHA-256:
+`e4d5268de92a3fe5c5c92038d21b01a5a919bb880f6d1b92ac89c99de383fb0e`.
+Particles, sounds, the challenge element flag and the generator animation remain
+pending; none of them changes these bodies.
+
+Generators raise the construction audit to 124 of 168 entries, adding 2-8, 2-9,
+2-10, 2-12, 2-18, 2-21, 2-24, 4-10, 5-11, 6-9 and 7-22. All 33 added journals run;
+the 11 main journals report no unsupported events. Generated balloons stay within
+0.09 m of the recordings with no missing samples. In 2-12 the drifting candy reaches
+two generators a frame or two after the recording did, so two balloon slots are
+briefly unknown. Because burned shapes leave the scene's shape list, the initial
+journal size is recorded at construction; without that, 7-22's journaled cut of
+its generated rope failed after a fireball burned a shape.
 
 ## Hint journal regression baseline
 

@@ -66,8 +66,8 @@ namespace Ctr2.Engine.Physics
                         touch = null;
                         break;
                     case JournalEventType.RopeCut:
-                        // Ropes take the first journal indices.
-                        if (e.Index < 0 || e.Index >= scene.RopeCount)
+                        int rope = JournalReplay.RopeIndex(scene, e.Index);
+                        if (rope < 0)
                         {
                             unsupported.Add($"Frame {e.Frame}: cut of journal object {e.Index}");
                             break;
@@ -75,7 +75,7 @@ namespace Ctr2.Engine.Physics
                         // A live cut gave the new tips the swipe's impulse. The recorder logs the cutting move after its cuts,
                         // so the swipe runs from the previous touch to the next move in this frame.
                         JournalEvent? move = frame.Skip(k + 1).FirstOrDefault(m => m.Type == JournalEventType.TouchMove);
-                        _ = scene.Cut(e.Index, e.Segment, point, touch is Vector2 from && move != null ? CandySimulation.SwipeImpulse(from, new(move.X, move.Y)) : Vector2.Zero);
+                        _ = scene.Cut(rope, e.Segment, point, touch is Vector2 from && move != null ? CandySimulation.SwipeImpulse(from, new(move.X, move.Y)) : Vector2.Zero);
                         break;
                     case JournalEventType.StarCatch:
                         break;

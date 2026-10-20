@@ -83,37 +83,46 @@ namespace Ctr2.Engine.Physics
             initialGremlinCount++;
         }
 
-        /// <summary>Windows 0x492DD0 unrotates a touch around the last child-update pose, then tests a half-open rectangle.</summary>
-        private bool TapGremlins(Vector2 point, bool spawned)
+        /// <summary>Offers a press to the authored gremlins, newest first.</summary>
+        private bool TapGremlins(Vector2 point)
         {
             for (int i = gremlins.Count - 1; i >= 0; i--)
             {
-                SimulationGremlin parent = gremlins[i];
-                if (parent.Spawned != spawned || parent.Removed || !parent.Cloneable || parent.Cooldown > 0)
+                if (!gremlins[i].Spawned && TapGremlin(gremlins[i], point))
                 {
-                    continue;
+                    return true;
                 }
-                float radians = (float)((float)(-0.0 - parent.Rotation) * 3.14159265 / 180.0);
-                float c = MathF.Cos(radians), s = MathF.Sin(radians);
-                Vector2 p = parent.Position, d = point - p;
-                float x = p.X + (d.X * c) - (d.Y * s), y = p.Y + (d.X * s) + (d.Y * c);
-                float left = p.X - 81, top = p.Y - 57.5f;
-                if (x < left || x >= left + 162 || y < top || y >= top + 115)
-                {
-                    continue;
-                }
-                // The clone factory (0x4928C0) uses the master body design at an explicit position and angle:
-                // no placement overrides, parent velocities or parent attachments are copied.
-                float height = NativeText.FloatValue(gremlinDesign!.GetValueOrDefault("height"));
-                float offset = height * 2 * .005f * -.5f;
-                Vector2 position = parent.Body.Position + PhysicsMath.Rotate(new(0, offset), parent.Body.Angle);
-                PhysicsBody clone = BodyFactory.Create(World, gremlinDesign!, position, parent.Body.Angle);
-                gremlins.Add(new(clone, true));
-                parent.Cooldown = .1f;
-                LimitGremlins();
-                return true;
             }
             return false;
+        }
+
+        /// <summary>Windows 0x492DD0 unrotates a touch around the last child-update pose, then tests a half-open rectangle.</summary>
+        private bool TapGremlin(SimulationGremlin parent, Vector2 point)
+        {
+            if (parent.Removed || !parent.Cloneable || parent.Cooldown > 0)
+            {
+                return false;
+            }
+            float radians = (float)((float)(-0.0 - parent.Rotation) * 3.14159265 / 180.0);
+            float c = MathF.Cos(radians), s = MathF.Sin(radians);
+            Vector2 p = parent.Position, d = point - p;
+            float x = p.X + (d.X * c) - (d.Y * s), y = p.Y + (d.X * s) + (d.Y * c);
+            float left = p.X - 81, top = p.Y - 57.5f;
+            if (x < left || x >= left + 162 || y < top || y >= top + 115)
+            {
+                return false;
+            }
+            // The clone factory (0x4928C0) uses the master body design at an explicit position and angle:
+            // no placement overrides, parent velocities or parent attachments are copied.
+            float height = NativeText.FloatValue(gremlinDesign!.GetValueOrDefault("height"));
+            float offset = height * 2 * .005f * -.5f;
+            Vector2 position = parent.Body.Position + PhysicsMath.Rotate(new(0, offset), parent.Body.Angle);
+            PhysicsBody clone = BodyFactory.Create(World, gremlinDesign!, position, parent.Body.Angle);
+            gremlins.Add(new(clone, true));
+            spawned.Add(gremlins[^1]);
+            parent.Cooldown = .1f;
+            LimitGremlins();
+            return true;
         }
 
         /// <summary>Windows GameScene::addGremlin (0x4F3910) protects authored and held gremlins, retiring old clones first.</summary>
@@ -143,15 +152,12 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        /// <summary>Initial gremlins update before throwers; newly added children update after all initial children.</summary>
-        private void UpdateGremlins(bool spawned)
+        /// <summary>Initial gremlins update before throwers; clones update as late children after all initial children.</summary>
+        private static void UpdateGremlin(SimulationGremlin gremlin)
         {
-            foreach (SimulationGremlin gremlin in gremlins.Where(g => g.Spawned == spawned && !g.Removed))
-            {
-                gremlin.CachePose();
-                gremlin.Cloneable = true;
-                gremlin.Cooldown = MathF.Max(0, gremlin.Cooldown - PhysicsWorld.TimeStep);
-            }
+            gremlin.CachePose();
+            gremlin.Cloneable = true;
+            gremlin.Cooldown = MathF.Max(0, gremlin.Cooldown - PhysicsWorld.TimeStep);
         }
     }
 }

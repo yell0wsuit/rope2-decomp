@@ -23,6 +23,11 @@ namespace Ctr2.Engine.Physics
         private readonly List<RopeChain> ropes = [];
         /// <summary>Pin hinges in creation order.</summary>
         private readonly List<PhysicsRevoluteJoint> pinJoints = [];
+        /// <summary>Children added after loading (gremlin clones, generated ropes and balloons), in the native addChild order,
+        /// which is also their journal append order.</summary>
+        private readonly List<object> spawned = [];
+        /// <summary>Scene rope bone length in meters and stretch frequency, for ropes created after loading.</summary>
+        private readonly float ropeBone, ropeFrequency;
         /// <summary>Gets optional gameplay state; null retains diagnostic behavior.</summary>
         public LevelGameplay? Gameplay
         {
@@ -103,9 +108,21 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
-        /// <summary>Gets the number of authored grab ropes.</summary>
+        /// <summary>Gets the number of scene ropes, authored and generated.</summary>
         /// <value>The number of independent chains, including released chains.</value>
         public int RopeCount => ropes.Count;
+
+        /// <summary>Gets the number of journal slots registered while loading; removals never shrink it, and late children follow.</summary>
+        internal int InitialJournalCount
+        {
+            get;
+        }
+
+        /// <summary>Gets the number of ropes built while loading; generated ropes follow them.</summary>
+        internal int InitialRopeCount
+        {
+            get;
+        }
 
         /// <summary>Creates a center-attachment simulation using a parsed level and matching master design.</summary>
         /// <param name="level">Original editor-space level.</param>
@@ -142,6 +159,7 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Rope bone length and stretch frequency must be positive.");
             }
+            (ropeBone, ropeFrequency) = (bone, frequency);
             // Rope ends: candy and Bookas (in candyBodies) slow their ropes; shapes and fireballs (in shapeBodies) do not.
             Dictionary<PlacedLevelObject, PhysicsBody> candyBodies = new(ReferenceEqualityComparer.Instance), shapeBodies = new(ReferenceEqualityComparer.Instance);
             List<PhysicsBody> candies = [], characters = [];
@@ -186,6 +204,9 @@ namespace Ctr2.Engine.Physics
                         break;
                     case "balloon":
                         AddBalloon(placed, design);
+                        break;
+                    case "balloonGenerator":
+                        AddBalloonGenerator(placed, design);
                         break;
                     case "pump":
                         AddPump(placed, design);
@@ -274,7 +295,8 @@ namespace Ctr2.Engine.Physics
             // Balloon ropes follow the grab ropes; a balloon has no default target.
             foreach (SimulationBalloon balloon in balloons)
             {
-                if (!balloon.Placed.Source.Attributes.TryGetValue("target_id", out string? name) || !layout.Named.TryGetValue(name, out PlacedLevelObject? named))
+                LevelElement source = balloon.Placed!.Source;
+                if (!source.Attributes.TryGetValue("target_id", out string? name) || !layout.Named.TryGetValue(name, out PlacedLevelObject? named))
                 {
                     continue;
                 }
@@ -283,7 +305,7 @@ namespace Ctr2.Engine.Physics
                 {
                     throw new InvalidDataException("Ropes support candy and circle/rectangle shape targets only.");
                 }
-                float x = Value(balloon.Placed.Source, "target_x"), y = Value(balloon.Placed.Source, "target_y"), lengthValue = Value(balloon.Placed.Source, "length");
+                float x = Value(source, "target_x"), y = Value(source, "target_y"), lengthValue = Value(source, "length");
                 ropes.Add(CreateRope(balloon.Body!, target!, lengthValue + lengthValue, new(0, 45), new(x + x, y + y), false, candy, bone, frequency));
                 AttachRopeToFireball(ropes.Count - 1, target!);
             }
@@ -293,12 +315,14 @@ namespace Ctr2.Engine.Physics
                 AddFruits(design, layout.Size);
                 starsScheduledForRemoval = true;
             }
+            InitialRopeCount = ropes.Count;
             Characters = characters.AsReadOnly();
             Candies = candies.AsReadOnly();
             Shapes = shapes.AsReadOnly();
             Stars = stars.AsReadOnly();
             StarCollections = starCollections.AsReadOnly();
             Gameplay = play ? new LevelGameplay(this, layout, firstLevelArrival, timings?.Character) : null;
+            InitialJournalCount = JournalReplay.Registry(this).Count;
         }
 
         /// <summary>Advances one tick, optionally applying a recorded diagnostic release before that tick.</summary>
@@ -331,7 +355,9 @@ namespace Ctr2.Engine.Physics
             CloseTouchedTongues(contacts);
             HandleThrowerContacts(contacts);
             HandleHelicopterContacts(contacts);
+            HandleGeneratorContacts(contacts);
             // The scene destroys objects scheduled for removal after the step and before its children update.
+            RemoveGenerators();
             if (starsScheduledForRemoval)
             {
                 RemoveStars();
@@ -340,15 +366,18 @@ namespace Ctr2.Engine.Physics
             RemoveBurnedObjects();
             RemoveBookas();
             RemoveGremlins();
-            // Scene children update after the step: ropes first, then balloons, fireballs and frogs.
-            foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
+            // Scene children update after the step: ropes first, then balloons, generators, snails, fireballs and frogs.
+            // Children added during this update first update in the next step.
+            int late = spawned.Count;
+            foreach (RopeChain rope in ropes.Take(InitialRopeCount).Where(r => !r.Released && r.CutGap < 0))
             {
                 UpdateRope(rope);
             }
-            foreach (SimulationBalloon balloon in balloons)
+            foreach (SimulationBalloon balloon in balloons.Where(b => !b.Spawned))
             {
                 UpdateBalloon(balloon);
             }
+            UpdateGenerators();
             UpdateSnails();
             UpdateFireballs();
             foreach (SimulationFrog frog in frogs)
@@ -356,7 +385,10 @@ namespace Ctr2.Engine.Physics
                 UpdateFrog(frog, PhysicsWorld.TimeStep);
             }
             UpdateBookas();
-            UpdateGremlins(spawned: false);
+            foreach (SimulationGremlin gremlin in gremlins.Where(g => !g.Spawned && !g.Removed))
+            {
+                UpdateGremlin(gremlin);
+            }
             // Throwers update after frogs and before the character, in scene order.
             foreach (SimulationThrower thrower in throwers)
             {
@@ -371,8 +403,63 @@ namespace Ctr2.Engine.Physics
             }
             UpdateStars();
             UpdateFruits();
-            UpdateGremlins(spawned: true);
+            UpdateSpawned(late);
         }
+
+        /// <summary>Updates the first children added after loading, in their addChild order.</summary>
+        /// <param name="count">Number of late children present when the children update began.</param>
+        private void UpdateSpawned(int count)
+        {
+            foreach (object child in spawned.Take(count))
+            {
+                switch (child)
+                {
+                    case SimulationGremlin { Removed: false } gremlin:
+                        UpdateGremlin(gremlin);
+                        break;
+                    case RopeChain { Released: false, CutGap: < 0 } rope:
+                        UpdateRope(rope);
+                        break;
+                    case SimulationBalloon balloon:
+                        UpdateBalloon(balloon);
+                        break;
+                    default:
+                        break;
+                }
+            }
+        }
+
+        /// <summary>Offers a press to the children added after loading, newest first, as the reverse touch dispatch does.</summary>
+        /// <param name="point">Logical-space press.</param>
+        /// <returns>Whether a late child consumed the press.</returns>
+        private bool TapSpawned(Vector2 point)
+        {
+            for (int i = spawned.Count - 1; i >= 0; i--)
+            {
+                if ((spawned[i] is SimulationGremlin gremlin && TapGremlin(gremlin, point)) || (spawned[i] is SimulationBalloon balloon && TapBalloon(balloon, point)))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Describes the journal slot native code appended for a late child.</summary>
+        /// <param name="index">Zero-based late child index, in append order.</param>
+        /// <returns>The slot kind, its body accessor, and the scene rope index for a rope slot or -1.</returns>
+        internal (string Kind, Func<PhysicsBody?> Body, int Rope) SpawnedJournalSlot(int index)
+        {
+            return spawned[index] switch
+            {
+                SimulationGremlin gremlin => ("gremlin", () => gremlin.Removed ? null : gremlin.Body, -1),
+                RopeChain rope => ("rope", () => null, ropes.IndexOf(rope)),
+                SimulationBalloon balloon => ("balloon", () => balloon.Body, -1),
+                _ => throw new InvalidOperationException("Unknown late child.")
+            };
+        }
+
+        /// <summary>Gets the number of children added after loading.</summary>
+        internal int SpawnedCount => spawned.Count;
 
         /// <summary>Snapshots a chain's current world centers in logical scene units.</summary>
         /// <param name="index">Zero-based authored rope index.</param>

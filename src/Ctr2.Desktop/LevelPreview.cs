@@ -217,6 +217,12 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(body.Position.X * 200, body.Position.Y * 200, body.Radius * 200, paint);
                     }
                 }
+                paint.Color = SKColors.Plum;
+                foreach (SimulationBalloonGenerator generator in Simulation?.BalloonGenerators.Where(g => !g.Removed) ?? [])
+                {
+                    // Diagnostic generator until its artwork is ported.
+                    canvas.DrawCircle(generator.Body.Origin.X * 200, generator.Body.Origin.Y * 200, generator.Body.Radius * 200, paint);
+                }
                 foreach (SimulationHelicopter helicopter in Simulation?.Helicopters ?? [])
                 {
                     // Diagnostic helicopter until its artwork is ported; it brightens while carrying a body.

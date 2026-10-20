@@ -12,18 +12,25 @@ namespace Ctr2.Engine.Physics
     /// <param name="Balloon">Zero-based balloon index in creation order.</param>
     public sealed record BalloonPop(int Tick, int Balloon);
 
-    /// <summary>One authored balloon: a buoyant body tied to its target by a rope.</summary>
+    /// <summary>One authored or generated balloon: a buoyant body tied to its target by a rope.</summary>
     public sealed class SimulationBalloon
     {
-        internal SimulationBalloon(PlacedLevelObject placed, PhysicsBody body)
+        internal SimulationBalloon(PlacedLevelObject? placed, PhysicsBody body, bool spawned = false)
         {
             Placed = placed;
             Body = body;
+            Spawned = spawned;
             InitialGravity = body.GravityScale;
             InitialDamping = body.LinearDamping;
         }
 
-        internal PlacedLevelObject Placed
+        /// <summary>Gets the authored placement, or null for a generated balloon.</summary>
+        internal PlacedLevelObject? Placed
+        {
+            get;
+        }
+        /// <summary>Gets whether a generator created this balloon after the initial scene objects.</summary>
+        public bool Spawned
         {
             get;
         }
@@ -54,8 +61,9 @@ namespace Ctr2.Engine.Physics
         private readonly List<SimulationBalloon> balloons = [];
         private readonly List<BalloonPop> balloonPops = [];
         private float stratosphere, stratosphereGravity, stratosphereDamping;
+        private bool balloonDesignLoaded;
 
-        /// <summary>Gets the authored balloons in creation order.</summary>
+        /// <summary>Gets the authored balloons followed by generated ones, in creation order.</summary>
         public IReadOnlyList<SimulationBalloon> Balloons => balloons.AsReadOnly();
 
         /// <summary>Gets balloons popped by swipes, in application order.</summary>
@@ -79,19 +87,28 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
-            if (balloons.Count == 0)
-            {
-                LevelElement settings = Find(design, "balloon_design");
-                stratosphere = Value(settings, "stratosphere_y");
-                stratosphereGravity = Value(settings, "stratosphere_koeff");
-                stratosphereDamping = Value(settings, "stratosphere_damping_koeff");
-            }
+            LoadBalloonDesign(design);
             Dictionary<string, string> fields = new(Fields(Find(design, "balloon")), StringComparer.Ordinal);
             foreach ((string key, string value) in placed.Source.Attributes)
             {
                 fields[key] = value;
             }
             balloons.Add(new(placed, BodyFactory.Create(World, fields.AsReadOnly())));
+        }
+
+        /// <summary>Reads the stratosphere settings every balloon initializer reads, once per scene.</summary>
+        /// <param name="design">Matching master document.</param>
+        private void LoadBalloonDesign(LevelDefinition design)
+        {
+            if (balloonDesignLoaded)
+            {
+                return;
+            }
+            LevelElement settings = Find(design, "balloon_design");
+            stratosphere = Value(settings, "stratosphere_y");
+            stratosphereGravity = Value(settings, "stratosphere_koeff");
+            stratosphereDamping = Value(settings, "stratosphere_damping_koeff");
+            balloonDesignLoaded = true;
         }
 
         /// <summary>Scales gravity and damping below the stratosphere line from the body height, as the balloon update does.</summary>
@@ -135,17 +152,23 @@ namespace Ctr2.Engine.Physics
             return true;
         }
 
-        /// <summary>Tries a tap on balloons, newest first, within 70 logical units.</summary>
+        /// <summary>Tries a tap on authored balloons, newest first; generated balloons see presses as late children.</summary>
         private bool TapBalloon(Vector2 point)
         {
             for (int i = balloons.Count - 1; i >= 0; i--)
             {
-                if (balloons[i].Body is PhysicsBody body && Vector2.Distance(body.Origin * 200, point) < 70 && Pop(balloons[i]))
+                if (!balloons[i].Spawned && TapBalloon(balloons[i], point))
                 {
                     return true;
                 }
             }
             return false;
+        }
+
+        /// <summary>Native <c>Balloon::processTouchDown</c>: a press within 70 logical units pops an active balloon.</summary>
+        private bool TapBalloon(SimulationBalloon balloon, Vector2 point)
+        {
+            return balloon.Body is PhysicsBody body && Vector2.Distance(body.Origin * 200, point) < 70 && Pop(balloon);
         }
 
         /// <summary>Pops every balloon within 50 logical units of a swipe segment, after ropes, as the finger trace does.</summary>
