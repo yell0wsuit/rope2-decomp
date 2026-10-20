@@ -208,6 +208,9 @@ namespace Ctr2.Engine.Physics
                     case "balloonGenerator":
                         AddBalloonGenerator(placed, design);
                         break;
+                    case "magnet":
+                        AddMagnet(placed, design);
+                        break;
                     case "pump":
                         AddPump(placed, design);
                         break;
@@ -247,6 +250,13 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Physics preview requires at least one candy.");
             }
+            // Magnets look up the object named "candy" and restore its design damping.
+            if (layout.Named.TryGetValue("candy", out PlacedLevelObject? namedCandy) && candyBodies.TryGetValue(namedCandy, out PhysicsBody? magnetTarget) &&
+                candies.Contains(magnetTarget))
+            {
+                magnetCandy = magnetTarget;
+            }
+            candyDefaultDamping = NativeText.FloatValue(candyDesign.GetValueOrDefault("linearDamping"));
             // Arbitrary ropes come first in the post-pass: each joins two named bodies, and an unregistered name keeps no rope.
             foreach (PlacedLevelObject instance in layout.Objects.Where(o => o.Source.Kind == "rope_instance"))
             {
@@ -403,6 +413,8 @@ namespace Ctr2.Engine.Physics
             }
             UpdateStars();
             UpdateFruits();
+            // Magnets are added as children after stars and fruits.
+            UpdateMagnets();
             UpdateSpawned(late);
         }
 

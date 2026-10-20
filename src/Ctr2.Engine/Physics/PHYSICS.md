@@ -313,6 +313,7 @@ compilation nor game assets.
 | `PhysicsReference.csv` | Free fall/damping, slack/taut ropes, chains, springs, multiple anchors, independent islands, rope updates (including candy slowdown) and diagnostic release. `scenario,tick,body,x,y,vx,vy` |
 | `BalloonReference.json` | 600 native ticks of balloons: tap and swipe pops, stratosphere gravity/damping blending, and fly-away on rope cut. Activity flags plus every alive body including gravity scale and damping. |
 | `BalloonGeneratorReference.json` | 600 native ticks of balloon generators: a swinging candy spawning three fanned balloons (one born dead inside a static block), an untouched generator, a cut and a tap of generated balloons, and a falling candy beside an authored balloon. Rope count, balloon and generator flags plus every alive body including gravity scale and damping. |
+| `MagnetReference.json` | 600 native ticks of magnets: a swinging candy between two magnets toggled by presses from the cached pose (one and two active), and a free candy pulled onto a magnet and released. Magnet states plus every alive body including the magnets' facing and the candy's damping. |
 | `FrogReference.json` | 720 native ticks of frog tongues: tap open/close bridge with candy, a block closing the opening tongue, and an authored open tongue. Tongue state and extension plus every alive body. |
 | `PinReference.json` | 240 native ticks of scene pins: locked, rotating, motorized and limit-locked hinges, plus pins that find one, three or no bodies. Every body including the main static body. |
 | `RopeReference.json` | 480 native ticks of scene ropes: end-offset ropes to a rotated plank and a wood circle, a candy rope, a rope with no material points, an exact bone multiple, stretch/restore cycles and two replay cuts. Every body in creation order, including linear damping. |
@@ -1887,6 +1888,45 @@ two generators a frame or two after the recording did, so two balloon slots are
 briefly unknown. Because burned shapes leave the scene's shape list, the initial
 journal size is recorded at construction; without that, 7-22's journaled cut of
 its generated rope failed after a fireball burned a shape.
+
+## Scene magnets
+
+Windows `Magnet::initWith` (0x494420) merges the master `magnet` design (a static
+solid circle) with the placement and reads `force` from `magnet_design`. Magnets
+are created in document order and never enter the hint journal. They are added
+as children after stars and fruits, so they update after them and before late
+children, and take presses right after late children.
+
+Each update (0x494D80) first caches the logical position and degree rotation, then
+looks up the object registered as `candy`. If there is one, the magnet turns to face
+it with `SetTransform` at the current origin. The angle is the x87 `fpatan` of the
+center difference (candy minus magnet), stored to float, plus `1.5707964f`. An active
+magnet normalizes that difference like `b2Vec2::Normalize` and applies `-force` times
+it to the candy's center. It then sets the candy's linear damping to 3. An inactive
+magnet restores the candy's design `linearDamping` while the candy's magnet counter
+is zero. Ropes update earlier in the same step, so in magnet levels this
+replaces the rope's candy slowdown whenever no magnet is on.
+
+A press (0x494AA0) toggles the newest magnet within 95 logical units (strictly) of
+the point 25 units along `(rotation + 90f) * pi / 180`, computed in double precision.
+The rotation and position come from the start of the last update, before its
+`SetTransform`, so the press direction lags one update. While a candy named `candy`
+exists, the toggle also moves the candy's magnet counter. Without that name, presses
+still toggle, but nothing turns or is pulled. Sounds, the levitation achievement and
+the challenge element flag do not affect bodies.
+
+`MagnetReference.json` was generated independently with the local native Box2D
+2.2.1 profile. All eight body components and magnet states match bit for bit over
+600 ticks. Fixture SHA-256:
+`7d9f8f1883cc0119adee1a3db3ee4c1686b31aa40c4a2d6de0bbbced3ef6af4d`.
+
+Magnets raise the construction audit to 141 of 168 entries, adding 3-8, 3-9, 3-10,
+3-12, 3-15, 3-16, 3-22, 4-8, 4-15, 4-18, 5-6, 5-14, 5-16, 5-17, 5-20, 6-20 and 7-14.
+All 51 added journals run, and the 17 main journals report no unsupported events.
+Several stay bit-exact through active pulls and several presses: 3-12 through frame
+195, 5-6 through 368, 5-20 through 401 and 4-18 through 510. The earliest breaks
+elsewhere are ulp-level angle differences on unrelated bodies. 3-12 later drifts
+2.1 m after the candy, rotating against wood, leaves the exact path at frame 197.
 
 ## Hint journal regression baseline
 

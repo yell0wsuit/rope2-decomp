@@ -223,6 +223,15 @@ namespace Ctr2.Desktop
                     // Diagnostic generator until its artwork is ported.
                     canvas.DrawCircle(generator.Body.Origin.X * 200, generator.Body.Origin.Y * 200, generator.Body.Radius * 200, paint);
                 }
+                foreach (SimulationMagnet magnet in Simulation?.Magnets ?? [])
+                {
+                    // Diagnostic magnet and facing until its artwork is ported; it brightens while active.
+                    paint.Color = magnet.Active ? SKColors.Crimson : SKColors.DarkRed;
+                    Vector2 center = magnet.Body.Origin * 200;
+                    canvas.DrawCircle(center.X, center.Y, magnet.Body.Radius * 200, paint);
+                    Vector2 facing = center + (Vector2.Transform(new Vector2(0, 25), Matrix3x2.CreateRotation(magnet.Body.Angle)) * 2);
+                    canvas.DrawCircle(facing.X, facing.Y, 6, paint);
+                }
                 foreach (SimulationHelicopter helicopter in Simulation?.Helicopters ?? [])
                 {
                     // Diagnostic helicopter until its artwork is ported; it brightens while carrying a body.

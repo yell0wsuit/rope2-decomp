@@ -123,12 +123,12 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Offers a press to touchable scene children in reverse order: late children (clones and generated balloons),
-        /// helicopters, throwers, authored gremlins, frogs, snails, balloons and pumps.</summary>
+        /// magnets, helicopters, throwers, authored gremlins, frogs, snails, balloons and pumps.</summary>
         /// <param name="point">Logical-space press.</param>
         /// <returns>Whether a child consumed the press.</returns>
         public bool Tap(Vector2 point)
         {
-            return TapSpawned(point) || TapHelicopter(point) || TapThrower(point) || TapGremlins(point) || TapFrogs(point);
+            return TapSpawned(point) || TapMagnets(point) || TapHelicopter(point) || TapThrower(point) || TapGremlins(point) || TapFrogs(point);
         }
 
         /// <summary>Creates an authored frog; a frog with an authored open tongue extends it during construction.</summary>
