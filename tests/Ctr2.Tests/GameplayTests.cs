@@ -121,6 +121,32 @@ namespace Ctr2.Tests
             Assert.Equal(finished, game.FinishedAt);
         }
 
+        /// <summary>The character collects a star it overlaps on its own, without cheering.</summary>
+        [Fact]
+        public void CharacterCollectsStarsWithoutCheering()
+        {
+            CandySimulation scene = Create("<candy id='c' x='100' y='20'/><omnom x='200' y='300'/><star x='200' y='300'/>");
+            scene.Step();
+            Assert.Equal(new StarCollection(0, 0, -1), Assert.Single(scene.StarCollections));
+            Assert.Equal(CharacterState.Idle, scene.Gameplay!.CharacterState);
+        }
+
+        /// <summary>A star collected by the candy excites an idle character; further stars only count while it cheers, and the
+        /// finished scene returns it to idle.</summary>
+        [Fact]
+        public void CandyStarsExciteAnIdleCharacter()
+        {
+            CandySimulation scene = Create("<candy id='c' x='280' y='40'/><omnom x='60' y='300'/><star x='280' y='40'/><star x='280' y='40'/>");
+            LevelGameplay game = scene.Gameplay!;
+            scene.Step();
+            Assert.Equal(2, scene.StarCollections.Count);
+            Assert.Equal(CharacterState.Excited, game.CharacterState);
+            Assert.Equal("EXCITED", game.Scene);
+            game.SceneFinished("EXCITED", game.SceneRevision);
+            Assert.Equal(CharacterState.Idle, game.CharacterState);
+            Assert.Equal("IDLE", game.Scene);
+        }
+
         /// <summary>Retired candy cannot collect later stars, including during its fading sensor phase.</summary>
         [Fact]
         public void EatingCandyDoesNotCollectStars()

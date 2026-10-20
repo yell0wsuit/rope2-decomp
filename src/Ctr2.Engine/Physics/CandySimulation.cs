@@ -292,11 +292,12 @@ namespace Ctr2.Engine.Physics
             }
             Tick = checked(Tick + 1);
             Gameplay?.AfterStep();
-            // Helicopters update after the character, in scene order.
+            // Helicopters update after the character, then stars, in scene order.
             foreach (SimulationHelicopter helicopter in helicopters)
             {
                 UpdateHelicopter(helicopter);
             }
+            UpdateStars();
         }
 
         /// <summary>Snapshots a chain's current world centers in logical scene units.</summary>

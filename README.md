@@ -50,13 +50,13 @@ resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.
 Restart restores the initial physics, stars, animation, input and replay clock.
 
-This first slice supports one candy and one Om Nom, stationary stars, basic grabs,
+This first slice supports one candy and one Om Nom, stationary and moving stars, basic grabs,
 a tap or swipe hint, static terrain, and static or dynamic wood rectangles and circles,
 including ropes attached to wood at authored offsets, free-standing ropes between
 named bodies, pumps, throwers, helicopters on fixed or moving paths, pins (hinges between bodies
 or to the world), frogs whose tongues form bridges and balloons, in a dry level (wood,
 pins, frogs, balloons, pumps, throwers and helicopters are drawn diagnostically). Gameplay is independent of the
-authored location; currently 38 levels across the forest, canyon and city packs use nothing but supported
+authored location; currently 42 levels across the forest, canyon and city packs use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -174,10 +174,10 @@ location, whether construction succeeds, and the first failure for each entry.
 An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
-The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 38 pass
-(pack 1/entries 1–4, 6, 7, 9–13, 16, 17 and 19–24; pack 2/entries 1–5, 7, 11, 13, 17,
-20, 22 and 23; pack 4/entries 1, 9, 11 and 21–24). Further work includes loader coverage, physical
-objects and general collision, moving stars, balloons, pumps, water, magnets,
+The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 42 pass
+(pack 1/entries 1–7, 9–13, 16, 17 and 19–24; pack 2/entries 1–5, 7, 11, 13, 17, 20, 22
+and 23; pack 4/entries 1, 3, 6, 9, 11, 19 and 21–24). Further work includes loader coverage, physical
+objects and general collision, water, magnets,
 the other characters, level selection, progression, audio and saves.
 
 ```sh

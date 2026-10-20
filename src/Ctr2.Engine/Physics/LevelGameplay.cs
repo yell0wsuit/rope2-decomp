@@ -76,7 +76,11 @@ namespace Ctr2.Engine.Physics
         /// <summary>Carried by a helicopter while chewing.</summary>
         HelicopterChewing,
         /// <summary>Carried by a helicopter after the mouth closed without candy.</summary>
-        HelicopterPuzzled
+        HelicopterPuzzled,
+        /// <summary>Cheering after the candy collected a star, until that scene ends.</summary>
+        Excited,
+        /// <summary>Cheering while carried by a helicopter, until that scene ends.</summary>
+        HelicopterExcited
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -96,6 +100,7 @@ namespace Ctr2.Engine.Physics
         private readonly IReadOnlyDictionary<string, double>? sceneDurations;
         private int completedRevision = -1;
         private float lastSlideAngle = 3.4028e38f;
+        private int excitedTimes;
 
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
@@ -377,6 +382,11 @@ namespace Ctr2.Engine.Physics
                     Finish(LevelResult.Won);
                 }
             }
+            else if (scene is "EXCITED" or "EXCITED_MORE" or "EXCITED_MOST")
+            {
+                CharacterState = CharacterState.Idle;
+                SetScene("IDLE");
+            }
             else if (scene is "WITH_HELICOPTER_TAKE" or "WITH_HELICOPTER_PUZZLED" or "WITH_HELICOPTER_EXCITED")
             {
                 CharacterState = CharacterState.HelicopterIdle;
@@ -481,6 +491,23 @@ namespace Ctr2.Engine.Physics
                 SetScene("FALLING");
             }
             collidedWithTerrain = false;
+        }
+
+        /// <summary>Native <c>Omnom::excite</c> for a star the candy collected: an idle character cheers, more with each star,
+        /// and a carried one cheers in the helicopter; any other state only counts the star.</summary>
+        internal void Excite()
+        {
+            excitedTimes++;
+            if (CharacterState == CharacterState.Idle)
+            {
+                CharacterState = CharacterState.Excited;
+                SetScene(excitedTimes == 1 ? "EXCITED" : excitedTimes == 2 ? "EXCITED_MORE" : "EXCITED_MOST");
+            }
+            else if (CharacterState == CharacterState.HelicopterIdle)
+            {
+                CharacterState = CharacterState.HelicopterExcited;
+                SetScene("WITH_HELICOPTER_EXCITED");
+            }
         }
 
         /// <summary>Native <c>Omnom::capturedByHelicopter</c>.</summary>

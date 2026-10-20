@@ -127,7 +127,7 @@ namespace Ctr2.Engine.Physics
                         continue;
                     }
                     (string kind, Func<PhysicsBody?> body) = objects[state.Index];
-                    if (kind is "rope" or "star" || state.X is not float x || state.Y is not float y)
+                    if (kind == "rope" || state.X is not float x || state.Y is not float y)
                     {
                         continue;
                     }
@@ -201,9 +201,9 @@ namespace Ctr2.Engine.Physics
             {
                 objects.Add(("helicopter", () => helicopter.Body));
             }
-            for (int i = 0; i < scene.Stars.Count; i++)
+            foreach (SimulationStar star in scene.Stars)
             {
-                objects.Add(("star", () => null));
+                objects.Add(("star", () => star.Body));
             }
             return objects;
         }

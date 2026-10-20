@@ -170,18 +170,26 @@ The earlier analytical circle sweep has been removed. The continuous native
 references from earlier checkpoints were generated with native TOI enabled, and they
 now pass against the port as well.
 
-## Stationary stars
+## Stars
 
 Master and placement attributes merge for star sensors, including radius overrides.
-Supported stars are stationary kinematic circle sensors with default collision
-filtering. Nonempty paths, normalized paths, nonzero velocities, unsupported body
-types and invalid radii fail explicitly. Geometry is in meters; marker drawing
+Supported stars are kinematic circle sensors with default collision filtering.
+Normalized paths, nonzero authored velocities, unsupported body types and invalid
+radii fail explicitly. A star with a `path` moves like a helicopter (see Scene
+helicopters): its `MovableBodyObject` sets the body's velocity after each step, in
+scene order after the helicopters, collected or not. The hint journals' star
+snapshots match these paths exactly, cyclic and ping-pong alike. Geometry is in meters; marker drawing
 converts to logical scene units independently of image density.
 
 Star overlap runs before world integration, matching contact-begin timing. Each
-star collects once through a candy circle; rope points and grab sensors cannot
-collect. Collection stores an immutable star snapshot and a zero-based
-`StarCollection(Tick, Star, Candy)` record. Simultaneous contacts use authored
+star collects once through a candy circle or, as in `Star::handlePreSolveCollision`,
+through Om Nom's polygon; rope points and grab sensors cannot collect. Collection
+stores an immutable star snapshot and a zero-based `StarCollection(Tick, Star, Candy)`
+record, with candy -1 for Om Nom. A candy's star excites Om Nom (`Omnom::excite`):
+idle, he shows EXCITED, EXCITED_MORE from the second star and EXCITED_MOST from the
+third, and returns to idle when it ends; carried by a helicopter, he shows
+WITH_HELICOPTER_EXCITED. In any other state the star is only counted. While excited
+he does not open his mouth, slide, turn or stand up, but can still start falling. Simultaneous contacts use authored
 star/candy order as a deterministic diagnostic tie-break; native callback order
 is not claimed. Sensor overlap accepts ten floating-point epsilons of distance,
 as Box2D's sensor distance test does. Sensors are not swept: a fast candy can pass
@@ -191,8 +199,7 @@ collection. It cannot push the candy, but its proxy takes broadphase IDs and so
 takes part in pair ordering. Collection itself still uses the geometric test above.
 
 The preview hides collected markers and reports events/counts on the console.
-Star animation/particles/audio, moving stars, Om Nom collection and score/save
-integration are pending. Level 1's off-screen Om Nom uses a dynamic polygon and
+Star particles, audio and score/save integration are pending. Level 1's off-screen Om Nom uses a dynamic polygon and
 uses the explicit first-entry arrival in opt-in play; the diagnostic remains physical-only.
 
 ## Dynamic compound characters
@@ -267,7 +274,7 @@ terrain and two independent bodies sharing a floor. These do not
 prove native broadphase/contact-order parity or original Om Nom movement.
 
 Character polygons take part in native TOI like every other dynamic body. Remaining
-gameplay adjustments and character star collection remain pending. The opt-in gameplay layer below adds feeding,
+gameplay adjustments remain pending. The opt-in gameplay layer below adds feeding,
 first-entry arrival and completion without a general dynamic-contact solver.
 
 ## Numerical fixtures

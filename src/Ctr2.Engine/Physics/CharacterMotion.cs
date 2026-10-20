@@ -21,7 +21,7 @@ namespace Ctr2.Engine.Physics
                 SetScene("IDLE");
             }
             UpdateSliding();
-            if (CharacterState == CharacterState.Idle && motion.IsFalling)
+            if (CharacterState is CharacterState.Idle or CharacterState.Excited && motion.IsFalling)
             {
                 CharacterState = CharacterState.Falling;
                 collidedWithTerrain = false;

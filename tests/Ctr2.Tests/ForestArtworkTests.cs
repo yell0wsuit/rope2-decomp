@@ -98,7 +98,7 @@ namespace Ctr2.Tests
                     File.WriteAllBytes(Path.Combine(assets, file), AnimationPreviewTests.Message([(1, 2), (7, 8f), (8, 8f), (9, part),
                         .. scenes.Select((name, i) => (10, (object)AnimationPreviewTests.Message((1, i), (2, name))))]));
                 }
-                Animation("character.pb", ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING", "STAND_UP"]);
+                Animation("character.pb", ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN", "FALLING_MOUTH_CLOSE", "FALLING_CHEWING", "ROLLING", "STAND_UP", "EXCITED", "EXCITED_MORE", "EXCITED_MOST"]);
                 Animation("star.pb", ["IDLE", "FLARE", "FX_PARTICLE"]);
                 using LevelPreview preview = LevelPreview.Load(root, 1, 2, resolution, play: true).Preview;
                 using SKBitmap pixels = new(width, height);

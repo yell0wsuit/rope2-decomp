@@ -1,22 +1,27 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 
 using Ctr2.Assets;
 
 namespace Ctr2.Engine.Physics
 {
-    /// <summary>Immutable stationary star geometry and collection state.</summary>
-    /// <param name="Position">Authored center in meters.</param>
+    /// <summary>One star's sensor body and collection state.</summary>
+    /// <param name="Body">Kinematic sensor body, moved along the authored path when there is one.</param>
     /// <param name="Radius">Sensor radius in meters, independent of artwork.</param>
     /// <param name="CollectedAt">Zero-based contact tick, or null before collection.</param>
-    public sealed record SimulationStar(Vector2 Position, float Radius, int? CollectedAt);
+    public sealed record SimulationStar(PhysicsBody Body, float Radius, int? CollectedAt)
+    {
+        /// <summary>Gets the star's current center in meters.</summary>
+        public Vector2 Position => Body.Position;
+    }
 
-    /// <summary>One accepted candy/star contact in the fixed-step replay.</summary>
+    /// <summary>One accepted candy/star or character/star contact in the fixed-step replay.</summary>
     /// <param name="Tick">Zero-based tick before world integration.</param>
     /// <param name="Star">Zero-based star index in authored order.</param>
-    /// <param name="Candy">Zero-based candy index in authored order.</param>
+    /// <param name="Candy">Zero-based candy index in authored order, or -1 when the character collected it.</param>
     public sealed record StarCollection(int Tick, int Star, int Candy);
 
     public sealed partial class CandySimulation
@@ -25,8 +30,10 @@ namespace Ctr2.Engine.Physics
         private readonly List<SimulationStar> stars = [];
         /// <summary>Accepted one-time sensor contacts in deterministic authored order.</summary>
         private readonly List<StarCollection> starCollections = [];
+        /// <summary>Path movers of stars with an authored path, in scene order.</summary>
+        private readonly List<(PathMover Mover, PhysicsBody Body)> starMovers = [];
 
-        /// <summary>Gets the stationary stars in authored order.</summary>
+        /// <summary>Gets the stars in authored order.</summary>
         /// <value>A read-only live view of immutable geometry and collection snapshots.</value>
         public IReadOnlyList<SimulationStar> Stars
         {
@@ -40,7 +47,8 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
-        /// <summary>Creates one stationary star as the scene does: a kinematic sensor body from its merged design.</summary>
+        /// <summary>Creates one star as the scene does: a kinematic sensor body from its merged design, moving along its
+        /// authored path like the native <c>MovableBodyObject</c>.</summary>
         /// <param name="placed">Authored star placement.</param>
         /// <param name="design">Matching master document.</param>
         /// <exception cref="InvalidDataException">A star has unsupported motion, geometry or collision filtering.</exception>
@@ -60,28 +68,39 @@ namespace Ctr2.Engine.Physics
             if (master.Kind != "circle" || attributes.GetValueOrDefault("body_type") != "kinematic" ||
                 attributes.GetValueOrDefault("isSensor") != "true" ||
                 Value(merged, "linearVelocityX", 0) != 0 || Value(merged, "linearVelocityY", 0) != 0 || Value(merged, "angularVelocity", 0) != 0 ||
-                !string.IsNullOrEmpty(attributes.GetValueOrDefault("path")) || !string.IsNullOrEmpty(attributes.GetValueOrDefault("normalizedPath")) ||
+                !string.IsNullOrEmpty(attributes.GetValueOrDefault("normalizedPath")) ||
                 attributes.GetValueOrDefault("filter.collideWith", "all") != "all" || Value(merged, "filter.category", 0) != 0)
             {
-                throw new InvalidDataException("Star collection supports stationary kinematic circle sensors with default collision filtering only.");
+                throw new InvalidDataException("Star collection supports kinematic circle sensors moved only by their path, with default collision filtering.");
             }
             float radius = Value(merged, "radius") / 100;
             if (radius is <= 0 or > 10000)
             {
                 throw new InvalidDataException("Star radius must be positive and within physics bounds.");
             }
-            _ = BodyFactory.Create(World, attributes.AsReadOnly());
-            stars.Add(new(placed.Position!.Value / 200, radius, null));
+            PhysicsBody body = BodyFactory.Create(World, attributes.AsReadOnly());
+            stars.Add(new(body, radius, null));
+            if (!string.IsNullOrEmpty(attributes.GetValueOrDefault("path")))
+            {
+                starMovers.Add((new PathMover(attributes), body));
+            }
         }
 
-        /// <summary>Collects overlapping candy sensors at contact-begin time before this tick's integration.</summary>
+        /// <summary>Native <c>Star::update</c>: moving stars set their velocity for the next step, collected or not.</summary>
+        private void UpdateStars()
+        {
+            foreach ((PathMover mover, PhysicsBody body) in starMovers)
+            {
+                mover.Update(body, PhysicsWorld.TimeStep);
+            }
+        }
+
+        /// <summary>Native <c>Star::handlePreSolveCollision</c> at contact-begin time before this tick's integration: an
+        /// overlapping candy collects a star and excites the character, and the character collects one on its own.</summary>
         /// <remarks>Sensor contacts use current transforms rather than a swept path; rope material points cannot collect stars.</remarks>
         private void CollectStars()
         {
-            if (Gameplay != null && Gameplay.CandyState != CandyState.Active)
-            {
-                return;
-            }
+            bool candyActive = Gameplay == null || Gameplay.CandyState == CandyState.Active;
             for (int starIndex = 0; starIndex < stars.Count; starIndex++)
             {
                 SimulationStar star = stars[starIndex];
@@ -89,20 +108,34 @@ namespace Ctr2.Engine.Physics
                 {
                     continue;
                 }
-                for (int candyIndex = 0; candyIndex < Candies.Count; candyIndex++)
+                int collector = -2;
+                for (int candyIndex = 0; candyActive && candyIndex < Candies.Count; candyIndex++)
                 {
                     PhysicsBody candy = Candies[candyIndex];
                     // Box2D sensor overlap accepts ten single-precision epsilons of distance.
                     float radius = candy.Radius + star.Radius + (10 * 1.1920929e-7f);
                     if (Vector2.DistanceSquared(candy.Position, star.Position) <= radius * radius)
                     {
-                        stars[starIndex] = star with
-                        {
-                            CollectedAt = Tick
-                        };
-                        starCollections.Add(new(Tick, starIndex, candyIndex));
+                        collector = candyIndex;
                         break;
                     }
+                }
+                if (collector < 0 && Characters.Any(c => c.PolygonFixtures.Any(f => f.OverlapsCircle(star.Position, star.Radius, c.Origin, c.Angle))))
+                {
+                    collector = -1;
+                }
+                if (collector == -2)
+                {
+                    continue;
+                }
+                stars[starIndex] = star with
+                {
+                    CollectedAt = Tick
+                };
+                starCollections.Add(new(Tick, starIndex, collector));
+                if (collector >= 0)
+                {
+                    Gameplay?.Excite();
                 }
             }
         }

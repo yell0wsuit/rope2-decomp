@@ -107,10 +107,34 @@ namespace Ctr2.Tests
             Assert.Equal(2, a.StarCollections.Count);
         }
 
+        /// <summary>A star with an open path ping-pongs along it from rest, and a cyclic one keeps circling at a constant parameter
+        /// speed; both move only through the velocity their path mover sets after each step.</summary>
+        [Fact]
+        public void PathStarsMoveAlongTheirPaths()
+        {
+            CandySimulation scene = Create("<candy id='c' x='300' y='400'/><star x='50' y='50' path='60,0,' cyclePath='false' speed='1'/>" +
+                "<star x='150' y='150' path='0,-30,30,-30,30,0,' cyclePath='true' speed='1'/><star x='250' y='50'/>");
+            System.Numerics.Vector2[] start = [.. scene.Stars.Select(s => s.Position)];
+            scene.Step();
+            // The movers set velocities after the first step, so nothing has moved yet.
+            Assert.Equal(start, scene.Stars.Select(s => s.Position));
+            float lastX = start[0].X;
+            for (int i = 0; i < 59; i++)
+            {
+                scene.Step();
+                Assert.True(scene.Stars[0].Position.X >= lastX);
+                lastX = scene.Stars[0].Position.X;
+            }
+            // The open path eases in for its first second and stays on its horizontal line.
+            Assert.InRange(scene.Stars[0].Position.X - start[0].X, .05f, .6f);
+            Assert.InRange(MathF.Abs(scene.Stars[0].Position.Y - start[0].Y), 0, 1e-4f);
+            Assert.True(System.Numerics.Vector2.Distance(scene.Stars[1].Position, start[1]) > .05f);
+            Assert.Equal(start[2], scene.Stars[2].Position);
+        }
+
         /// <summary>Unsupported motion and invalid overrides fail instead of silently freezing stars.</summary>
         /// <param name="attributes">Invalid or unsupported placement overrides.</param>
         [Theory]
-        [InlineData("path='10,0,'")]
         [InlineData("normalizedPath='0,0,1,1'")]
         [InlineData("linearVelocityX='1'")]
         [InlineData("linearVelocityY='NaN'")]
