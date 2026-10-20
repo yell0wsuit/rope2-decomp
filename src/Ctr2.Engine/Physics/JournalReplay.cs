@@ -67,6 +67,7 @@ namespace Ctr2.Engine.Physics
             ArgumentNullException.ThrowIfNull(scene);
             ArgumentNullException.ThrowIfNull(journal);
             List<(string Kind, Func<PhysicsBody?> Body)> objects = Registry(scene);
+            int registeredGremlins = scene.Gremlins.Count;
             List<string> unsupported = [];
             Dictionary<int, Accumulator> drift = [];
             Dictionary<int, int> catches = [], fruitCatches = [];
@@ -85,6 +86,12 @@ namespace Ctr2.Engine.Physics
                     {
                         _ = fruitCatches.TryAdd(e.Index, e.Frame);
                     }
+                }
+                // Native addGremlin appends a new journal slot immediately after the touch creates it.
+                while (registeredGremlins < scene.Gremlins.Count)
+                {
+                    SimulationGremlin gremlin = scene.Gremlins[registeredGremlins++];
+                    objects.Add(("gremlin", () => gremlin.Removed ? null : gremlin.Body));
                 }
                 scene.Step();
                 foreach (JournalObjectState state in snapshots[scene.Tick].SelectMany(s => s.Objects))
@@ -139,7 +146,7 @@ namespace Ctr2.Engine.Physics
                 Array.AsReadOnly([.. player.Unsupported, .. unsupported]), samples.AsReadOnly());
         }
 
-        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, fireballs, frogs, Bookas, throwers, Om Nom,
+        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, fireballs, frogs, Bookas, gremlins, throwers, Om Nom,
         /// helicopters, stars (a fruit challenge registers them before they are removed), then fruits. Removed objects leave the
         /// journal.</summary>
         private static List<(string, Func<PhysicsBody?>)> Registry(CandySimulation scene)
@@ -176,6 +183,10 @@ namespace Ctr2.Engine.Physics
             {
                 objects.Add(("booka", () => booka.Removed ? null : booka.Body));
             }
+            foreach (SimulationGremlin gremlin in scene.Gremlins.Where(g => !g.Spawned))
+            {
+                objects.Add(("gremlin", () => gremlin.Removed ? null : gremlin.Body));
+            }
             foreach (SimulationThrower thrower in scene.Throwers)
             {
                 objects.Add(("thrower", () => thrower.Body));
@@ -197,6 +208,10 @@ namespace Ctr2.Engine.Physics
             {
                 int fruit = i;
                 objects.Add(("fruit", () => scene.Fruits[fruit].Removed ? null : scene.Fruits[fruit].Body));
+            }
+            foreach (SimulationGremlin gremlin in scene.Gremlins.Where(g => g.Spawned))
+            {
+                objects.Add(("gremlin", () => gremlin.Removed ? null : gremlin.Body));
             }
             return objects;
         }

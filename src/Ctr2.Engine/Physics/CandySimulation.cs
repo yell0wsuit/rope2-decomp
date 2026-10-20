@@ -202,6 +202,9 @@ namespace Ctr2.Engine.Physics
                     case "booka":
                         candyBodies.Add(placed, AddBooka(placed, design));
                         break;
+                    case "gremlin":
+                        AddGremlin(placed, design);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
                             kind.StartsWith("polygon", StringComparison.Ordinal))
@@ -332,6 +335,7 @@ namespace Ctr2.Engine.Physics
             RemoveFinishedFruits();
             RemoveBurnedObjects();
             RemoveBookas();
+            RemoveGremlins();
             // Scene children update after the step: ropes first, then balloons, fireballs and frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
@@ -347,6 +351,7 @@ namespace Ctr2.Engine.Physics
                 UpdateFrog(frog, PhysicsWorld.TimeStep);
             }
             UpdateBookas();
+            UpdateGremlins(spawned: false);
             // Throwers update after frogs and before the character, in scene order.
             foreach (SimulationThrower thrower in throwers)
             {
@@ -361,6 +366,7 @@ namespace Ctr2.Engine.Physics
             }
             UpdateStars();
             UpdateFruits();
+            UpdateGremlins(spawned: true);
         }
 
         /// <summary>Snapshots a chain's current world centers in logical scene units.</summary>

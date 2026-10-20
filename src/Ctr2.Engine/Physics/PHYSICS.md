@@ -1742,6 +1742,44 @@ and verify that an ordinary level needs no clover design. This raises the deskto
 construction audit to 78 of 168 entries, adding 1-14, 1-18, 2-6, 4-2, 4-4, 4-14,
 5-9, 7-5, 7-9, 7-16 and 7-20 to the trigger checkpoint's 67.
 
+## Scene gremlins
+
+Windows initializes authored gremlins from the master `gremlin` body design with
+placement overrides (0x492740), accepting at most ten. They update after Bookas
+and before throwers. The first update enables cloning; each successful press
+starts a 0.1-second cooldown, reduced by fixed dt on each child update. The
+162x115 logical-unit touch rectangle is unrotated around the last child-update
+pose and excludes its right and bottom edges (0x492DD0).
+
+A clone uses the master design with an explicit origin at the parent's live
+center plus its rotated negative half master height, and the parent's live angle
+(0x4928C0). It does not inherit placement overrides, velocity or attachments.
+The new child updates after all initial children and receives taps first. Its
+journal slot appends after every existing slot, whereas authored gremlins register
+between Bookas and throwers. Removed clones leave empty slots. Gremlins do not
+register authored names for rope lookup. Throwers recognize body type 12 and
+hold it on a 0.17 m hinge; helicopters do not capture this type.
+
+The scene's cap enforcement (0x4F3910) schedules the oldest active unheld clone
+for disappearance until its local counter reaches ten or no eligible clone
+remains. Authored gremlins and the newest clone are protected, so ten authored
+gremlins can retain an eleventh body. Pending removals still enter the counter
+for another press in the same frame. Removal destroys the body after the next
+physics step. Tests cover this edge case and protect clones held by throwers.
+
+`GremlinReference.json` is an invented solid clone stack with gravity, a rotated
+parent, floor contacts and cap evictions, generated independently with the local
+native Box2D 2.2.1 profile. All six pose/velocity components of every remaining
+body match bit for bit over 240 ticks. Fixture SHA-256:
+`dc9db714265799046ec61b63894d0895b8a70c4f3487e6e0a35fae2e54b3199a`.
+The desktop draws blue fixtures; animation, random visual scene choices, sounds,
+particles and achievements remain pending and do not change these bodies.
+
+Gremlins raise the construction audit to 94 of 168 entries, adding 3-1 through
+3-7, 3-13, 3-17, 3-19, 3-24, 4-5, 4-16, 5-3, 5-23 and 7-12. Their 48 journals
+are supported, but some later open-loop trajectories still diverge, especially
+3-19, 3-3 and 7-12; native fixture agreement is not full journal parity.
+
 ## Hint journal regression baseline
 
 The original developer hint journals double as playtests. `replay-check` replays one

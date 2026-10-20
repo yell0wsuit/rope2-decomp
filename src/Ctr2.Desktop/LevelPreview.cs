@@ -248,6 +248,27 @@ namespace Ctr2.Desktop
                         canvas.DrawPath(outline, paint);
                     }
                 }
+                foreach (SimulationGremlin gremlin in Simulation?.Gremlins.Where(g => !g.Removed) ?? [])
+                {
+                    // Diagnostic fixture outlines until gremlin artwork is ported.
+                    paint.Color = SKColors.CornflowerBlue;
+                    int gremlinSave = canvas.Save();
+                    canvas.Translate(gremlin.Body.Origin.X * 200, gremlin.Body.Origin.Y * 200);
+                    canvas.RotateRadians(gremlin.Body.Angle);
+                    foreach (ConvexPolygon fixture in gremlin.Body.PolygonFixtures)
+                    {
+                        using SKPathBuilder path = new();
+                        path.MoveTo(fixture.Vertices[0].X * 200, fixture.Vertices[0].Y * 200);
+                        foreach (Vector2 vertex in fixture.Vertices.Skip(1))
+                        {
+                            path.LineTo(vertex.X * 200, vertex.Y * 200);
+                        }
+                        path.Close();
+                        using SKPath outline = path.Detach();
+                        canvas.DrawPath(outline, paint);
+                    }
+                    canvas.RestoreToCount(gremlinSave);
+                }
                 foreach (SimulationPump pump in Simulation?.Pumps ?? [])
                 {
                     // Diagnostic pump and blow direction until its artwork is ported.
@@ -354,7 +375,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "trigger" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "trigger" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }
