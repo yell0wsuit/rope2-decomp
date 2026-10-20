@@ -110,9 +110,8 @@ namespace Ctr2.Engine.Physics
             bookaRandom ^= bookaRandom >> 17;
             bookaRandom ^= bookaRandom << 5;
             float angle = (float)(((int)(bookaRandom % 41) - 110) * 3.14159265 / 180.0);
-            // The impulse power is the float 0.11, widened for the double cosine and sine.
-            double power = .11f;
-            booka.Body.ApplyLinearImpulse(new((float)(Math.Cos(angle) * power), (float)(Math.Sin(angle) * power)), booka.Body.Position);
+            // Windows takes float sine and cosine and scales them by the double 0.11 (Android and iOS use double trigonometry).
+            booka.Body.ApplyLinearImpulse(new((float)(MathF.Cos(angle) * .11), (float)(MathF.Sin(angle) * .11)), booka.Body.Position);
             booka.State = SimulationBooka.BookaState.Booed;
             booka.CaughtAt = Tick;
         }
