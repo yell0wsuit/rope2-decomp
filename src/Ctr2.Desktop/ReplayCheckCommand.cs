@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 
 using Ctr2.Assets;
+using Ctr2.Engine;
 using Ctr2.Engine.Physics;
 
 namespace Ctr2.Desktop
@@ -62,7 +63,9 @@ namespace Ctr2.Desktop
             {
                 throw new InvalidDataException($"Journal level hash {journal.LevelHash} does not match the level ({levelHash}).");
             }
-            CandySimulation scene = new(level, design, play: true, firstLevelArrival: pack == 1 && entry == 1, LevelGameplay.LoadCharacterScenes(cache));
+            CandySimulation scene = new(level, design, play: true, firstLevelArrival: pack == 1 && entry == 1, LevelGameplay.LoadCharacterScenes(cache),
+                variant.Length == 0 ? LevelVariant.Main : LevelVariants.Parse(variant.TrimStart('.')),
+                variant == ".fruit_challenge" ? CandySimulation.LoadFruitScenes(cache) : null);
             JournalReplayResult result = JournalReplay.Run(scene, journal, threshold);
             Console.WriteLine(JsonSerializer.Serialize(new
             {
@@ -77,6 +80,7 @@ namespace Ctr2.Desktop
                 RecordedFrames = journal.Snapshots.Count == 0 ? 0 : journal.Snapshots.Max(s => s.Frame),
                 result.Objects,
                 result.Stars,
+                result.Fruits,
                 result.Unsupported,
                 Samples = trace ? result.Samples.Select(s => new { s.Frame, s.Index, RecordedX = s.Recorded.X, RecordedY = s.Recorded.Y, PortX = s.Port.X, PortY = s.Port.Y, s.RecordedAngle, s.PortAngle }) : null
             }, new JsonSerializerOptions { WriteIndented = true }));

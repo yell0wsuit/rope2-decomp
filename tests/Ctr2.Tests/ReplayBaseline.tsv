@@ -35,7 +35,7 @@
 1	14	fruit_challenge	unsupported	-	0	0
 1	15	main	ok	181	24	166
 1	15	challenge	ok	102	16	317
-1	15	fruit_challenge	ok	121	10	205
+1	15	fruit_challenge	ok	121	14	205
 1	16	main	ok	277	49	86
 1	16	challenge	ok	185	75	111
 1	16	fruit_challenge	ok	365	18	141
@@ -83,7 +83,7 @@
 2	6	fruit_challenge	unsupported	-	0	0
 2	7	main	ok	107	15	236
 2	7	challenge	ok	61	6	112
-2	7	fruit_challenge	ok	165	10	187
+2	7	fruit_challenge	ok	165	10	186
 2	8	main	unsupported	-	0	0
 2	8	challenge	unsupported	-	0	0
 2	8	fruit_challenge	unsupported	-	0	0

@@ -296,7 +296,7 @@ try
         "  audit-levels <cache>\n" +
         "  replay-baseline <cache> [--write file]\n" +
         "  replay-check <cache> <pack> <entry> [--variant challenge|fruit_challenge] [--threshold meters] [--trace]\n" +
-        "  play-level <cache> <one-based pack> <one-based level> [--ticks N] [--cut tick:rope:segment:x:y[:impulseX:impulseY]] [preview options]\n" +
+        "  play-level <cache> <one-based pack> <one-based level> [--ticks N] [--cut tick:rope:segment:x:y[:impulseX:impulseY]] [--variant challenge|fruit_challenge] [preview options]\n" +
         "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [--cut tick:rope:segment:x:y] [preview options]\n" +
         "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +
         "  preview-animation <cache> <animation ID> <scene name> [--resolution N] [--time seconds] [preview options]\n" +

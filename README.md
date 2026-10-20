@@ -45,6 +45,9 @@ After importing a full Windows package, start with pack 1, entry 1 or 2:
 dotnet run --project src/Ctr2.Desktop -- play-level cache/windows-alpha 1 2
 ```
 
+Add `--variant challenge` or `--variant fruit_challenge` to play a level's challenge: both hide the tutorial finger, and
+the fruit challenge replaces the stars with the fruit grid (drawn diagnostically).
+
 Drag the primary mouse button across ropes or balloons; click a frog to open or close its tongue, or a balloon to pop it. **R** restarts, **Space** pauses or
 resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.

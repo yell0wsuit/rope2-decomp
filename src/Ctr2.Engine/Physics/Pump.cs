@@ -29,15 +29,15 @@ namespace Ctr2.Engine.Physics
             {
                 // The pump design supplies every pump's power and cone; an authored power attribute is ignored.
                 LevelElement pump = Find(design, "pump_design");
-                pumpPower = Value(pump, "power", 0);
-                pumpLength = Value(pump, "cone_height", 0);
-                pumpWidth = Value(pump, "cone_width", 0);
+                pumpPower = Value(pump, "power");
+                pumpLength = Value(pump, "cone_height");
+                pumpWidth = Value(pump, "cone_width");
                 if (pumpPower < 0 || pumpLength <= 0 || pumpWidth < 0)
                 {
                     throw new InvalidDataException("Invalid pump design.");
                 }
             }
-            pumps.Add(new(placed.Position!.Value, Value(placed.Source, "angle", 0)));
+            pumps.Add(new(placed.Position!.Value, Value(placed.Source, "angle")));
         }
 
         /// <summary>Native <c>Pump::processTouchDown</c> for the newest pump within 90 logical units of the press.</summary>

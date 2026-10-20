@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -141,13 +140,13 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Frogs without a tongue path are not supported.");
             }
-            float x = Value(placed.Source, "x", 0), y = Value(placed.Source, "y", 0);
+            float x = Value(placed.Source, "x"), y = Value(placed.Source, "y");
             Vector2 position = new Vector2(x, y) * 2;
             Vector2 finish = position + (new Vector2(Number(path[0]), Number(path[1])) * 2);
             SimulationFrog frog = new(position, finish);
             frogs.Add(frog);
             World.RecordContactEvents = true;
-            if (placed.Source.Attributes.GetValueOrDefault("tongueOut") == "true")
+            if (NativeText.BoolValue(placed.Source.Attributes.GetValueOrDefault("tongueOut")))
             {
                 frog.State = FrogState.Opening;
                 UpdateFrog(frog, 1);
@@ -318,8 +317,7 @@ namespace Ctr2.Engine.Physics
 
         private static float Number(string text)
         {
-            return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) && MathF.Abs(value) <= 1000000
-                ? value : throw new InvalidDataException("Invalid frog path number: " + text);
+            return NativeText.FloatValue(text);
         }
     }
 }

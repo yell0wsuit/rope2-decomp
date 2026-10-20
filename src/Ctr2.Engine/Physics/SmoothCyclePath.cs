@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -331,8 +330,7 @@ namespace Ctr2.Engine.Physics
 
         internal static float Number(string text)
         {
-            return text.Length == 0 ? 0 : float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) && MathF.Abs(value) <= 1000000
-                ? value : throw new InvalidDataException("Invalid smooth path number: " + text);
+            return NativeText.FloatValue(text);
         }
 
         /// <summary>One Akima segment: value, first, second and third coefficients at knot <see cref="T"/>.</summary>

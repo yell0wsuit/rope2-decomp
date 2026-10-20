@@ -178,7 +178,8 @@ Normalized paths, nonzero authored velocities, unsupported body types and invali
 radii fail explicitly. A star with a `path` moves like a helicopter (see Scene
 helicopters): its `MovableBodyObject` sets the body's velocity after each step, in
 scene order after the helicopters, collected or not. The hint journals' star
-snapshots match these paths exactly, cyclic and ping-pong alike. Geometry is in meters; marker drawing
+snapshots match these paths exactly, cyclic and ping-pong alike. A fruit challenge
+destroys every star after its first step (see Challenge variants). Geometry is in meters; marker drawing
 converts to logical scene units independently of image density.
 
 Star overlap runs before world integration, matching contact-begin timing. Each
@@ -1339,6 +1340,45 @@ source. Authored `circle*`/`rectangle*`/`polygon*` shapes are exposed as `Shapes
 diagnostically until their artwork is ported. As in the game, a shape whose body is
 static is land: Om Nom's terrain checks and landing impacts count contacts with it.
 
+Authored numbers and flags go through `NativeText`, which reads like the native
+`ZString` accessors: absent or blank numbers read zero, `intValue` keeps the leading
+integer digits of a decimal, and `boolValue` accepts only lowercase `true`. The body
+factory's own flags compare against exactly `true`. Malformed numbers fail explicitly
+instead of reading zero as they would in the game.
+
+## Challenge variants
+
+`CandySimulation` takes the `LevelVariant` the scene is built for, as
+`GameScene::loadMap` reads the challenge type. Both challenges leave tutorial fingers
+out of the scene (the native loader builds them but adds them only outside the
+challenges). A fruit challenge also builds a fruit grid after the grab and balloon
+ropes and schedules every star for removal: the stars keep their journal indices, can
+still be collected during the first step, and are destroyed after it, before the
+scene's children update.
+
+The grid has 11 columns of 12 fruits over the logical screen. With `w = width / 11` and
+`h = height / 12` in float, column `c` and row `r` sit at
+`x = c * w + w / 2 + c * 1.8` and `y = r * h + 50 + (c even ? h / 2 : 0) - 4.5 * c`, with
+the native float roundings, and their type is `(c odd ? r : r + 2) % 3`. A fruit is not
+created when its center lies inside any existing fixture, sensors and stars included
+(an AABB query of ±1.1921e-7 m and `TestPoint`). Each fruit is the master `clover`
+design (a kinematic sensor circle) with `normalizeShape`, Booka's filter category as an
+excluded category, and a position that travels through text: half of it is printed like
+`ostream << float` with six significant digits and the body factory parses and doubles
+it again. Fruits register in the journal after the stars.
+
+An overlapping active candy or Om Nom collects a fruit at contact-begin time; the fruit
+turns static in its update. Its scene in Windows animation 30 (types 0, 1 and 2 play
+APPLE, STRAWBERRY and GRAPE) first advances in the collecting frame. The frame it
+finishes adds a particle burst that first updates in the next frame, since children
+added during an update wait for the following one. The burst stops emitting after 0.7
+seconds, drops its six 0.7 second particles on the 43rd update and reports on the 44th,
+and the scene destroys the fruit after the next frame's physics step. Freed proxies are
+reused by bodies created later, such as cut rope tips: with this removal, 1223 of the
+1553 recorded fruit catches across 39 fruit-challenge journals land on the recorded
+frame (1138 without removal), and removing fruits one or two frames earlier lowers it
+to 1209. Fruit challenge scoring and medals are pending.
+
 ## Design body factory
 
 `BodyFactory` ports the scene's shared body factory for one-fixture circle and
@@ -1599,6 +1639,9 @@ first snapshot frame that is not bit-identical and the count of exact samples be
 supported journal becomes unsupported. It is skipped without a local cache
 (`CTR2_CACHE`, or `cache/windows-alpha` at the repository root). Regenerate the
 baseline after an improvement.
+
+Each journal replays in its own variant. Recorded fruit catches are compared with the
+port's collections like star catches, never applied.
 
 Journaled cuts store only the crossing and bone, but the recording cut live, so the
 replay rebuilds the swipe impulse: the recorder logs a cutting move after its cuts,

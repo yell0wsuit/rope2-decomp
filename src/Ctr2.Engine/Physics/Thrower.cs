@@ -59,7 +59,7 @@ namespace Ctr2.Engine.Physics
         {
             if (throwers.Count == 0)
             {
-                throwPower = Value(Find(design, "thrower_design"), "power", 0);
+                throwPower = Value(Find(design, "thrower_design"), "power");
             }
             Dictionary<string, string> fields = new(Fields(Find(design, "thrower")), StringComparer.Ordinal);
             foreach ((string key, string value) in placed.Source.Attributes)

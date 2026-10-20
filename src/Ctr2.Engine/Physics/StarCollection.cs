@@ -12,7 +12,8 @@ namespace Ctr2.Engine.Physics
     /// <param name="Body">Kinematic sensor body, moved along the authored path when there is one.</param>
     /// <param name="Radius">Sensor radius in meters, independent of artwork.</param>
     /// <param name="CollectedAt">Zero-based contact tick, or null before collection.</param>
-    public sealed record SimulationStar(PhysicsBody Body, float Radius, int? CollectedAt)
+    /// <param name="Removed">Whether the scene destroyed the star, as a fruit challenge does after its first step.</param>
+    public sealed record SimulationStar(PhysicsBody Body, float Radius, int? CollectedAt, bool Removed = false)
     {
         /// <summary>Gets the star's current center in meters.</summary>
         public Vector2 Position => Body.Position;
@@ -32,6 +33,8 @@ namespace Ctr2.Engine.Physics
         private readonly List<StarCollection> starCollections = [];
         /// <summary>Path movers of stars with an authored path, in scene order.</summary>
         private readonly List<(PathMover Mover, PhysicsBody Body)> starMovers = [];
+        /// <summary>Whether a fruit challenge scheduled the stars for removal at the end of the next step.</summary>
+        private bool starsScheduledForRemoval;
 
         /// <summary>Gets the stars in authored order.</summary>
         /// <value>A read-only live view of immutable geometry and collection snapshots.</value>
@@ -67,9 +70,9 @@ namespace Ctr2.Engine.Physics
             LevelElement merged = new(master.Kind, attributes);
             if (master.Kind != "circle" || attributes.GetValueOrDefault("body_type") != "kinematic" ||
                 attributes.GetValueOrDefault("isSensor") != "true" ||
-                Value(merged, "linearVelocityX", 0) != 0 || Value(merged, "linearVelocityY", 0) != 0 || Value(merged, "angularVelocity", 0) != 0 ||
+                Value(merged, "linearVelocityX") != 0 || Value(merged, "linearVelocityY") != 0 || Value(merged, "angularVelocity") != 0 ||
                 !string.IsNullOrEmpty(attributes.GetValueOrDefault("normalizedPath")) ||
-                attributes.GetValueOrDefault("filter.collideWith", "all") != "all" || Value(merged, "filter.category", 0) != 0)
+                attributes.GetValueOrDefault("filter.collideWith", "all") != "all" || Value(merged, "filter.category") != 0)
             {
                 throw new InvalidDataException("Star collection supports kinematic circle sensors moved only by their path, with default collision filtering.");
             }
@@ -84,6 +87,22 @@ namespace Ctr2.Engine.Physics
             {
                 starMovers.Add((new PathMover(attributes), body));
             }
+        }
+
+        /// <summary>Native <c>GameScene::removeGameObject</c> for the stars a fruit challenge scheduled: their bodies are
+        /// destroyed after the first step, so they can still be collected during it.</summary>
+        private void RemoveStars()
+        {
+            starsScheduledForRemoval = false;
+            for (int i = 0; i < stars.Count; i++)
+            {
+                _ = World.RemoveBody(stars[i].Body);
+                stars[i] = stars[i] with
+                {
+                    Removed = true
+                };
+            }
+            starMovers.Clear();
         }
 
         /// <summary>Native <c>Star::update</c>: moving stars set their velocity for the next step, collected or not.</summary>
@@ -104,7 +123,7 @@ namespace Ctr2.Engine.Physics
             for (int starIndex = 0; starIndex < stars.Count; starIndex++)
             {
                 SimulationStar star = stars[starIndex];
-                if (star.CollectedAt.HasValue)
+                if (star.CollectedAt.HasValue || star.Removed)
                 {
                     continue;
                 }

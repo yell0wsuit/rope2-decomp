@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 
+using Ctr2.Engine;
 using Ctr2.Engine.Physics;
 
 using SDL3;
@@ -27,6 +28,7 @@ namespace Ctr2.Desktop
             List<RopeCut> cuts = [];
             List<SceneTap> taps = [];
             List<BalloonPop> pops = [];
+            LevelVariant variant = LevelVariant.Main;
             for (int i = 4; i < args.Length; i += 2)
             {
                 if (i + 1 == args.Length)
@@ -53,6 +55,9 @@ namespace Ctr2.Desktop
                         break;
                     case "--snapshot":
                         snapshot = value;
+                        break;
+                    case "--variant":
+                        variant = LevelVariants.Parse(value);
                         break;
                     case "--tap":
                         if (taps.Count >= 1024)
@@ -87,7 +92,7 @@ namespace Ctr2.Desktop
                 throw new ArgumentException("Dimensions must be 1–8192; frames nonnegative; ticks 0–36000.");
             }
             using LevelPreview preview = LevelPreview.Load(args[1], int.Parse(args[2], CultureInfo.InvariantCulture),
-                int.Parse(args[3], CultureInfo.InvariantCulture), resolution, play: true).Preview;
+                int.Parse(args[3], CultureInfo.InvariantCulture), resolution, play: true, variant: variant).Preview;
             GameSession session = preview.Session!;
             Queue<RopeCut> replay = new(cuts.OrderBy(c => c.Tick));
             Queue<SceneTap> tapReplay = new(taps.OrderBy(t => t.Tick));

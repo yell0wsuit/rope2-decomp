@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -69,6 +68,12 @@ namespace Ctr2.Engine.Physics
             get;
         }
 
+        /// <summary>Gets the game mode the scene was built for.</summary>
+        public LevelVariant Variant
+        {
+            get;
+        }
+
         /// <summary>Gets the fixtureless static body that anchors world pins.</summary>
         internal PhysicsBody MainStaticBody
         {
@@ -92,11 +97,16 @@ namespace Ctr2.Engine.Physics
         /// <param name="firstLevelArrival">Whether the host selected the first production level, which has a special arrival.</param>
         /// <param name="characterScenes">Om Nom scene durations by name, which let gameplay complete authored scenes on its own
         /// fixed clock; without them only a presentation callback completes scenes.</param>
+        /// <param name="variant">Game mode the scene is built for.</param>
+        /// <param name="fruitScenes">Fruit scene durations by native fruit type (see <see cref="LoadFruitScenes"/>), which time a
+        /// collected fruit's removal; without them collected fruits stay.</param>
         /// <exception cref="InvalidDataException">A required design, target or supported field is invalid.</exception>
         /// <remarks>Circle and compound-polygon/static-terrain contacts are supported; polygon CCD, sleeping, dynamic-body collisions and gameplay state remain pending.</remarks>
         public CandySimulation(LevelDefinition level, LevelDefinition design, bool play = false, bool firstLevelArrival = false,
-            IReadOnlyDictionary<string, double>? characterScenes = null)
+            IReadOnlyDictionary<string, double>? characterScenes = null, LevelVariant variant = LevelVariant.Main, IReadOnlyList<double>? fruitScenes = null)
         {
+            Variant = variant;
+            this.fruitScenes = fruitScenes;
             LevelLayout layout = LevelLayout.Create(level);
             // The scene first creates a fixtureless static body at the bottom center of its logical screen; world pins anchor to it.
             MainStaticBody = World.AddStaticBody(new((float)(layout.Size.X / 2.0 / 200.0), (float)(layout.Size.Y / 200.0)));
@@ -194,8 +204,8 @@ namespace Ctr2.Engine.Physics
                     throw new InvalidDataException("Ropes support candy and circle/rectangle/polygon shape ends only.");
                 }
                 // The native constructor doubles the authored length twice and the shifts once.
-                float lengthValue = Value(source, "length", 0), x1 = Value(source, "x_shift_1", 0), y1 = Value(source, "y_shift_1", 0),
-                    x2 = Value(source, "x_shift_2", 0), y2 = Value(source, "y_shift_2", 0);
+                float lengthValue = Value(source, "length"), x1 = Value(source, "x_shift_1"), y1 = Value(source, "y_shift_1"),
+                    x2 = Value(source, "x_shift_2"), y2 = Value(source, "y_shift_2");
                 ropes.Add(CreateRope(head!, tail!, lengthValue + lengthValue + (lengthValue + lengthValue), new(x1 + x1, y1 + y1), new(x2 + x2, y2 + y2),
                     headCandy, tailCandy, bone, frequency));
             }
@@ -217,7 +227,7 @@ namespace Ctr2.Engine.Physics
                 {
                     throw new InvalidDataException("Ropes support candy and circle/rectangle shape targets only.");
                 }
-                float x = Value(grab.Source, "target_x", 0), y = Value(grab.Source, "target_y", 0), lengthValue = Value(grab.Source, "length");
+                float x = Value(grab.Source, "target_x"), y = Value(grab.Source, "target_y"), lengthValue = Value(grab.Source, "length");
                 ropes.Add(CreateRope(grabs[grab], target!, lengthValue + lengthValue, Vector2.Zero, new(x + x, y + y), false, candy, bone, frequency));
             }
             // Balloon ropes follow the grab ropes; a balloon has no default target.
@@ -232,8 +242,14 @@ namespace Ctr2.Engine.Physics
                 {
                     throw new InvalidDataException("Ropes support candy and circle/rectangle shape targets only.");
                 }
-                float x = Value(balloon.Placed.Source, "target_x", 0), y = Value(balloon.Placed.Source, "target_y", 0), lengthValue = Value(balloon.Placed.Source, "length");
+                float x = Value(balloon.Placed.Source, "target_x"), y = Value(balloon.Placed.Source, "target_y"), lengthValue = Value(balloon.Placed.Source, "length");
                 ropes.Add(CreateRope(balloon.Body!, target!, lengthValue + lengthValue, new(0, 45), new(x + x, y + y), false, candy, bone, frequency));
+            }
+            // A fruit challenge then adds its fruit grid and schedules every star for removal after the first step.
+            if (variant == LevelVariant.FruitChallenge)
+            {
+                AddFruits(design, layout.Size);
+                starsScheduledForRemoval = true;
             }
             Characters = characters.AsReadOnly();
             Candies = candies.AsReadOnly();
@@ -265,6 +281,7 @@ namespace Ctr2.Engine.Physics
                 }
             }
             CollectStars();
+            CollectFruits();
             Gameplay?.BeforeStep();
             World.Step();
             // The scene's contact listener calls each object's delegates during the step; both kinds only record decisions.
@@ -272,6 +289,12 @@ namespace Ctr2.Engine.Physics
             CloseTouchedTongues(contacts);
             HandleThrowerContacts(contacts);
             HandleHelicopterContacts(contacts);
+            // The scene destroys objects scheduled for removal after the step and before its children update.
+            if (starsScheduledForRemoval)
+            {
+                RemoveStars();
+            }
+            RemoveFinishedFruits();
             // Scene children update after the step: ropes first, then balloons, then frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
@@ -298,6 +321,7 @@ namespace Ctr2.Engine.Physics
                 UpdateHelicopter(helicopter);
             }
             UpdateStars();
+            UpdateFruits();
         }
 
         /// <summary>Snapshots a chain's current world centers in logical scene units.</summary>
@@ -472,11 +496,11 @@ namespace Ctr2.Engine.Physics
         private void AddPin(PlacedLevelObject placed)
         {
             IReadOnlyDictionary<string, string> attributes = placed.Source.Attributes;
-            float x = Value(placed.Source, "x", 0), y = Value(placed.Source, "y", 0);
+            float x = Value(placed.Source, "x"), y = Value(placed.Source, "y");
             Vector2 position = new(x + x, y + y);
-            bool fixedRotation = attributes.GetValueOrDefault("fixed_rotation") == "true", pinToWorld = attributes.GetValueOrDefault("pin_to_world") == "true";
-            bool enableMotor = attributes.GetValueOrDefault("enable_motor") == "true";
-            float speed = Value(placed.Source, "motor_speed", 0), torque = Value(placed.Source, "max_force", 0);
+            bool fixedRotation = NativeText.BoolValue(attributes.GetValueOrDefault("fixed_rotation")), pinToWorld = NativeText.BoolValue(attributes.GetValueOrDefault("pin_to_world"));
+            bool enableMotor = NativeText.BoolValue(attributes.GetValueOrDefault("enable_motor"));
+            float speed = Value(placed.Source, "motor_speed"), torque = Value(placed.Source, "max_force");
             List<PhysicsBody> found = [];
             World.QueryAabb(new(Meters(position - Vector2.One), Meters(position + Vector2.One)), fixture =>
             {
@@ -548,17 +572,13 @@ namespace Ctr2.Engine.Physics
             return matches.Length != 1 ? throw new InvalidDataException("Expected one master design: " + id) : matches[0];
         }
 
-        /// <summary>Reads a finite bounded design value with an optional missing-value fallback.</summary>
+        /// <summary>Reads an authored number like <c>ZString::floatValue</c>: absent reads zero, malformed text fails.</summary>
         /// <param name="element">Authored object.</param>
         /// <param name="name">Attribute name.</param>
-        /// <param name="fallback">Value for an absent optional attribute.</param>
         /// <returns>The parsed value.</returns>
-        private static float Value(LevelElement element, string name, float? fallback = null)
+        private static float Value(LevelElement element, string name)
         {
-            return !element.Attributes.TryGetValue(name, out string? text) && fallback is float value
-                ? value
-                : !float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float result) || !float.IsFinite(result) || MathF.Abs(result) > 1000000
-                ? throw new InvalidDataException("Invalid physics design attribute: " + name) : result;
+            return NativeText.FloatValue(element.Attributes.GetValueOrDefault(name));
         }
 
         /// <summary>Owns mutable constraints and moving-average state for one authored rope.</summary>

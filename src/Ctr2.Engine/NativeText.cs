@@ -7,7 +7,8 @@ namespace Ctr2.Engine
     /// <summary>Reads authored text like the native <c>ZString</c> accessors, which stream it through an
     /// <c>istringstream</c>: absent text reads as zero or false, and a well-formed decimal is read up to the first
     /// character the target type cannot hold.</summary>
-    /// <remarks>Text that is not a finite decimal within one million fails instead of silently reading as zero.</remarks>
+    /// <remarks>Blank text reads zero, as the stream finds no number in it; other text that is not a finite decimal within one
+    /// million fails instead of silently reading as zero.</remarks>
     internal static class NativeText
     {
         /// <summary>Native <c>ZString::floatValue</c>.</summary>
@@ -16,7 +17,7 @@ namespace Ctr2.Engine
         /// <exception cref="InvalidDataException">The text is not a bounded finite decimal.</exception>
         internal static float FloatValue(string? text)
         {
-            return text == null ? 0 : Decimal(text);
+            return string.IsNullOrWhiteSpace(text) ? 0 : Decimal(text);
         }
 
         /// <summary>Native <c>ZString::intValue</c>: the integer digits that lead a decimal, so <c>280.27</c> reads 280 and
@@ -26,7 +27,7 @@ namespace Ctr2.Engine
         /// <exception cref="InvalidDataException">The text is not a bounded finite decimal.</exception>
         internal static int IntValue(string? text)
         {
-            if (text == null)
+            if (string.IsNullOrWhiteSpace(text))
             {
                 return 0;
             }

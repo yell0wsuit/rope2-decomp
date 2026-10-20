@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -51,7 +50,7 @@ namespace Ctr2.Engine.Physics
                 }
                 if (fields.GetValueOrDefault("body_type") != "dynamic" || Flag(fields, "isSensor") || Flag(fields, "bullet") ||
                     Number(fields, "linearVelocityX") != 0 || Number(fields, "linearVelocityY") != 0 || Number(fields, "angularVelocity") != 0 ||
-                    Number(fields, "smoothFactor", 1) != 1 || fields.GetValueOrDefault("filter.collideWith", "all") != "all" ||
+                    (fields.TryGetValue("smoothFactor", out string? smooth) ? NativeText.IntValue(smooth) : 1) != 1 || fields.GetValueOrDefault("filter.collideWith", "all") != "all" ||
                     Number(fields, "filter.category") != 0 || !string.IsNullOrEmpty(fields.GetValueOrDefault("path")) ||
                     !string.IsNullOrEmpty(fields.GetValueOrDefault("normalizedPath")))
                 {
@@ -59,7 +58,7 @@ namespace Ctr2.Engine.Physics
                 }
                 float density = Number(fields, "density");
                 float linear = Number(fields, "linearDamping"), angular = Number(fields, "angularDamping");
-                float friction = Number(fields, "friction", .2f), restitution = Number(fields, "restitution");
+                float friction = Number(fields, "friction"), restitution = Number(fields, "restitution");
                 if (density <= 0 || linear < 0 || angular < 0 || friction < 0 || friction > 100 || restitution < 0 || restitution > 10)
                 {
                     throw new InvalidDataException("Invalid character body density, damping or material.");
@@ -71,7 +70,7 @@ namespace Ctr2.Engine.Physics
                     throw new InvalidDataException("Character body mass or inertia is degenerate.");
                 }
                 result.Add(new(fields.GetValueOrDefault("id", "omnom"), shape, placed.Position!.Value / 200,
-                    placed.Angle * MathF.PI / 180, mass, density, Number(fields, "gravityScale", 1), linear, angular, friction, restitution, Flag(fields, "fixedRotation")));
+                    placed.Angle * MathF.PI / 180, mass, density, Number(fields, "gravityScale"), linear, angular, friction, restitution, Flag(fields, "fixedRotation")));
             }
             return result.AsReadOnly();
         }
@@ -88,8 +87,9 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Character polygon text exceeds geometry bounds.");
             }
-            string[] values = text.TrimEnd(',').Split(',');
-            if (values.Length is < 4 or > 16 || values.Length % 2 != 0)
+            // As the smooth path reader: one trailing empty component is dropped and a missing final y reads zero.
+            string[] values = (text.EndsWith(',') ? text[..^1] : text).Split(',');
+            if (values.Length is < 4 or > 16)
             {
                 throw new InvalidDataException("Invalid character polygon coordinate count.");
             }
@@ -97,7 +97,7 @@ namespace Ctr2.Engine.Physics
             Vector2 center = Vector2.Zero;
             for (int i = 0; i < values.Length; i += 2)
             {
-                Vector2 point = new Vector2(Parse(values[i]), Parse(values[i + 1])) * 2;
+                Vector2 point = new Vector2(NativeText.FloatValue(values[i]), i + 1 < values.Length ? NativeText.FloatValue(values[i + 1]) : 0) * 2;
                 points.Add(point);
                 center += point;
             }
@@ -131,24 +131,13 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        /// <summary>Reads a finite bounded authored numeric field.</summary>
+        /// <summary>Reads a body number like the native body factory's <c>floatValue</c>: absent reads zero.</summary>
         /// <param name="fields">Merged master and placement attributes.</param>
         /// <param name="name">Field name.</param>
-        /// <param name="fallback">Absent-field value.</param>
         /// <returns>The parsed value.</returns>
-        private static float Number(IReadOnlyDictionary<string, string> fields, string name, float fallback = 0)
+        private static float Number(IReadOnlyDictionary<string, string> fields, string name)
         {
-            return fields.TryGetValue(name, out string? value) ? Parse(value) : fallback;
-        }
-
-        /// <summary>Parses an invariant finite coordinate or body coefficient.</summary>
-        /// <param name="text">Requested numeric text.</param>
-        /// <returns>A finite value within one million authored units.</returns>
-        /// <exception cref="InvalidDataException">The number is invalid or outside bounds.</exception>
-        private static float Parse(string text)
-        {
-            return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) && MathF.Abs(value) <= 1000000
-                ? value : throw new InvalidDataException("Invalid character body number: " + text);
+            return NativeText.FloatValue(fields.GetValueOrDefault(name));
         }
 
         /// <summary>Reads an authored flag as the native body factory does: only the exact text <c>true</c> is true.</summary>

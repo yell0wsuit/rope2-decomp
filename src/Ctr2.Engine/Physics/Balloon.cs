@@ -82,9 +82,9 @@ namespace Ctr2.Engine.Physics
             if (balloons.Count == 0)
             {
                 LevelElement settings = Find(design, "balloon_design");
-                stratosphere = Value(settings, "stratosphere_y", 0);
-                stratosphereGravity = Value(settings, "stratosphere_koeff", 0);
-                stratosphereDamping = Value(settings, "stratosphere_damping_koeff", 0);
+                stratosphere = Value(settings, "stratosphere_y");
+                stratosphereGravity = Value(settings, "stratosphere_koeff");
+                stratosphereDamping = Value(settings, "stratosphere_damping_koeff");
             }
             Dictionary<string, string> fields = new(Fields(Find(design, "balloon")), StringComparer.Ordinal);
             foreach ((string key, string value) in placed.Source.Attributes)

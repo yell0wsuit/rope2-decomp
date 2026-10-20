@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -54,14 +53,13 @@ namespace Ctr2.Engine.Physics
                     throw new InvalidDataException("Invalid terrain material coefficients.");
                 }
 
-                string sensor = definition.Attributes.GetValueOrDefault("isSensor", "false");
-                if (sensor is not ("true" or "false"))
-                {
-                    throw new InvalidDataException("Invalid terrain sensor flag.");
-                }
+                // The body factory compares the flag with exactly "true".
+                bool sensor = definition.Attributes.GetValueOrDefault("isSensor") == "true";
 
-                string[] parts = Required(element, "polygon").TrimEnd(',').Split(',');
-                if (parts.Length is < 4 or > 512 || parts.Length % 2 != 0)
+                // As the smooth path reader: one trailing empty component is dropped and a missing final y reads zero.
+                string path = Required(element, "polygon");
+                string[] parts = (path.EndsWith(',') ? path[..^1] : path).Split(',');
+                if (parts.Length is < 4 or > 512)
                 {
                     throw new InvalidDataException("Invalid bounded terrain path.");
                 }
@@ -69,7 +67,7 @@ namespace Ctr2.Engine.Physics
                 List<Vector2> points = [Vector2.Zero];
                 for (int i = 0; i < parts.Length; i += 2)
                 {
-                    points.Add(new(Parse(parts[i]) * 2, Parse(parts[i + 1]) * 2));
+                    points.Add(new(NativeText.FloatValue(parts[i]) * 2, (i + 1 < parts.Length ? NativeText.FloatValue(parts[i + 1]) : 0) * 2));
                 }
 
                 if (points[^1] == points[0])
@@ -77,8 +75,8 @@ namespace Ctr2.Engine.Physics
                     points.RemoveAt(points.Count - 1);
                 }
 
-                int factor = element.Attributes.TryGetValue("smoothFactor", out string? text) ?
-                    int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ? parsed : 0 : 1;
+                // An absent smooth factor is one; a present one reads like intValue.
+                int factor = element.Attributes.TryGetValue("smoothFactor", out string? text) ? NativeText.IntValue(text) : 1;
                 if (factor is < 1 or > 16 || points.Count * factor > 512)
                 {
                     throw new InvalidDataException("Terrain smoothing exceeds geometry bounds.");
@@ -102,7 +100,7 @@ namespace Ctr2.Engine.Physics
                 {
                     merged[key] = value;
                 }
-                result.Add(new(outline.AsReadOnly(), triangles.AsReadOnly(), friction, restitution, sensor == "true", BodyFactory.Filter(merged)));
+                result.Add(new(outline.AsReadOnly(), triangles.AsReadOnly(), friction, restitution, sensor, BodyFactory.Filter(merged)));
             }
             return result.AsReadOnly();
         }
@@ -341,22 +339,13 @@ namespace Ctr2.Engine.Physics
             return element.Attributes.TryGetValue(name, out string? value) && value.Length > 0 ? value : throw new InvalidDataException("Missing terrain field: " + name);
         }
 
-        /// <summary>Reads a bounded invariant material number.</summary>
+        /// <summary>Reads a material number like the body factory's <c>floatValue</c>: absent reads zero.</summary>
         /// <param name="element">Authored record.</param>
-        /// <param name="name">Required field.</param>
-        /// <returns>A finite numeric value.</returns>
+        /// <param name="name">Field name.</param>
+        /// <returns>The parsed value.</returns>
         private static float Number(LevelElement element, string name)
         {
-            return Parse(Required(element, name));
-        }
-
-        /// <summary>Parses a bounded invariant terrain coordinate or coefficient.</summary>
-        /// <param name="text">Authored text.</param>
-        /// <returns>A finite value with magnitude at most one million.</returns>
-        private static float Parse(string text)
-        {
-            return float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) && MathF.Abs(value) <= 1000000
-                ? value : throw new InvalidDataException("Invalid terrain number.");
+            return NativeText.FloatValue(element.Attributes.GetValueOrDefault(name));
         }
 
         /// <summary>Computes a scalar signed cross product.</summary>

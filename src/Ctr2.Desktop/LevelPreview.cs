@@ -57,10 +57,12 @@ namespace Ctr2.Desktop
         /// <param name="resolution">Known image density enum, independent of map coordinates.</param>
         /// <param name="simulate">Whether to load master-design candy/rope physics and classic candy artwork.</param>
         /// <param name="play">Whether to enable supported gameplay and session controls.</param>
+        /// <param name="variant">Game mode to play, which decides stars, fruits and tutorial fingers.</param>
         /// <returns>The parsed level and a preview owning its decoded character assets.</returns>
         /// <exception cref="System.IO.InvalidDataException">The level, resource or animation is invalid.</exception>
         /// <exception cref="System.IO.IOException">A cache file cannot be read.</exception>
-        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution, bool simulate = false, bool play = false)
+        public static (LevelDefinition Definition, LevelPreview Preview) Load(string cache, int pack, int level, int resolution, bool simulate = false, bool play = false,
+            LevelVariant variant = LevelVariant.Main)
         {
             LevelDefinition definition = LevelReader.LoadWindows(cache, pack, level);
             LevelPreview preview = new(LevelLayout.Create(definition));
@@ -73,7 +75,8 @@ namespace Ctr2.Desktop
                 if (play)
                 {
                     preview.Session = new(definition, LevelReader.LoadWindowsDesign(cache), firstLevelArrival: pack == 1 && level == 1,
-                        LevelGameplay.LoadCharacterScenes(cache));
+                        LevelGameplay.LoadCharacterScenes(cache), variant,
+                        variant == LevelVariant.FruitChallenge ? CandySimulation.LoadFruitScenes(cache) : null);
                     if (preview.Session.Simulation.Gameplay!.ArrivalLeaves != null)
                     {
                         preview.forestLeaves = new ForestLeafSprites(cache, resolution);
@@ -310,6 +313,15 @@ namespace Ctr2.Desktop
                         }
                     }
                 }
+                if (Simulation != null)
+                {
+                    // Fruit artwork is pending; uncollected fruits are drawn diagnostically.
+                    paint.Color = SKColors.OrangeRed;
+                    foreach (SimulationFruit fruit in Simulation.Fruits.Where(f => !f.CollectedAt.HasValue))
+                    {
+                        canvas.DrawCircle(fruit.Position.X * 200, fruit.Position.Y * 200, fruit.Radius * 200, paint);
+                    }
+                }
                 int candyIndex = 0;
                 int starIndex = 0;
                 int characterIndex = 0;
@@ -335,12 +347,13 @@ namespace Ctr2.Desktop
                     }
                     else if (placed.Source.Kind == "star" && Simulation != null)
                     {
+                        // A fruit challenge destroys its stars after the first step.
                         SimulationStar star = Simulation.Stars[starIndex];
-                        if (stars != null)
+                        if (stars != null && !star.Removed)
                         {
                             stars.Draw(canvas, star, starIndex, Simulation.Tick);
                         }
-                        else if (!star.CollectedAt.HasValue)
+                        else if (stars == null && !star.Removed && !star.CollectedAt.HasValue)
                         {
                             paint.Color = SKColors.Gold;
                             canvas.DrawCircle(star.Position.X * 200, star.Position.Y * 200, star.Radius * 200, paint);

@@ -217,7 +217,7 @@ namespace Ctr2.Tests
         [InlineData("shapeType", "triangle")]
         [InlineData("density", "0")]
         [InlineData("radius", "1e2x")]
-        [InlineData("filter.category", "1.5")]
+        [InlineData("filter.category", "32")]
         public void UnsupportedDesignsFailExplicitly(string key, string value)
         {
             Dictionary<string, string> design = Wood(true, ("shapeType", "circle"), ("radius", "10"));

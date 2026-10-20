@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -123,9 +122,11 @@ namespace Ctr2.Engine.Physics
             {
                 throw new InvalidDataException("Multiple swipe hints are outside the supported gameplay slice.");
             }
-            if (hints.Length == 1)
+            // The scene builds tutorial fingers in every mode but only shows them outside the challenges.
+            if (hints.Length == 1 && simulation.Variant == LevelVariant.Main)
             {
-                if (!float.TryParse(hints[0].Source.Attributes.GetValueOrDefault("delay", "0"), NumberStyles.Float, CultureInfo.InvariantCulture, out float delay) || !float.IsFinite(delay) || delay < 0 || delay > 36000)
+                float delay = NativeText.FloatValue(hints[0].Source.Attributes.GetValueOrDefault("delay"));
+                if (delay is < 0 or > 36000)
                 {
                     throw new InvalidDataException("Invalid swipe hint delay.");
                 }

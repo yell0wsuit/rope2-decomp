@@ -2,6 +2,7 @@ using System.Linq;
 using System.Numerics;
 
 using Ctr2.Assets;
+using Ctr2.Engine;
 using Ctr2.Engine.Physics;
 
 using Xunit;
@@ -11,12 +12,13 @@ namespace Ctr2.Tests
     /// <summary>Checks explicit first-entry arrival selection and deterministic nonphysical leaf presentation.</summary>
     public sealed class FirstLevelArrivalTests
     {
-        internal static GameSession Create(bool arrival, int y = -97, string hint = "<tutorial_swipe x='150' y='70' delay='3' angle='1'/>")
+        internal static GameSession Create(bool arrival, int y = -97, string hint = "<tutorial_swipe x='150' y='70' delay='3' angle='1'/>", LevelVariant variant = LevelVariant.Main)
         {
             LevelDefinition level = LevelReader.Read($"<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy id='c' x='280' y='0'/><omnom x='100' y='{y}' gravityScale='1'/>{hint}<polygon_materialized x='0' y='250' material='wood' polygon='320,0,320,30,0,30,' smoothFactor='1'/></layer></map>");
             LevelDefinition design = LevelReader.Read(CandySimulationTests.Design.Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"")
-                .Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "<polygon id='wood' body_type='static' friction='0.4' restitution='0' isSensor='false'/></layer></map>"));
-            return new(level, design, firstLevelArrival: arrival);
+                .Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "<polygon id='wood' body_type='static' friction='0.4' restitution='0' isSensor='false'/>" +
+                "<circle id='clover' body_type='kinematic' isSensor='true' radius='15' density='0.1'/></layer></map>"));
+            return new(level, design, firstLevelArrival: arrival, variant: variant);
         }
 
         /// <summary>Only explicitly selected first-entry arrival permits its authored off-screen character.</summary>
@@ -100,6 +102,16 @@ namespace Ctr2.Tests
             Assert.Equal(new Vector2(300, 140), tap.Position);
             Assert.True(Create(true).Simulation.Gameplay!.Tutorial!.Swipe);
             _ = Assert.Throws<System.IO.InvalidDataException>(() => Create(true, hint: "<tutorial_tap x='1' y='1' delay='1'/><tutorial_swipe x='2' y='2' delay='1' angle='0'/>"));
+        }
+
+        /// <summary>Both challenges leave the tutorial finger out of the scene.</summary>
+        /// <param name="variant">Challenge variant.</param>
+        [Theory]
+        [InlineData(LevelVariant.Challenge)]
+        [InlineData(LevelVariant.FruitChallenge)]
+        public void ChallengesShowNoFingerHint(LevelVariant variant)
+        {
+            Assert.Null(Create(false, y: 97, variant: variant).Simulation.Gameplay!.Tutorial);
         }
 
         /// <summary>Swipe hints use the authored delay and fade only after an active touch.</summary>

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Numerics;
@@ -64,16 +63,16 @@ namespace Ctr2.Engine.Physics
             if (design.TryGetValue("angle", out string? text))
             {
                 // The native conversion runs in double precision before narrowing.
-                angle = (float)(FloatValue(text) * 3.14159265 / 180.0);
+                angle = (float)(NativeText.FloatValue(text) * 3.14159265 / 180.0);
             }
             if (design.TryGetValue("x", out text))
             {
-                float value = FloatValue(text);
+                float value = NativeText.FloatValue(text);
                 x = value + value;
             }
             if (design.TryGetValue("y", out text))
             {
-                float value = FloatValue(text);
+                float value = NativeText.FloatValue(text);
                 y = value + value;
             }
             return Create(world, design, new(x / 200, y / 200), angle);
@@ -167,9 +166,8 @@ namespace Ctr2.Engine.Physics
         private static PhysicsBody CreatePolygon(PhysicsWorld world, IReadOnlyDictionary<string, string> design, Vector2 position, float angle,
             PhysicsBodyType type, float density, float gravityScale, bool fixedRotation)
         {
-            int smoothFactor = design.TryGetValue("smoothFactor", out string? text) && !string.IsNullOrWhiteSpace(text)
-                ? int.TryParse(text, NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite, CultureInfo.InvariantCulture, out int value) ? value
-                : throw new InvalidDataException("Invalid polygon smooth factor: " + text) : 1;
+            // An absent smooth factor is one; a present one reads like intValue.
+            int smoothFactor = design.TryGetValue("smoothFactor", out string? text) ? NativeText.IntValue(text) : 1;
             Vector2 editor = new((float)(position.X * 200.0), (float)(position.Y * 200.0));
             SmoothCyclePath path = new(editor, design.GetValueOrDefault("polygon", ""), design.GetValueOrDefault("normalizeShape") == "true", smoothFactor);
             IReadOnlyList<Vector2> points = path.TrianglePoints();
@@ -216,36 +214,24 @@ namespace Ctr2.Engine.Physics
             return new(category, mask, 0);
         }
 
-        /// <summary>Reads an absent or empty value as zero, otherwise one bounded invariant decimal.</summary>
+        /// <summary>Reads a design number like <c>ZString::floatValue</c>: absent reads zero, malformed text fails.</summary>
         /// <param name="design">Merged design dictionary.</param>
         /// <param name="name">Attribute name.</param>
         /// <returns>The parsed value.</returns>
         private static float Number(IReadOnlyDictionary<string, string> design, string name)
         {
-            return FloatValue(design.GetValueOrDefault(name));
+            return NativeText.FloatValue(design.GetValueOrDefault(name));
         }
 
-        /// <summary>Parses like <c>ZString::floatValue</c> for well-formed text; partial numbers are rejected.</summary>
+        /// <summary>Reads a filter category like <c>ZString::intValue</c>, limited to the indices a shift can address.</summary>
         /// <param name="text">Authored text, or null.</param>
-        /// <returns>Zero for null or blank text, otherwise the parsed value.</returns>
-        /// <exception cref="InvalidDataException">The text is not a finite decimal within one million.</exception>
-        private static float FloatValue(string? text)
-        {
-            return string.IsNullOrWhiteSpace(text) ? 0
-                : float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) && MathF.Abs(value) <= 1000000
-                ? value : throw new InvalidDataException("Invalid design number: " + text);
-        }
-
-        /// <summary>Parses like <c>ZString::intValue</c> for well-formed text; partial numbers are rejected.</summary>
-        /// <param name="text">Authored text, or null.</param>
-        /// <returns>Zero for null or blank text, otherwise a category index from 0 to 31.</returns>
-        /// <exception cref="InvalidDataException">The text is not an integer category index.</exception>
+        /// <returns>Zero when absent, otherwise a category index from 0 to 31.</returns>
+        /// <exception cref="InvalidDataException">The text is malformed or not a category index.</exception>
         private static int Integer(string? text)
         {
             // Shifts beyond the 16 filter bits produce zero after narrowing, as in the native assignment.
-            return string.IsNullOrWhiteSpace(text) ? 0
-                : int.TryParse(text, NumberStyles.AllowLeadingWhite | NumberStyles.AllowTrailingWhite | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int value) && value is >= 0 and < 32
-                ? value : throw new InvalidDataException("Invalid design filter category: " + text);
+            int value = NativeText.IntValue(text);
+            return value is >= 0 and < 32 ? value : throw new InvalidDataException("Invalid design filter category: " + text);
         }
     }
 }

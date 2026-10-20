@@ -33,14 +33,21 @@ namespace Ctr2.Engine.Physics
     /// <param name="PortTick">Tick at which the port collected it, if it did.</param>
     public sealed record JournalStarCatch(int Star, int RecordedFrame, int? PortTick);
 
+    /// <summary>One recorded fruit catch and the port's collection tick for the same fruit.</summary>
+    /// <param name="Fruit">Zero-based fruit index in creation order, or -1 when the journal names an object that is not a port fruit.</param>
+    /// <param name="RecordedFrame">Recorded catch frame.</param>
+    /// <param name="PortTick">Port contact tick, or null when the port never collected it.</param>
+    public sealed record JournalFruitCatch(int Fruit, int RecordedFrame, int? PortTick);
+
     /// <summary>The outcome of replaying a journal open-loop against the port.</summary>
     /// <param name="Frames">Steps simulated.</param>
     /// <param name="Objects">Per-object drift.</param>
     /// <param name="Stars">Recorded star catches.</param>
+    /// <param name="Fruits">Recorded fruit catches.</param>
     /// <param name="Result">Port gameplay result after the last step.</param>
     /// <param name="Unsupported">Events or objects the port could not apply.</param>
     /// <param name="Samples">Every compared state, in frame order.</param>
-    public sealed record JournalReplayResult(int Frames, IReadOnlyList<JournalDrift> Objects, IReadOnlyList<JournalStarCatch> Stars, LevelResult? Result,
+    public sealed record JournalReplayResult(int Frames, IReadOnlyList<JournalDrift> Objects, IReadOnlyList<JournalStarCatch> Stars, IReadOnlyList<JournalFruitCatch> Fruits, LevelResult? Result,
         IReadOnlyList<string> Unsupported, IReadOnlyList<JournalSample> Samples);
 
     /// <summary>Replays an original hint journal against a scene without forcing its snapshots, measuring drift.</summary>
@@ -62,7 +69,7 @@ namespace Ctr2.Engine.Physics
             List<(string Kind, Func<PhysicsBody?> Body)> objects = Registry(scene);
             List<string> unsupported = [];
             Dictionary<int, Accumulator> drift = [];
-            Dictionary<int, int> catches = [];
+            Dictionary<int, int> catches = [], fruitCatches = [];
             List<JournalSample> samples = [];
             int frames = Math.Max(journal.Events.Count == 0 ? 0 : journal.Events.Max(e => e.Frame), journal.Snapshots.Count == 0 ? 0 : journal.Snapshots.Max(s => s.Frame));
             ILookup<int, JournalEvent> events = journal.Events.ToLookup(e => e.Frame);
@@ -113,6 +120,7 @@ namespace Ctr2.Engine.Physics
                         case JournalEventType.PauseSwipe:
                             break;
                         case JournalEventType.FruitCatch:
+                            _ = fruitCatches.TryAdd(e.Index, e.Frame);
                             break;
                         default:
                             break;
@@ -159,12 +167,20 @@ namespace Ctr2.Engine.Physics
                 StarCollection? collected = star < 0 ? null : scene.StarCollections.FirstOrDefault(s => s.Star == star);
                 return new JournalStarCatch(star, c.Value, collected?.Tick);
             })];
+            List<int> fruitIndices = [.. Enumerable.Range(0, objects.Count).Where(i => objects[i].Kind == "fruit")];
+            JournalFruitCatch[] fruits = [.. fruitCatches.OrderBy(c => c.Value).Select(c =>
+            {
+                int fruit = fruitIndices.IndexOf(c.Key);
+                FruitCollection? collected = fruit < 0 ? null : scene.FruitCollections.FirstOrDefault(f => f.Fruit == fruit);
+                return new JournalFruitCatch(fruit, c.Value, collected?.Tick);
+            })];
             return new(scene.Tick, Array.AsReadOnly(drift.OrderBy(d => d.Key).Select(d => new JournalDrift(d.Key, d.Value.Kind, d.Value.Samples, d.Value.Missing, d.Value.Max,
-                d.Value.Samples == 0 ? 0 : d.Value.Sum / d.Value.Samples, d.Value.MaxAngle, d.Value.First)).ToArray()), Array.AsReadOnly(stars), scene.Gameplay?.Result,
+                d.Value.Samples == 0 ? 0 : d.Value.Sum / d.Value.Samples, d.Value.MaxAngle, d.Value.First)).ToArray()), Array.AsReadOnly(stars), Array.AsReadOnly(fruits), scene.Gameplay?.Result,
                 unsupported.AsReadOnly(), samples.AsReadOnly());
         }
 
-        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, frogs, throwers, Om Nom, helicopters, then stars.</summary>
+        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, frogs, throwers, Om Nom, helicopters,
+        /// stars (a fruit challenge registers them before they are removed), then fruits.</summary>
         private static List<(string, Func<PhysicsBody?>)> Registry(CandySimulation scene)
         {
             List<(string, Func<PhysicsBody?>)> objects = [];
@@ -201,9 +217,15 @@ namespace Ctr2.Engine.Physics
             {
                 objects.Add(("helicopter", () => helicopter.Body));
             }
-            foreach (SimulationStar star in scene.Stars)
+            for (int i = 0; i < scene.Stars.Count; i++)
             {
-                objects.Add(("star", () => star.Body));
+                int star = i;
+                objects.Add(("star", () => scene.Stars[star].Removed ? null : scene.Stars[star].Body));
+            }
+            for (int i = 0; i < scene.Fruits.Count; i++)
+            {
+                int fruit = i;
+                objects.Add(("fruit", () => scene.Fruits[fruit].Removed ? null : scene.Fruits[fruit].Body));
             }
             return objects;
         }
