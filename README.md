@@ -53,7 +53,8 @@ swipes and cuts are fed to the port frame by frame, open loop, exactly as `repla
 the port's physics follows the recorded solution. **R** restarts the replay; mouse input still works on top of it. It also
 works headless, for example `play-level cache/windows-alpha 7 23 --replay --ticks 1400 --snapshot local/7-23.png`.
 
-Drag the primary mouse button across ropes or balloons; click a frog to open or close its tongue, or a balloon to pop it. **R** restarts, **Space** pauses or
+Drag the primary mouse button across ropes or balloons; click a frog to open or close its tongue, or a balloon to pop it.
+Tap a gremlin to clone it, or a snail to start or stop walking. **R** restarts, **Space** pauses or
 resumes, and **Escape** exits. Focus loss and minimization pause and cancel held
 input; press Space to resume. The display reports collected stars and the result.
 Restart restores the initial physics, stars, animation, input and replay clock.
@@ -62,12 +63,13 @@ This first slice supports one candy and one Om Nom, stationary and moving stars,
 a tap or swipe hint, static terrain, and static or dynamic wood rectangles and circles,
 including ropes attached to wood at authored offsets, free-standing ropes between
 named bodies, pumps, throwers, helicopters on fixed or moving paths, pins (hinges between bodies
-or to the world), frogs whose tongues form bridges, balloons, fireballs and Bookas, in a dry level (wood,
-pins, frogs, balloons, pumps, throwers, helicopters, fireballs and Bookas are drawn diagnostically). Fireballs ignite dynamic
+or to the world), triggers that release locked pin motors, frogs whose tongues form bridges, balloons,
+fireballs, Bookas, cloning gremlins and snails following polygon tracks, in a dry level (wood,
+pins, triggers, frogs, balloons, pumps, throwers, helicopters, fireballs, Bookas, gremlins and snails are drawn diagnostically). Fireballs ignite dynamic
 wood and spread the burn through joints to connected shapes. Their first fade update releases carriers and destroys the
 physics body, cutting its ropes; the visual remains until its animation finishes. Om Nom scares Bookas off their
 ropes and jumps away from them. Gameplay is independent of the
-authored location; currently 57 levels across the forest, canyon, city, ventilation and bakery packs use nothing but supported
+authored location; currently 113 levels across all seven desktop packs use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -185,11 +187,12 @@ location, whether construction succeeds, and the first failure for each entry.
 An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
-The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 94 pass
+The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 113 pass
 (pack 1/entries 1–7 and 9–24; pack 2/entries 1–7, 11, 13, 17, 20 and 22–23;
 pack 3/entries 1–7, 13, 17, 19 and 24; pack 4/entries 1–6, 9, 11–14, 16–17, 19 and
 21–24; pack 5/entries 1, 3–4, 7–10, 13, 15, 18–19 and 21–24;
-pack 7/entries 1–3, 5–6, 8–9, 11–13, 15–16, 20 and 23).
+pack 6/entries 1–7, 10–11, 13, 15–18 and 21–24;
+pack 7/entries 1–3, 5–6, 8–9, 11–13, 15–16, 18, 20 and 23).
 Authored clovers are ignored, matching the Windows executable's loader; their
 presence in the map does not add a collectible or physics body. Further work includes loader coverage, physical
 objects and general collision, water, magnets,

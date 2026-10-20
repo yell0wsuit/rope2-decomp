@@ -136,7 +136,7 @@ namespace Ctr2.Desktop
                     }
                 }
             };
-            Console.WriteLine("Play: swipe to cut or pop, tap frogs and balloons; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
+            Console.WriteLine("Play: swipe to cut or pop, tap objects to interact; R restart; Space pause/resume; Escape exit. Terrain and ropes are diagnostic; broader mechanics are pending.");
             for (int i = 0; i < ticks && session.Simulation.Gameplay!.Result == LevelResult.Running; i++)
             {
                 session.Step();
@@ -266,7 +266,7 @@ namespace Ctr2.Desktop
             };
             canvas.DrawText($"{status}   Stars: {session.Simulation.StarCollections.Count}/{session.Simulation.Stars.Count}", 12, 27, SKTextAlign.Left, font, text);
             font.Size *= .75f;
-            canvas.DrawText("Swipe to cut, tap frogs/balloons | R: restart | Space: pause | Esc: exit", 12, 52, SKTextAlign.Left, font, text);
+            canvas.DrawText("Swipe to cut/pop, tap objects | R: restart | Space: pause | Esc: exit", 12, 52, SKTextAlign.Left, font, text);
         }
     }
 }

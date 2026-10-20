@@ -146,7 +146,7 @@ namespace Ctr2.Engine.Physics
                 Array.AsReadOnly([.. player.Unsupported, .. unsupported]), samples.AsReadOnly());
         }
 
-        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, fireballs, frogs, Bookas, gremlins, throwers, Om Nom,
+        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, snails, fireballs, frogs, Bookas, gremlins, throwers, Om Nom,
         /// helicopters, stars (a fruit challenge registers them before they are removed), then fruits. Removed objects leave the
         /// journal.</summary>
         private static List<(string, Func<PhysicsBody?>)> Registry(CandySimulation scene)
@@ -169,7 +169,10 @@ namespace Ctr2.Engine.Physics
             {
                 objects.Add(("candy", () => scene.World.Bodies.Contains(candy) ? candy : null));
             }
-            // Snails, still pending, register between candies and fireballs.
+            foreach (SimulationSnail snail in scene.Snails)
+            {
+                objects.Add(("snail", () => snail.Body));
+            }
             foreach (SimulationFireball fireball in scene.Fireballs)
             {
                 objects.Add(("fireball", () => scene.World.Bodies.Contains(fireball.Body) ? fireball.Body : null));

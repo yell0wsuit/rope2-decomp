@@ -205,6 +205,9 @@ namespace Ctr2.Engine.Physics
                     case "gremlin":
                         AddGremlin(placed, design);
                         break;
+                    case "snail":
+                        AddSnail(placed, design);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
                             kind.StartsWith("polygon", StringComparison.Ordinal))
@@ -245,7 +248,8 @@ namespace Ctr2.Engine.Physics
                 AttachRopeToFireball(ropes.Count - 1, head!);
                 AttachRopeToFireball(ropes.Count - 1, tail!);
             }
-            // Pins join bodies after every object exists and before the grab ropes are built.
+            AttachSnails(layout, shapeBodies);
+            // Pins join bodies after every object exists and snails attach, before the grab ropes are built.
             foreach (PlacedLevelObject pin in pins)
             {
                 AddPin(pin);
@@ -345,6 +349,7 @@ namespace Ctr2.Engine.Physics
             {
                 UpdateBalloon(balloon);
             }
+            UpdateSnails();
             UpdateFireballs();
             foreach (SimulationFrog frog in frogs)
             {

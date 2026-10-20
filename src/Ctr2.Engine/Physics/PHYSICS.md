@@ -1780,6 +1780,52 @@ Gremlins raise the construction audit to 94 of 168 entries, adding 3-1 through
 are supported, but some later open-loop trajectories still diverge, especially
 3-19, 3-3 and 7-12; native fixture agreement is not full journal parity.
 
+## Scene snails
+
+Windows `Snail::initWith` (0x4A69F0) merges its body design with placement fields,
+mirrors the first four authored polygon points through six-significant-digit
+text for negative speed, reads `activeOnStart` with boolalpha, and clamps
+`percent * 0.01f` to [0, 1]. The loader attaches it to the named polygon after
+arbitrary ropes and before pins (0x4A6FF0). Attachment adds the unrotated local
+spline point to the target body's origin and uses the tangent angle; the target's
+own angle does not rotate the snail path. The current attachment targets are
+polygon shapes, covering every snail target in the supplied Windows maps.
+Circle and rectangle track factories remain unsupported explicitly.
+
+Snails update after balloons and before fireballs (0x4A7570). An active snail sets
+the next step's velocity to `(derivative * speed * MaxRealT + positionError) *
+0.005f`, with `speed = (float)(editorSpeed * 0.06)`. The position error is the
+fixed logical path position plus its local point minus the live body origin in
+logical units. The cyclic parameter advances by fixed dt times speed and wraps
+with inclusive endpoints. Angular velocity comes from successive tangent angles;
+the Windows wrap first adds `2 * pi` while below `pi`, then subtracts it while
+above `pi`, preserving the rounding this unusual order introduces.
+
+The strict 80-unit press radius uses the last child-update position plus (0,-57)
+rotated by the Windows 1024-entry tables at the live body angle (0x4A7460).
+Its inlined index uses the full reciprocal of pi; at angle bits `0x3f317fff` it
+chooses entry 112, where the generic helper's rounded pi chooses 113. Both this
+boundary and the difference from direct sine/cosine have regressions. Both activation
+and deactivation clear linear and angular velocity; deactivation also resets the
+body's angle to the current spline tangent (0x4A7140/0x4A7220). Snails receive taps
+after frogs and before balloons and pumps. Their journal entries follow candies
+and precede fireballs; they do not register names or become capture candidates.
+
+`SnailReference.json` contains 720 independent native ticks: forward and reverse
+walking across parameter wraps, four pause/resume presses per scenario, candy and
+track contacts, and a normalized track body rotated 25 degrees while the snail
+path remains unrotated. Every body component and parameter matches bit for bit.
+Fixture SHA-256:
+`65fba452a028c8df3dd78a3d8656fca92a31fb93483e05010e9471fd2a4f69e6`.
+The desktop uses diagnostic markers; visual timelines, sounds and achievements
+remain pending and do not change these bodies.
+
+Snails raise the construction audit to 113 of 168 entries, adding 6-1 through 6-7,
+6-10, 6-11, 6-13, 6-15 through 6-18, 6-21 through 6-24 and 7-18. All 57 added
+journals run. In the 19 newly supported main journals the largest snail-origin
+drift is below 0.000002 m, but other bodies still diverge later; this is not a
+claim of full original-runtime parity.
+
 ## Hint journal regression baseline
 
 The original developer hint journals double as playtests. `replay-check` replays one

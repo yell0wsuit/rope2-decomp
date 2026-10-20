@@ -118,12 +118,12 @@ namespace Ctr2.Engine.Physics
                 }
                 return true;
             }
-            // Balloons, then pumps, were added to the scene before frogs, so they see the tap afterwards in reverse order.
-            return TapBalloon(point) || TapPump(point);
+            // Snails, balloons and pumps were added before frogs, so they see the tap afterwards in reverse order.
+            return TapSnails(point) || TapBalloon(point) || TapPump(point);
         }
 
         /// <summary>Offers a press to touchable scene children in reverse order: clones, helicopters, throwers, authored
-        /// gremlins, frogs, balloons and pumps.</summary>
+        /// gremlins, frogs, snails, balloons and pumps.</summary>
         /// <param name="point">Logical-space press.</param>
         /// <returns>Whether a child consumed the press.</returns>
         public bool Tap(Vector2 point)

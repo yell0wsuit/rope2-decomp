@@ -269,6 +269,12 @@ namespace Ctr2.Desktop
                     }
                     canvas.RestoreToCount(gremlinSave);
                 }
+                foreach (SimulationSnail snail in Simulation?.Snails ?? [])
+                {
+                    // Diagnostic snail marker at its touch center until artwork is ported.
+                    paint.Color = snail.Active ? SKColors.Gold : SKColors.Goldenrod;
+                    canvas.DrawCircle(snail.VisualCenter.X, snail.VisualCenter.Y, 26, paint);
+                }
                 foreach (SimulationPump pump in Simulation?.Pumps ?? [])
                 {
                     // Diagnostic pump and blow direction until its artwork is ported.
@@ -375,7 +381,7 @@ namespace Ctr2.Desktop
                         continue;
                     }
                     if (placed.Position is not Vector2 point || placed.Source.Kind == "polygon_materialized" ||
-                        (Simulation != null && (placed.Source.Kind is "pin" or "trigger" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
+                        (Simulation != null && (placed.Source.Kind is "pin" or "trigger" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" or "snail" || placed.Source.Kind.StartsWith("circle", StringComparison.Ordinal) || placed.Source.Kind.StartsWith("rectangle", StringComparison.Ordinal))))
                     {
                         continue;
                     }

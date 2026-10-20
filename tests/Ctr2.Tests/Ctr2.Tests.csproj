@@ -9,6 +9,7 @@
     <None Update="RopeReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PinReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="GremlinReference.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="SnailReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="FrogReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BalloonReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PrismaticReference.json" CopyToOutputDirectory="PreserveNewest" />
