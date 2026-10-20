@@ -98,7 +98,8 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Native <c>Thrower::handlePreSolveCollision</c> and <c>handleFinishedCollision</c>, which the scene's contact
-        /// listener calls from begin and end contact events with the two objects ordered by game body type.</summary>
+        /// listener calls from begin and end contact events with the two objects ordered by game body type, in delegate
+        /// registration (creation) order until a delegate returns true.</summary>
         private void HandleThrowerContacts(IReadOnlyList<PhysicsContactEvent> events)
         {
             if (throwers.Count == 0)
@@ -181,6 +182,9 @@ namespace Ctr2.Engine.Physics
                         scheduled = holder.Body;
                     }
                     thrower.ToCapture = scheduled;
+                    // Scheduling returns true, which stops the scene listener from calling later delegates for this contact:
+                    // of two touching throwers, only the one created first schedules the other.
+                    break;
                 }
             }
         }
@@ -221,8 +225,8 @@ namespace Ctr2.Engine.Physics
                 GameBodyType.GeneralPolygon => body.Radius + -.06f,
                 GameBodyType.Candy => .1f,
                 GameBodyType.Character => .23f,
-                GameBodyType.Thrower => throw new NotImplementedException(),
-                null => throw new NotImplementedException(),
+                // Throwers, and the source's other default capture types, hang farther out.
+                GameBodyType.Thrower or null => .26f,
                 _ => .26f
             };
             thrower.Captured = body;

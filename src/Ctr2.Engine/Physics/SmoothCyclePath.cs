@@ -13,7 +13,6 @@ namespace Ctr2.Engine.Physics
     {
         private readonly List<Tuple> splineX = [], splineY = [];
         private readonly int factor;
-        private readonly float maxRealT;
 
         /// <summary>Builds the path like the original constructor.</summary>
         /// <param name="position">Editor position in logical units; the body origin derives from it.</param>
@@ -68,7 +67,7 @@ namespace Ctr2.Engine.Physics
                     vertices[i] = CandySimulation.TableRotate(vertices[i], (float)(angle * 3.14159265 / 180.0));
                 }
             }
-            maxRealT = Build(vertices);
+            MaxRealT = Build(vertices);
         }
 
         /// <summary>Gets the editor position in logical units.</summary>
@@ -84,7 +83,7 @@ namespace Ctr2.Engine.Physics
         /// <returns>The closed path without a repeated final point.</returns>
         public IReadOnlyList<Vector2> SmoothPoints()
         {
-            List<float> ts = [.. splineX.Select(t => (float)(t.T / maxRealT)), 1f];
+            List<float> ts = [.. splineX.Select(t => (float)(t.T / MaxRealT)), 1f];
             List<Vector2> result = [];
             for (int k = 0; k < splineX.Count; k++)
             {
@@ -138,6 +137,49 @@ namespace Ctr2.Engine.Physics
             return result.AsReadOnly();
         }
 
+        /// <summary>Gets the spline's arc length in logical units.</summary>
+        public float MaxRealT
+        {
+            get;
+        }
+
+        /// <summary>Native <c>getVectorForT</c>: the spline point at a cyclic parameter.</summary>
+        /// <param name="t">Parameter; values outside [0, 1] wrap.</param>
+        /// <returns>The point relative to <see cref="Position"/>, in logical units.</returns>
+        public Vector2 VectorAt(float t)
+        {
+            return new((float)Value(splineX, t), (float)Value(splineY, t));
+        }
+
+        /// <summary>Native <c>getDVectorForT</c>: the spline's derivative with respect to arc length at a cyclic parameter.</summary>
+        /// <param name="t">Parameter; values outside [0, 1] wrap.</param>
+        /// <returns>The tangent.</returns>
+        public Vector2 DerivativeAt(float t)
+        {
+            return new((float)Derivative(splineX, t), (float)Derivative(splineY, t));
+        }
+
+        private double Derivative(List<Tuple> spline, float t)
+        {
+            while (t < 0)
+            {
+                t += 1f;
+            }
+            while (t > 1)
+            {
+                t -= 1f;
+            }
+            float ta = t * MaxRealT;
+            int i = 0;
+            while (i + 1 < spline.Count && spline[i + 1].T < ta)
+            {
+                i++;
+            }
+            float h = (float)(ta - spline[i].T);
+            double c = spline[i].C;
+            return spline[i].B + ((c + c) * h) + (spline[i].D * 3.0 * h * h);
+        }
+
         private float Build(List<Vector2> points)
         {
             int n = points.Count;
@@ -185,7 +227,7 @@ namespace Ctr2.Engine.Physics
             return end - start;
         }
 
-        private static void EuclidSpline(float[] points, List<float> knots, List<Tuple> spline)
+        internal static void EuclidSpline(float[] points, List<float> knots, List<Tuple> spline)
         {
             int n = points.Length;
             List<float> ts = [.. knots];
@@ -239,7 +281,7 @@ namespace Ctr2.Engine.Physics
             {
                 t -= 1f;
             }
-            float ta = t * maxRealT;
+            float ta = t * MaxRealT;
             int i = 0;
             // On the closing edge the original reads one tuple past the end: memory still holding the first erased tail tuple,
             // whose unshifted knot exceeds every query, so the search stops at the last real tuple.
@@ -287,12 +329,13 @@ namespace Ctr2.Engine.Physics
             return true;
         }
 
-        private static float Number(string text)
+        internal static float Number(string text)
         {
             return text.Length == 0 ? 0 : float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) && float.IsFinite(value) && MathF.Abs(value) <= 1000000
                 ? value : throw new InvalidDataException("Invalid smooth path number: " + text);
         }
 
-        private readonly record struct Tuple(double A, double B, double C, double D, double T);
+        /// <summary>One Akima segment: value, first, second and third coefficients at knot <see cref="T"/>.</summary>
+        internal readonly record struct Tuple(double A, double B, double C, double D, double T);
     }
 }

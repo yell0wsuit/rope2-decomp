@@ -36,6 +36,45 @@ namespace Ctr2.Tests
             }
         }
 
+        /// <summary>Open and cyclic spline values and arc-length derivatives match the native bits, including the short-path
+        /// branches that add and later drop mirrored end points.</summary>
+        [Fact]
+        public void SplineValuesAndDerivativesMatchNativeReconstruction()
+        {
+            string[] lines = [.. File.ReadAllLines(Path.Combine(AppContext.BaseDirectory, "SplineReference.txt")).Where(l => !l.StartsWith('#'))];
+            Assert.Equal(18, lines.Length);
+            for (int i = 0; i < lines.Length; i += 2)
+            {
+                string[] input = lines[i][2..].Split(' ');
+                bool open = input[0] == "open";
+                Func<float, Vector2> value, derivative;
+                float length;
+                if (open)
+                {
+                    SmoothPath path = new(Vector2.Zero, input[1]);
+                    (value, derivative, length) = (path.VectorAt, path.DerivativeAt, path.MaxRealT);
+                }
+                else
+                {
+                    SmoothCyclePath path = new(Vector2.Zero, input[1], false, 10);
+                    (value, derivative, length) = (path.VectorAt, path.DerivativeAt, path.MaxRealT);
+                }
+                List<string> actual = [input[0], "00000000", Hex(length)];
+                for (int k = 0; k <= 40; k++)
+                {
+                    float t = open ? k / 40f : (k / 40f) + .013f;
+                    Vector2 v = value(t), d = derivative(t);
+                    actual.AddRange([Hex(v.X), Hex(v.Y), Hex(d.X), Hex(d.Y)]);
+                }
+                Assert.Equal(lines[i + 1], string.Join(' ', actual));
+            }
+        }
+
+        private static string Hex(float value)
+        {
+            return BitConverter.SingleToUInt32Bits(value).ToString("x8", CultureInfo.InvariantCulture);
+        }
+
         /// <summary>The body origin is the editor position scaled to meters in double precision.</summary>
         [Fact]
         public void BodyOriginRoundTripsEditorPosition()

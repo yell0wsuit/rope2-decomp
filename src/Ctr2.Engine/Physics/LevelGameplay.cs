@@ -68,7 +68,15 @@ namespace Ctr2.Engine.Physics
         /// <summary>Turning to face right until the turn scene ends.</summary>
         TurnRight,
         /// <summary>Held by a thrower until thrown.</summary>
-        ThrowerCaptured
+        ThrowerCaptured,
+        /// <summary>Carried by a helicopter.</summary>
+        HelicopterIdle,
+        /// <summary>Carried by a helicopter with candy nearby.</summary>
+        HelicopterMouthOpen,
+        /// <summary>Carried by a helicopter while chewing.</summary>
+        HelicopterChewing,
+        /// <summary>Carried by a helicopter after the mouth closed without candy.</summary>
+        HelicopterPuzzled
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -92,7 +100,7 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "tutorial_swipe" or "tutorial_tap")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "frog" or "balloon" or "rope_instance" or "pump" or "thrower" or "helicopter" or "tutorial_swipe" or "tutorial_tap")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
                 throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
@@ -198,15 +206,16 @@ namespace Ctr2.Engine.Physics
             if (character.PolygonFixtures.Any(f => f.OverlapsCircle(candy.Position, candy.Radius, character.Origin, character.Angle)))
             {
                 consumptions.Add(new(simulation.Tick, 0, 0));
-                // A thrower holding the candy swaps it for the character.
+                // A thrower holding the candy swaps it for the character; a helicopter carrying it lets go.
                 simulation.SwapThrowerCapture(candy, character);
+                simulation.DropFromHelicopter(candy);
                 CandyState = CandyState.Eating;
-                bool airborne = CharacterState == CharacterState.FallingMouthOpen;
-                CharacterState = airborne ? CharacterState.FallingChewing : CharacterState.Chewing;
+                bool airborne = CharacterState == CharacterState.FallingMouthOpen, carried = CharacterState == CharacterState.HelicopterMouthOpen;
+                CharacterState = carried ? CharacterState.HelicopterChewing : airborne ? CharacterState.FallingChewing : CharacterState.Chewing;
                 candy.IsSensor = true;
                 candy.GravityScale = 0;
                 candy.Velocity = 5 * (character.Origin - candy.Position);
-                SetScene(airborne ? "FALLING_MOUTH_CLOSE" : "MOUTH_CLOSE");
+                SetScene(carried ? "WITH_HELICOPTER_MOUTH_CLOSE" : airborne ? "FALLING_MOUTH_CLOSE" : "MOUTH_CLOSE");
             }
         }
 
@@ -306,6 +315,17 @@ namespace Ctr2.Engine.Physics
                     CharacterState = CharacterState.FallingMouthClose;
                     SetScene("FALLING_MOUTH_CLOSE");
                 }
+                else if (CharacterState == CharacterState.HelicopterIdle && distance < 150)
+                {
+                    FacingRight = (float)(candy.Position.X * 200.0) > CharacterX();
+                    CharacterState = CharacterState.HelicopterMouthOpen;
+                    SetScene("WITH_HELICOPTER_MOUTH_OPEN");
+                }
+                else if (CharacterState == CharacterState.HelicopterMouthOpen && distance > 170)
+                {
+                    CharacterState = CharacterState.HelicopterIdle;
+                    SetScene("WITH_HELICOPTER_MOUTH_CLOSE");
+                }
                 UpdateAirborneState();
                 UpdateStandingState();
             }
@@ -356,6 +376,27 @@ namespace Ctr2.Engine.Physics
                 {
                     Finish(LevelResult.Won);
                 }
+            }
+            else if (scene is "WITH_HELICOPTER_TAKE" or "WITH_HELICOPTER_PUZZLED" or "WITH_HELICOPTER_EXCITED")
+            {
+                CharacterState = CharacterState.HelicopterIdle;
+                SetScene("WITH_HELICOPTER_IDLE");
+            }
+            else if (scene == "WITH_HELICOPTER_MOUTH_CLOSE")
+            {
+                if (CharacterState == CharacterState.HelicopterChewing)
+                {
+                    SetScene("WITH_HELICOPTER_CHEWING");
+                }
+                else
+                {
+                    CharacterState = CharacterState.HelicopterPuzzled;
+                    SetScene("WITH_HELICOPTER_PUZZLED");
+                }
+            }
+            else if (scene == "WITH_HELICOPTER_CHEWING")
+            {
+                Finish(LevelResult.Won);
             }
             else if (CharacterState == CharacterState.ThrowerCaptured)
             {
@@ -419,7 +460,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Native <c>Omnom::capturedByThrower</c>: a character that is neither chewing nor failed shows the thrower hold.</summary>
         internal void CharacterCaptured()
         {
-            if (CharacterState is not (CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing or CharacterState.Fail))
+            if (!Chewing && CharacterState != CharacterState.Fail)
             {
                 CharacterState = CharacterState.ThrowerCaptured;
                 SetScene("WITH_THROWER");
@@ -429,7 +470,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Native <c>Omnom::releasedByThrower</c>: a thrown character falls, chewing if it was.</summary>
         internal void CharacterReleased()
         {
-            if (CharacterState is CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing)
+            if (Chewing)
             {
                 CharacterState = CharacterState.FallingChewing;
                 SetScene("FALLING_CHEWING");
@@ -441,6 +482,48 @@ namespace Ctr2.Engine.Physics
             }
             collidedWithTerrain = false;
         }
+
+        /// <summary>Native <c>Omnom::capturedByHelicopter</c>.</summary>
+        internal void CharacterHelicopterCaptured()
+        {
+            if (Chewing)
+            {
+                CharacterState = CharacterState.HelicopterChewing;
+                SetScene("WITH_HELICOPTER_CHEWING");
+            }
+            else if (CharacterState == CharacterState.Fail)
+            {
+                SetScene("WITH_HELICOPTER_FAIL");
+            }
+            else
+            {
+                CharacterState = CharacterState.HelicopterIdle;
+                SetScene("WITH_HELICOPTER_TAKE");
+            }
+        }
+
+        /// <summary>Native <c>Omnom::releasedByHelicopter</c>: a dropped character falls, chewing if it was.</summary>
+        internal void CharacterHelicopterReleased()
+        {
+            if (Chewing)
+            {
+                CharacterState = CharacterState.FallingChewing;
+                SetScene("FALLING_CHEWING");
+            }
+            else if (CharacterState == CharacterState.Fail)
+            {
+                SetScene("FAIL");
+            }
+            else
+            {
+                CharacterState = CharacterState.Falling;
+                SetScene("FALLING");
+            }
+            collidedWithTerrain = false;
+        }
+
+        /// <summary>Gets whether the character is in a source chewing state.</summary>
+        private bool Chewing => CharacterState is CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing or CharacterState.HelicopterChewing;
 
         /// <summary>Gets the character's logical x like the source node, from the body origin.</summary>
         private float CharacterX()

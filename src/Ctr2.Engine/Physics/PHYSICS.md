@@ -1278,6 +1278,47 @@ center and starts a 0.3 second cooldown. Om Nom shows `WITH_THROWER` while held
 and falls, chewing if he was, when thrown. Eating held candy swaps it for Om Nom
 without a cooldown, and destroying a held body releases it with one.
 
+## Scene helicopters
+
+A `helicopter` is the `helicopter` master design (a kinematic sensor circle) with the
+authored attributes and a forced `normalizeShape`. Its path follows the native
+`MovableBodyObject`: `path` is read around the doubled editor position, `cyclePath`
+picks a closed `SmoothCyclePath` cycled at constant parameter speed, otherwise an open
+`SmoothPath` (the native Akima spline, padded with mirrored points below five tuples)
+is ping-ponged with one-second quadratic ease-in and ease-out phases, the ease-out
+starting at the precomputed 60-frame deceleration distance. Speed is
+`speed * 100 / length` in path fractions per second. Each update sets the body's
+velocity from the spline derivative; ping-pong adds the gap to the spline point,
+both in logical units per second, before dividing by 200. `startOnContact` holds the
+path until the helicopter starts carrying something.
+
+Begin-contact events (helicopter type 10, above every candidate) schedule a capture
+unless the helicopter is cooling down or already carrying. Om Nom is preferred and
+keeps upright (his hinge uses his anchor and a zero reference angle); otherwise a
+circle shape or a candy is taken at its current angle. A candy marks the capture as
+replaceable by Om Nom, and the source then releases the candy's slot with Om Nom's
+delegate paired with the candy body. After the step, in scene order after Om Nom,
+each helicopter runs its path, counts the cooldown down, releases a replaced capture,
+starts the scheduled one (angular damping `3d + 2`), deletes hinges queued by
+releases, and pulls the carried body toward the hook 0.49 m below its origin at 4 m/s,
+turning Om Nom upright at twice `-4` times his wrapped angle. Within `sqrt(0.012)` m
+the body is teleported onto the hook at its wrapped angle and hinged from the
+helicopter's `(0, 0.13)` point with limits of ±1 radian and a 0.003 torque motor. The
+anchor is `(0, -0.2)` for candy, `(0, -0.32)` for Om Nom and `(0, -0.02 - r)` for a
+circle. A carried body spinning at 2 rad/s or more keeps 65% of it each update.
+
+A press within 93 logical units of a carrying helicopter or 60 of its load (helicopters
+first, newest first) releases the load: its damping is restored, a 0.5 second
+cooldown starts and the hinge is queued, so it holds for one more physics step before
+the next update deletes it. The hint journals split on that last point: about as
+many releases follow an immediate deletion as the queued one. In 4-21 the dropped
+candy tracks the recording only with immediate deletion, 1/512 m off (one step of
+its gravity), while in 1-12's fruit challenge Om Nom follows the queued deletion
+exactly. Recorded `PauseTap` positions match the helicopter after the step of the
+tap frame in both, so tap timing is not the cause. The port keeps the source order.
+Om Nom shows the `WITH_HELICOPTER_*` scenes while carried, opening his mouth near
+candy, and falls (chewing if he was) when dropped; eating carried candy releases it.
+
 ## Scene construction order
 
 `CandySimulation` creates bodies the way the scene loader does: one pass over the

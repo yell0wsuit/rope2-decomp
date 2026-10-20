@@ -164,7 +164,7 @@ namespace Ctr2.Engine.Physics
                 unsupported.AsReadOnly(), samples.AsReadOnly());
         }
 
-        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, frogs, throwers, Om Nom, then stars.</summary>
+        /// <summary>Journal registration order: ropes, dynamic polygons, balloons, candies, frogs, throwers, Om Nom, helicopters, then stars.</summary>
         private static List<(string, Func<PhysicsBody?>)> Registry(CandySimulation scene)
         {
             List<(string, Func<PhysicsBody?>)> objects = [];
@@ -196,6 +196,10 @@ namespace Ctr2.Engine.Physics
             foreach (PhysicsBody character in scene.Characters)
             {
                 objects.Add(("omnom", () => character));
+            }
+            foreach (SimulationHelicopter helicopter in scene.Helicopters)
+            {
+                objects.Add(("helicopter", () => helicopter.Body));
             }
             for (int i = 0; i < scene.Stars.Count; i++)
             {

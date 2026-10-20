@@ -158,6 +158,9 @@ namespace Ctr2.Engine.Physics
                     case "thrower":
                         AddThrower(placed, design);
                         break;
+                    case "helicopter":
+                        AddHelicopter(placed, design);
+                        break;
                     default:
                         if (kind.StartsWith("circle", StringComparison.Ordinal) || kind.StartsWith("rectangle", StringComparison.Ordinal) ||
                             kind.StartsWith("polygon", StringComparison.Ordinal))
@@ -268,6 +271,7 @@ namespace Ctr2.Engine.Physics
             IReadOnlyList<PhysicsContactEvent> contacts = World.RecordContactEvents ? World.DrainContactEvents() : [];
             CloseTouchedTongues(contacts);
             HandleThrowerContacts(contacts);
+            HandleHelicopterContacts(contacts);
             // Scene children update after the step: ropes first, then balloons, then frogs.
             foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
             {
@@ -288,6 +292,11 @@ namespace Ctr2.Engine.Physics
             }
             Tick = checked(Tick + 1);
             Gameplay?.AfterStep();
+            // Helicopters update after the character, in scene order.
+            foreach (SimulationHelicopter helicopter in helicopters)
+            {
+                UpdateHelicopter(helicopter);
+            }
         }
 
         /// <summary>Snapshots a chain's current world centers in logical scene units.</summary>
