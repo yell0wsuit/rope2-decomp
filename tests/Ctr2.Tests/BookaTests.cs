@@ -15,7 +15,7 @@ namespace Ctr2.Tests
             "isSensor='false' filter.category='2' filter.collideWith='all'/>" +
             "<omnom_design id='omnom_design' boo_jump_power='1.2' boo_jump_angle='70' boo_jump_delay='0.5'/>";
 
-        private static CandySimulation Create(string objects, SceneTimings? timings = null)
+        internal static CandySimulation Create(string objects, SceneTimings? timings = null)
         {
             string design = CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master + Designs + "</layer></map>")
                 .Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"").Replace("gravityScale='0.7'", "gravityScale='0'");

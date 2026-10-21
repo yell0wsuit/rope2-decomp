@@ -1957,3 +1957,44 @@ and introduce others, so the port keeps the host's float trigonometry. Level 1-9
 known exception: in all three variants the candy jumps by millimetres between two
 exact samples while swinging on its ropes, with no input or contact in between, and a
 one-ulp nudge does not reproduce it, so an unported logic detail is still involved.
+
+### Snapshot-corrected replay and gameplay outcomes
+
+Open-loop replay amplifies those ulp-level differences until a candy misses a star,
+sensor or Om Nom, so it stops verifying gameplay after a few hundred frames.
+`replay-check --corrected` and `JournalReplay.Run(..., corrected: true)` do what the
+original hint playback does. After step N, each object in snapshot N is first
+compared, which measures only the drift since that object's previous recorded state,
+and then applied as `SingleBodyObject::applyObjectState` does. `SetTransform` runs
+when position and angle are all recorded; stars and helicopters omit the angle, so
+they are never moved. Then the linear and angular velocities are set when recorded.
+`Booka::applyObjectState` skips a Booka once Om Nom has caught it. The recorder
+writes a state when an object moved more than 0.5 m or 0.17453 rad, or at least every
+60 frames. Velocities appear only in full syncs: recording start, a gremlin clone and
+a thrower capture. Rope points have no state. `--follow <journal index>` prints the
+port's per-frame pose of one journal object to standard error.
+
+`replay-outcomes <cache> [--corrected]` plays every supported journal to its end, plus
+600 input-free ticks, and grades the result against the recording. Main levels must
+win with the recorded star set, challenges must win with at least `desiredStars`, and
+fruit challenges must win. Their fruit counts are compared with the recorded catches,
+because 17 recordings fall short of their own `minFruits` by catch count. Rope limits
+and forbidden elements constrain input, which the recording already obeys.
+
+With 141 startable levels (415 journals), open-loop replay passes 131/141 main,
+118/137 challenge and 98/137 fruit-challenge journals (within two fruits). Every
+failure follows a trajectory divergence that starts at an ulp-level difference.
+Corrected replay passes all 141 main and all 137 challenge journals with the
+recorded stars, and 135/137 fruit challenges, all within two fruits (128 exact).
+Remaining corrected errors above 5 cm within one snapshot interval are mostly random
+Booka flights. Others are bodies near a tipping point whose uncorrected velocities
+bifurcate: Om Nom in 7-14 and 6-20, and gremlin stacks.
+
+The two corrected fruit-challenge losses differ:
+- 6-20 is such a bifurcation (Om Nom on a rotating shape).
+- In 3-12 the candy is pulled back up by a magnet from about 5.76 m, past the
+  canvas-based loss line at 960 + 190 logical units. The original measures
+  `isOutOfScreen` against `ScreenSizeMgr::FULL_SCREEN` and `SCREEN_OFFSET`, the
+  device's whole visible area. The recording device evidently showed more below the
+  canvas than the port's canvas-only rule assumes. Matching that rule depends on the
+  desktop viewport, which still letterboxes the canvas.

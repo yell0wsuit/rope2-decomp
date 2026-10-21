@@ -40,6 +40,10 @@ try
         }
         return 0;
     }
+    if (args.Length > 0 && args[0] == "replay-outcomes")
+    {
+        return ReplayOutcomesCommand.Run(args);
+    }
     if (args.Length > 0 && args[0] == "replay-check")
     {
         return ReplayCheckCommand.Run(args);
@@ -295,7 +299,8 @@ try
         "  import <Windows dump folder | .appx | .msix | .zip> <new cache directory>\n" +
         "  audit-levels <cache>\n" +
         "  replay-baseline <cache> [--write file]\n" +
-        "  replay-check <cache> <pack> <entry> [--variant challenge|fruit_challenge] [--threshold meters] [--trace]\n" +
+        "  replay-outcomes <cache> [--corrected]\n" +
+        "  replay-check <cache> <pack> <entry> [--variant challenge|fruit_challenge] [--threshold meters] [--trace] [--corrected] [--follow journalIndex]\n" +
         "  play-level <cache> <one-based pack> <one-based level> [--ticks N] [--cut tick:rope:segment:x:y[:impulseX:impulseY]] [--variant challenge|fruit_challenge] [--replay] [preview options]\n" +
         "  simulate-level <cache> <one-based pack> <one-based level> [--ticks N] [--release-at tick] [--cut tick:rope:segment:x:y] [preview options]\n" +
         "  preview-level <cache> <one-based pack> <one-based level> [--resolution N] [--time seconds] [preview options]\n" +

@@ -53,6 +53,10 @@ swipes and cuts are fed to the port frame by frame, open loop, exactly as `repla
 the port's physics follows the recorded solution. **R** restarts the replay; mouse input still works on top of it. It also
 works headless, for example `play-level cache/windows-alpha 7 23 --replay --ticks 1400 --snapshot local/7-23.png`.
 
+`replay-outcomes cache/windows-alpha [--corrected]` plays every supported hint journal to its end and checks the gameplay
+outcome (win, stars, challenge stars, fruits) against the recording; `--corrected` re-applies each recorded snapshot like the
+original hint playback, so precision drift cannot accumulate. `replay-check` accepts `--corrected` and `--follow <index>` too.
+
 Drag the primary mouse button across ropes or balloons; click a frog to open or close its tongue, or a balloon to pop it.
 Tap a gremlin to clone it, or a snail to start or stop walking. **R** restarts, **Space** pauses or
 resumes, and **Escape** exits. Focus loss and minimization pause and cancel held

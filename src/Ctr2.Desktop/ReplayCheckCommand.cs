@@ -21,12 +21,14 @@ namespace Ctr2.Desktop
             string cache = args[1], variant = "";
             int pack = int.Parse(args[2], CultureInfo.InvariantCulture), entry = int.Parse(args[3], CultureInfo.InvariantCulture);
             float threshold = .05f;
-            bool trace = false;
+            int follow = -1;
+            bool trace = false, corrected = false;
             for (int i = 4; i < args.Length; i += 2)
             {
-                if (args[i] == "--trace")
+                if (args[i] is "--trace" or "--corrected")
                 {
-                    trace = true;
+                    trace |= args[i] == "--trace";
+                    corrected |= args[i] == "--corrected";
                     i--;
                     continue;
                 }
@@ -35,6 +37,9 @@ namespace Ctr2.Desktop
                 {
                     case "--variant":
                         variant = value is "challenge" or "fruit_challenge" ? "." + value : throw new ArgumentException("Variant must be challenge or fruit_challenge.");
+                        break;
+                    case "--follow":
+                        follow = int.Parse(value, CultureInfo.InvariantCulture);
                         break;
                     case "--threshold":
                         threshold = float.Parse(value, CultureInfo.InvariantCulture);
@@ -53,11 +58,18 @@ namespace Ctr2.Desktop
             ReplayJournal journal = JournalInputPlayer.LoadHint(cache, level, mode);
             string levelHash = journal.LevelHash;
             CandySimulation scene = new(level, design, play: true, firstLevelArrival: pack == 1 && entry == 1, SceneTimings.Load(cache, level, mode), mode);
-            JournalReplayResult result = JournalReplay.Run(scene, journal, threshold);
+            JournalReplayResult result = JournalReplay.Run(scene, journal, threshold, corrected, follow < 0 ? null : (s, bodies) =>
+            {
+                if (follow < bodies.Count && bodies[follow] is PhysicsBody body)
+                {
+                    Console.Error.WriteLine(FormattableString.Invariant($"{s.Tick}\t{body.Origin.X:R}\t{body.Origin.Y:R}\t{body.Angle:R}\t{body.Velocity.X:R}\t{body.Velocity.Y:R}\t{body.AngularVelocity:R}"));
+                }
+            });
             Console.WriteLine(JsonSerializer.Serialize(new
             {
                 SchemaVersion = 1,
-                Scope = "Open-loop replay of the original hint journal: inputs only, snapshots compared, never applied.",
+                Scope = corrected ? "Snapshot-corrected replay of the original hint journal: inputs applied, each snapshot compared and then applied."
+                    : "Open-loop replay of the original hint journal: inputs only, snapshots compared, never applied.",
                 Level = level.FileName,
                 Variant = variant.TrimStart('.'),
                 LevelHash = levelHash,

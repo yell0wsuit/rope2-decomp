@@ -50,19 +50,23 @@ namespace Ctr2.Engine.Physics
     public sealed record JournalReplayResult(int Frames, IReadOnlyList<JournalDrift> Objects, IReadOnlyList<JournalStarCatch> Stars, IReadOnlyList<JournalFruitCatch> Fruits, LevelResult? Result,
         IReadOnlyList<string> Unsupported, IReadOnlyList<JournalSample> Samples);
 
-    /// <summary>Replays an original hint journal against a scene without forcing its snapshots, measuring drift.</summary>
-    /// <remarks>The original hint playback re-applies every snapshot, so it never relies on determinism. This replay applies
+    /// <summary>Replays an original hint journal against a scene, measuring drift, either open loop or snapshot-corrected.</summary>
+    /// <remarks>The original hint playback re-applies every snapshot, so it never relies on determinism. Open-loop replay applies
     /// only inputs: cuts by journal rope index with the live swipe's tip impulse, touch presses as scene taps, and touch
     /// movement as balloon swipes (replayed touches never cut ropes). Events recorded at frame F apply before step F + 1; a snapshot at frame N is
-    /// compared after step N.</remarks>
+    /// compared after step N. Corrected replay then applies each compared state as <c>SingleBodyObject::applyObjectState</c> does,
+    /// so each comparison measures only the drift since that object's previous state.</remarks>
     public static class JournalReplay
     {
         /// <summary>Runs the journal and compares every snapshot state with the matching port body.</summary>
         /// <param name="scene">A freshly constructed scene for the journal's level.</param>
         /// <param name="journal">Parsed journal.</param>
         /// <param name="threshold">Origin distance in meters that counts as divergence.</param>
+        /// <param name="corrected">Whether to apply every compared snapshot state after measuring it.</param>
+        /// <param name="follow">Optional per-step observer receiving the scene and the journal slot bodies, before any correction.</param>
         /// <returns>Per-object drift, star catch timing and the final result.</returns>
-        public static JournalReplayResult Run(CandySimulation scene, ReplayJournal journal, float threshold = .05f)
+        public static JournalReplayResult Run(CandySimulation scene, ReplayJournal journal, float threshold = .05f, bool corrected = false,
+            Action<CandySimulation, IReadOnlyList<PhysicsBody?>>? follow = null)
         {
             ArgumentNullException.ThrowIfNull(scene);
             ArgumentNullException.ThrowIfNull(journal);
@@ -99,6 +103,7 @@ namespace Ctr2.Engine.Physics
                 Append();
                 scene.Step();
                 Append();
+                follow?.Invoke(scene, [.. objects.Select(o => o.Body())]);
                 foreach (JournalObjectState state in snapshots[scene.Tick].SelectMany(s => s.Objects))
                 {
                     if (state.Index < 0 || state.Index >= objects.Count)
@@ -130,6 +135,10 @@ namespace Ctr2.Engine.Physics
                     {
                         a.First ??= scene.Tick;
                     }
+                    if (corrected)
+                    {
+                        Apply(scene, b, state);
+                    }
                 }
             }
             List<int> starIndices = [.. Enumerable.Range(0, objects.Count).Where(i => objects[i].Kind == "star")];
@@ -149,6 +158,28 @@ namespace Ctr2.Engine.Physics
             return new(scene.Tick, Array.AsReadOnly(drift.OrderBy(d => d.Key).Select(d => new JournalDrift(d.Key, d.Value.Kind, d.Value.Samples, d.Value.Missing, d.Value.Max,
                 d.Value.Samples == 0 ? 0 : d.Value.Sum / d.Value.Samples, d.Value.MaxAngle, d.Value.First)).ToArray()), Array.AsReadOnly(stars), Array.AsReadOnly(fruits), scene.Gameplay?.Result,
                 Array.AsReadOnly([.. player.Unsupported, .. unsupported]), samples.AsReadOnly());
+        }
+
+        /// <summary>Native <c>SingleBodyObject::applyObjectState</c>: the origin and angle when all three are recorded, then the linear and
+        /// angular velocities when recorded (only full syncs record them). <c>Booka::applyObjectState</c> ignores a caught Booka.</summary>
+        private static void Apply(CandySimulation scene, PhysicsBody body, JournalObjectState state)
+        {
+            if (!scene.World.Bodies.Contains(body) || scene.Bookas.Any(b => b.Body == body && b.Booed))
+            {
+                return;
+            }
+            if (state is { X: float x, Y: float y, Angle: float angle })
+            {
+                scene.World.SetTransform(body, new(x, y), angle);
+            }
+            if (state is { VelocityX: float vx, VelocityY: float vy })
+            {
+                body.SetLinearVelocity(new(vx, vy));
+            }
+            if (state.AngularVelocity is float spin)
+            {
+                body.SetAngularVelocity(spin);
+            }
         }
 
         /// <summary>Maps a journal object index to a scene rope: loaded ropes take the first indices, and generated ropes take the
