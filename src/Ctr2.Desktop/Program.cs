@@ -339,7 +339,8 @@ internal static class DesktopPreview
     /// <exception cref="ArgumentOutOfRangeException">The drawing dimensions are invalid.</exception>
     /// <param name="input">Optional event callback receiving window and pixel dimensions.</param>
     /// <param name="title">Desktop window title.</param>
-    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw, Action<SDL.Event, int, int, int, int>? input = null, string title = "Cut the Rope 2 — asset preview")
+    /// <param name="beforeShutdown">Optional owner cleanup before SDL shuts down.</param>
+    public static int Run(int width, int height, int frameLimit, Action<SKCanvas, int, int, double> draw, Action<SDL.Event, int, int, int, int>? input = null, string title = "Cut the Rope 2 — asset preview", Action? beforeShutdown = null)
     {
         if (!SDL.Init(SDL.InitFlags.Video))
         {
@@ -441,6 +442,7 @@ internal static class DesktopPreview
                 SDL.DestroyWindow(window);
             }
 
+            beforeShutdown?.Invoke();
             SDL.Quit();
         }
     }

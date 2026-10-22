@@ -131,6 +131,8 @@ namespace Ctr2.Engine.Physics
             }
         }
 
+        internal event Action? Splashed;
+
         internal void Observe(PhysicsBody body, bool below)
         {
             if (!below)
@@ -147,6 +149,7 @@ namespace Ctr2.Engine.Physics
                 collisions.Add(new(body, center, time + .2f));
                 if (!firstFrame && body.Velocity.Length() > 1.7f)
                 {
+                    Splashed?.Invoke();
                     for (int i = 0; i < 10; i++)
                     {
                         drops.Add(NewParticle(center, true, 1.3f));

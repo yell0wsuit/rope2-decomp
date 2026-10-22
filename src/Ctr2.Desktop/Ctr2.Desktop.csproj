@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="../Ctr2.Assets/Ctr2.Assets.csproj" />
     <ProjectReference Include="../Ctr2.Engine/Ctr2.Engine.csproj" />
+    <PackageReference Include="NVorbis" Version="0.10.4" />
     <PackageReference Include="SkiaSharp" Version="4.152.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.macOS" Version="4.152.0" />
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.152.0" />

@@ -30,6 +30,7 @@ namespace Ctr2.Engine.Physics
             waterFlow = Value(placed.Source, "flowspeed");
             waterMaster = design;
             WaterEffects = new(Screen, waterLevel.Value);
+            WaterEffects.Splashed += PlayWaterSplash;
         }
 
         private WaterParameters? WaterDesign(PhysicsBody body)
@@ -100,6 +101,7 @@ namespace Ctr2.Engine.Physics
                     body.SetLinearVelocity(System.Numerics.Vector2.Zero);
                     fireball.State = SimulationFireball.FireballState.FadingWater;
                     fireball.FadeStartedAt = Tick;
+                    PlaySound(SimulationSoundId.FireDrown);
                 }
                 float depth = MathF.Min(center - level, 80);
                 body.GravityScale = below ? (float)(depth * .0125) * parameters.BelowGravity : parameters.Gravity;

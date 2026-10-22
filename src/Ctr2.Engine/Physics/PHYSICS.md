@@ -2254,3 +2254,43 @@ journals / 18027 exact-prefix samples, with no prefix shrink. Construction remai
 verdicts; all 75 admitted water variants win with the same known collectible
 mismatches. Actual-cache inspection includes 5-2 tick60 portrait, 7-24 tick360
 ultrawide at resolution4/density1.56, and a released-body 5-2 splash at tick60.
+
+
+### Water audio checkpoint
+
+Windows water initialization calls LoopSoundHelper::play(323), looping at volume1
+(0x4AE510/0x4AC780). The existing fast-entry gate emits sound324 or325 at volume1
+before creating its splash (0x4AF1C0). Touch and ambient bubbles have no sound
+request. Fireball::onUnderWater emits255 once when starting its water fade,
+including initial immersion (0x489710); it does not pass the splash-speed gate
+because its callback already cleared velocity.
+
+The PE resource registry at0x8EE9E0 (eight-byte entries) maps323 to
+`water_splash_idle.ogg`,324/325 to`water_splash01.ogg`/`water_splash02.ogg`, and255
+to`fire_drown01.ogg`. SoundMgr pause/resume are0x6CA910/0x6CA920. Source choices
+and full volume are preserved; random splash selection uses an independent audio
+stream, leaving physics and existing particle trajectories unchanged.
+
+Simulation emits device-independent `SoundPlayed` events. Interactive play owns
+an NVorbis decoder and SDL stereo float stream. The small mixer duplicates mono,
+linearly converts decoded rates to48kHz, loops ambience, sums overlapping voices
+and clips output. Pause retains phase/queued PCM; restart clears old voices and
+subscriptions and restarts ambience. Cleanup occurs before SDL shutdown. Dry
+levels do not open water audio; snapshots/replay/audit commands never open devices.
+Missing files or an unavailable output device report once and keep play available.
+This ports these water sounds, not the rest of the original sound manager.
+
+Seven focused regressions cover source cue gates, extinguishing, RNG independence,
+PCM overlap/looping/rate conversion and pause/restart/disposal. A local probe
+successfully decoded all four actual imported clips (mono22050Hz), verified finite
+nonzero PCM and queued/paused/resumed it through SDL's dummy device. This verifies
+decoding and device plumbing; physical speaker listening remains unverified.
+
+Release verification:725 tests passed, zero skipped; release build and formatting
+verification clean. Replay baseline regenerated unchanged:490 supported journals /
+18027 exact-prefix samples; no prefix shrink. All960 native water body snapshots
+remain exact. Construction166/168; corrected verdicts166/166 main,161/162 challenge,
+155/162 fruit, with all75 admitted water variants winning. FixtureSHA256 remains
+`0caa4a88a99c404d8244bd992d4cf6ceddb1f47fdba4e8c6dbcb13ed056f22ff`.
+Independent review confirmed resource IDs and source pause/resume, with no
+outstanding important issues. WaterDrawer distortion is the next checkpoint.

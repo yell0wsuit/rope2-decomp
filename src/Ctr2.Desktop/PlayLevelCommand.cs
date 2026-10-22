@@ -158,9 +158,27 @@ namespace Ctr2.Desktop
             }
             else
             {
+                WaterAudioPlayback? audio = null;
+                if (session.Simulation.WaterEffects != null)
+                {
+                    try
+                    {
+                        audio = WaterAudioPlayback.Create(args[1]);
+                        audio.Update(session.Simulation, session.Paused);
+                    }
+                    catch (Exception error) when (error is IOException or InvalidDataException or InvalidOperationException)
+                    {
+                        audio?.Dispose();
+                        audio = null;
+                        Console.Error.WriteLine("Water audio unavailable: " + error.Message);
+                    }
+                }
+                using WaterAudioPlayback? ownedAudio = audio;
                 _ = DesktopPreview.Run(width, height, frames, (canvas, w, h, seconds) =>
                 {
+                    audio?.Update(session.Simulation, session.Paused);
                     session.AdvanceTo(seconds);
+                    audio?.Update(session.Simulation, session.Paused);
                     Draw(canvas, w, h);
                 }, (evt, windowWidth, windowHeight, pixelWidth, pixelHeight) =>
                 {
@@ -191,7 +209,7 @@ namespace Ctr2.Desktop
                         }
                         new SdlRopeInput(session.Input).Handle(evt, windowWidth, windowHeight, pixelWidth, pixelHeight);
                     }
-                }, title: "Cut the Rope 2 — play");
+                }, title: "Cut the Rope 2 — play", beforeShutdown: () => audio?.Dispose());
             }
             LevelGameplay game = session.Simulation.Gameplay!;
             foreach (string skipped in hint?.Unsupported ?? [])
