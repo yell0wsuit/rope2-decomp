@@ -155,10 +155,10 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
-            foreach (SimulationFireball fireball in fireballs.Where(f => f.State == SimulationFireball.FireballState.FadingBurn))
+            foreach (SimulationFireball fireball in fireballs.Where(f => f.Fading))
             {
-                // FADE_FIRE is scene 3.
-                if (Tick == fireball.FadeStartedAt + SceneTimings.Updates(scenes[3]))
+                // FADE_WATER is scene 2; FADE_FIRE is scene 3.
+                if (Tick == fireball.FadeStartedAt + SceneTimings.Updates(scenes[fireball.State == SimulationFireball.FireballState.FadingWater ? 2 : 3]))
                 {
                     fireball.State = SimulationFireball.FireballState.Removed;
                 }

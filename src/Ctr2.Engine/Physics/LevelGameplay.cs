@@ -104,10 +104,10 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "clover" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "trigger" or "frog" or "balloon" or "balloonGenerator" or "magnet" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" or "snail" or "tutorial_swipe" or "tutorial_tap")) ||
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "clover" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "trigger" or "frog" or "balloon" or "balloonGenerator" or "magnet" or "water" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" or "snail" or "tutorial_swipe" or "tutorial_tap")) ||
                 (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
             {
-                throw new InvalidDataException("Play supports one candy and one Om Nom in a dry level; negative spawn requires the first production level and other mechanics are pending.");
+                throw new InvalidDataException("Play supports one candy and one Om Nom with supported mechanics; negative spawn requires the first production level.");
             }
             this.simulation = simulation;
             this.sceneDurations = sceneDurations;
@@ -256,7 +256,7 @@ namespace Ctr2.Engine.Physics
             motion.Sample(character.Velocity, character.AngularVelocity);
             BooTimer -= PhysicsWorld.TimeStep;
             collidedWithTerrain |= simulation.CharacterTouchesTerrain();
-            if (Outside(character.Origin, 70))
+            if (simulation.OutOfScreen(character, 70))
             {
                 CharacterState = CharacterState.Fail;
                 SetScene("FAIL");
@@ -287,7 +287,7 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
-            if (CandyState == CandyState.Active && Outside(candy.Origin, 40))
+            if (CandyState == CandyState.Active && simulation.OutOfScreen(candy, 40))
             {
                 simulation.RetireCandy();
                 CandyState = CandyState.Removed;
@@ -653,13 +653,6 @@ namespace Ctr2.Engine.Physics
         {
             Result = result;
             FinishedAt = simulation.Tick;
-        }
-
-        private bool Outside(Vector2 meters, int margin)
-        {
-            Vector2 point = meters * 200;
-            int expanded = margin + 150;
-            return point.X < -expanded || point.Y < -expanded || point.X > canvas.X + expanded || point.Y > canvas.Y + expanded;
         }
     }
 

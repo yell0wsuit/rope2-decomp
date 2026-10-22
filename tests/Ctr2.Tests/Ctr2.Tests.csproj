@@ -13,6 +13,7 @@
     <None Update="FrogReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BalloonReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="BalloonGeneratorReference.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="WaterReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="MagnetReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="PrismaticReference.json" CopyToOutputDirectory="PreserveNewest" />
     <None Update="ContinuousWorldReference.json" CopyToOutputDirectory="PreserveNewest" />

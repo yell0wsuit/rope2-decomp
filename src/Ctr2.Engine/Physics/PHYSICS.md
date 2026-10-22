@@ -1998,3 +1998,74 @@ The two corrected fruit-challenge losses differ:
   device's whole visible area. The recording device evidently showed more below the
   canvas than the port's canvas-only rule assumes. Matching that rule depends on the
   desktop viewport, which still letterboxes the canvas.
+
+### Water physics checkpoint
+
+Windows water is a late scene child, after magnets and before appended children,
+with no body or journal slot. Its update (0x4AF1C0) walks dynamic bodies newest
+first, caches each object's above/below design on first sight, and invokes the
+above/underwater callback every tick before assigning gravity and damping. Candy,
+fireball, Booka, gremlin, thrower and Om Nom use master designs; general polygons
+use their merged design. Rope points, balloons and other base-class objects have
+no water parameters. New gremlin clones enter the cache on the next water update.
+
+The surface is twice the authored y. World-center y times 200 decides immersion:
+equality is above water. Below gravity ramps over 80 logical units; Windows rounds
+`depth * 0.0125` to float before multiplying the cached underwater gravity. The
+underwater design multiplies gravity by `gravity_multiplier` and replaces linear
+and angular damping. Windows formats these through a default C++ output stream,
+then reads the strings back as floats (0x4A6140 → 0x48D2B0 → 0x48D6B0): six
+significant digits. For example `0.7f * -0.6f` is stored back as `-0.42f`.
+Above-water assignments restore design values even after ropes or magnets changed
+them. Flow advances the surface after the body walk; supplied levels all use zero.
+
+Fireball water entry (0x489710) starts scene 2, makes the fixture a sensor and
+zeros its velocity. Its next fireball child update destroys the body, releasing
+carriers and cutting ropes; its visual removal follows the water fade timeline.
+Om Nom records the latest 60 immersion callbacks. The newest 59, divided by the
+fixed denominator 59 with double arithmetic rounded to float, gate the righting
+impulse above 0.5. The impulse runs after character state updates and motion
+sampling, before the next water callback. Submerged characters do not enter the
+ordinary falling state. Swim/dive artwork and WATER_* presentation states are the
+next checkpoint.
+
+Candy, Om Nom and Bookas share the Windows offscreen test (0x4A68E0): outside the
+expanded rectangle, or beyond the horizontal margin while submerged with speed
+squared strictly below 0.0001. Expanded upper bounds are exclusive. Bounds still
+use the logical canvas; the viewport limitation described above remains.
+
+`WaterReference.json` contains 960 invented native Box2D snapshots: a candy on a
+rope dipping through the surface, floating dynamic wood, a submerged rotating
+Om Nom (including resurfacing and history decay), and an extinguishing fireball.
+All nine body components compare exactly at every tick: position, velocity,
+angle, spin, both damping values and gravity scale. Om Nom's comparison runs with
+gameplay enabled. Fixture SHA-256:
+`0caa4a88a99c404d8244bd992d4cf6ceddb1f47fdba4e8c6dbcb13ed056f22ff`.
+Focused tests additionally cover clone discovery, flow ordering, partial depth,
+master versus merged designs, rope-point exclusion, water fade lifetime,
+underwater side loss, journal exclusion and sampling before the righting impulse.
+Release validation: 691 tests passed, zero skipped.
+
+The current construction audit is **166/168**; water adds 25 entries. The remaining
+entries are **1-8** (tutorial sensor) and **2-14** (negative Om Nom spawn, an existing
+admission restriction). The replay baseline is **490 supported journals / 18027
+exact-prefix samples**, with no previously committed prefix shrinking.
+
+The corrected outcome sweep covers all 78 water journals. Three variants of 2-14
+remain unsupported. All 75 admitted water variants win with zero unsupported
+journal events: main 25/25, challenge 25/25, fruit challenge 25/25. Full collectible
+verdicts pass 25/25 main, 24/25 challenge and 24/25 fruit challenge. Two limitations
+remain after trace/follow inspection:
+
+- 6-8 challenge misses star 1 (recorded tick 511); the candy's largest discrepancy
+  between snapshots is 0.039977632 m, with early differences below a micrometre.
+- 2-16 fruit challenge collects 41/42 recorded fruits. Fruit 91 (recorded tick 661)
+  is missed, and fruit 90 is collected at 708 instead of 653. The candy begins with
+  ulp-scale differences; the largest discrepancy reaches 0.251062 m at tick 708.
+  Om Nom's position stays exact. The remaining trajectory divergence is unresolved.
+
+Across all supported content, corrected replay wins 166/166 main, 162/162 challenge
+and 160/162 fruit challenges. Full collectible verdicts pass 166/166, 161/162 and
+155/162 respectively; five won fruit challenges differ by one recorded fruit. The
+two fruit losses remain 3-12 and 6-20, described above. These results establish the
+physics checkpoint and its limits, not full water visual or trajectory parity.

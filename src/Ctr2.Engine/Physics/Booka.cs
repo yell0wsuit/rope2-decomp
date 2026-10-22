@@ -154,12 +154,14 @@ namespace Ctr2.Engine.Physics
             }
         }
 
-        /// <summary>Native <c>SingleBodyObject::isOutOfScreen</c> outside water: beyond the screen grown by the margin plus 150.</summary>
+        /// <summary>Native <c>SingleBodyObject::isOutOfScreen</c> including the underwater stationary side-margin rule.</summary>
         internal bool OutOfScreen(PhysicsBody body, int margin)
         {
             Vector2 point = new((float)(body.Origin.X * 200.0), (float)(body.Origin.Y * 200.0));
             int expanded = margin + 150;
-            return point.X < -expanded || point.Y < -expanded || point.X > Screen.X + expanded || point.Y > Screen.Y + expanded;
+            return point.X < -expanded || point.Y < -expanded || point.X >= Screen.X + expanded || point.Y >= Screen.Y + expanded ||
+                ((point.X < -margin || point.X > Screen.X + margin) && IsUnderwater(body) &&
+                ((body.Velocity.X * body.Velocity.X) + (body.Velocity.Y * body.Velocity.Y)) < .0001f);
         }
     }
 }

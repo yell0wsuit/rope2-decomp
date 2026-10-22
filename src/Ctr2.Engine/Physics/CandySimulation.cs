@@ -208,6 +208,9 @@ namespace Ctr2.Engine.Physics
                     case "balloonGenerator":
                         AddBalloonGenerator(placed, design);
                         break;
+                    case "water":
+                        AddWater(placed, design);
+                        break;
                     case "magnet":
                         AddMagnet(placed, design);
                         break;
@@ -340,10 +343,7 @@ namespace Ctr2.Engine.Physics
         /// <remarks>Release removes final links; it does not implement the native swipe/cut-fragment algorithm.</remarks>
         public void Step(int releaseAt = -1)
         {
-            if (releaseAt < -1)
-            {
-                throw new ArgumentOutOfRangeException(nameof(releaseAt));
-            }
+            ArgumentOutOfRangeException.ThrowIfLessThan(releaseAt, -1);
             if (Tick == releaseAt)
             {
                 foreach (RopeChain rope in ropes.Where(r => !r.Released && r.CutGap < 0))
@@ -406,6 +406,7 @@ namespace Ctr2.Engine.Physics
             }
             Tick = checked(Tick + 1);
             Gameplay?.AfterStep();
+            UpdateUnderwaterCharacters();
             // Helicopters update after the character, then stars, in scene order.
             foreach (SimulationHelicopter helicopter in helicopters)
             {
@@ -415,6 +416,7 @@ namespace Ctr2.Engine.Physics
             UpdateFruits();
             // Magnets are added as children after stars and fruits.
             UpdateMagnets();
+            UpdateWater();
             UpdateSpawned(late);
         }
 

@@ -73,7 +73,7 @@ pins, triggers, frogs, balloons, balloon generators, magnets, pumps, throwers, h
 wood and spread the burn through joints to connected shapes. Their first fade update releases carriers and destroys the
 physics body, cutting its ropes; the visual remains until its animation finishes. Om Nom scares Bookas off their
 ropes and jumps away from them. Gameplay is independent of the
-authored location; currently 141 levels across all seven desktop packs use nothing but supported
+authored location; currently 166 levels across all seven desktop packs use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -191,15 +191,14 @@ location, whether construction succeeds, and the first failure for each entry.
 An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
-The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 141 pass
-(pack 1/entries 1–7 and 9–24; pack 2/entries 1–13, 17–18 and 20–24;
-pack 3/entries 1–10, 12–13, 15–17, 19, 22 and 24; pack 4/entries 1–6, 8–19 and 21–24;
-pack 5/entries 1, 3–4, 6–11 and 13–24;
-pack 6/entries 1–7, 9–11, 13, 15–18 and 20–24;
-pack 7/entries 1–3, 5–6, 8–9, 11–16, 18, 20 and 22–23).
+The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 166 pass.
+The remaining entries are 1-8 (tutorial sensor) and 2-14 (negative Om Nom spawn).
+Water physics is supported, including buoyancy, depth-dependent gravity, damping,
+fireball extinguishing and Om Nom's righting impulse. Water artwork and Om Nom's
+swim/dive presentation remain pending.
 Authored clovers are ignored, matching the Windows executable's loader; their
 presence in the map does not add a collectible or physics body. Further work includes loader coverage, physical
-objects and general collision, water,
+objects and general collision, water presentation,
 the other characters, level selection, progression, audio and saves.
 
 ```sh
