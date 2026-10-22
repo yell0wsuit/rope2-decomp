@@ -2116,8 +2116,9 @@ SHA-256 above are unchanged.
 
 Local Windows-cache render inspection covered all six water animation scenes and
 playable frames from 5-2 (tick 18) and 7-24 (tick 60). This verifies decoded artwork
-and scene rendering, not visual parity with an original-game recording. Water
-surface artwork, particles and audio remain separate presentation work.
+and scene rendering, not visual parity with an original-game recording. The water
+surface and tint are covered by the next checkpoint; particles and audio remain
+separate presentation work.
 
 The construction audit remains 166/168 (1-8 tutorial sensor and 2-14 negative
 spawn remain blocked). The replay baseline remains 490 journals / 18027 exact
@@ -2129,3 +2130,57 @@ and missing fruit in 2-16 documented above. Full collectible verdicts remain
 25/25 main, 24/25 challenge and 24/25 fruit challenge for water, and
 166/166, 161/162 and 155/162 over all supported content. Release validation:
 701 tests passed, zero skipped; build, format verification and diff checks pass.
+
+
+### Water surface and tint checkpoint
+
+The desktop renderer now loads Windows resource **250**, preserving the selected
+resolution's pixel quads, density and trim metadata. Rear wave 7 draws before
+terrain and gameplay objects; upper tint 6, lower tint 5 and front wave 8 draw after
+them, before tutorial/UI. The water placement no longer draws a diagnostic dot.
+Windows Water::initWith (0x4AE510), drawLayer (0x4AEED0) and the GameScene draw
+passes (~313360 / 314080 in the exported C) establish this order.
+
+The surface starts at twice the authored y. Upper tint starts 11 logical units
+below it and keeps its trimmed logical height. Lower tint stretches from there
+to the logical canvas bottom; both tones stretch across the canvas width and
+retain atlas alpha. The native center-based scaling and compensating positions
+reduce to these rectangles. Viewport letterboxing still bounds the logical canvas;
+this does not resolve native FULL_SCREEN / SCREEN_OFFSET coverage.
+
+Wave strips repeat their trimmed logical width. Windows XShiftTiledImage::update
+(0x4AD8D0) accumulates float speed times the fixed delta, wraps with one tile-width
+correction, and truncates soft x to an integer for drawing. Front speed is positive;
+rear speed is negative. The rear's initial x is offset8.x minus offset7.x, then the
+first update replaces it with the scrolling position. Its y remains offset7.y
+minus offset8.y. Windows generateTimeline (0x4ADD20) alternates ease-out and ease-in
+between the graphics design's vertical scale extrema, scaling about strip center.
+The supplied design has speed 180, scale minimum/maximum both 1, and 0.6 seconds
+per leg. Rendering advances only visual phase from completed simulation ticks;
+repeated draws and pause cannot advance bodies, and restart restores phase.
+Static previews use the supplied preview time.
+
+Six generated-atlas rendering cases cover portrait and ultrawide fitting, two
+texture densities, layer occlusion, relative trim offsets, full-width tiling,
+upper/lower tint geometry and alpha, opposite scrolling with wrap, pause/restart,
+render-side physics preservation and static-preview ease-out scaling. The fixtures
+include extruded edge texels, as verified in the Windows water atlas, so stretched
+linear sampling does not introduce invented transparent borders.
+
+Real cached frames were inspected at 5-2 tick 18 (640x960, resolution 2) and 7-24
+tick 60 (1280x480, resolution 4 with density 1.56). These establish decoded atlas
+rendering and viewport placement, not pixel parity with original-game captures.
+Light traces, bubble/splash particles, audio and the optional full-scene WaterEffect
+distortion path (~314083..314118) remain separate checkpoints. The two-pass atlas
+rendering is also the native path when that optional render-target effect is off.
+
+Construction remains 166/168; replay prefixes remain 490 supported journals /
+18027 exact samples, with no shrunk prefix. Corrected outcomes remain unchanged,
+including all 75 admitted water variants winning and the previously documented
+6-8 challenge star and 2-16 fruit discrepancies. The native water physics fixture
+and its SHA-256 remain unchanged.
+
+Release verification for this checkpoint: 707 tests passed, zero skipped; build
+completed without warnings or errors, format plus verify passed, and diff checks
+were clean. Review found no important correctness issues; rear motion and wrap
+coverage was added after review.

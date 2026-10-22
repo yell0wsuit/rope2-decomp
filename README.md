@@ -195,8 +195,8 @@ The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 166 pas
 The remaining entries are 1-8 (tutorial sensor) and 2-14 (negative Om Nom spawn).
 Water physics is supported, including buoyancy, depth-dependent gravity, damping,
 fireball extinguishing and Om Nom's righting impulse. Om Nom uses the authored dive, looping swim, water mouth, chewing and failure
-scenes, including root connection squash/recovery. Water surface artwork, particles
-and audio remain pending.
+scenes, including root connection squash/recovery. The water surface and underwater tint use the Windows atlas.
+Light traces, bubbles/splashes, audio and the optional distortion effect remain pending.
 Authored clovers are ignored, matching the Windows executable's loader; their
 presence in the map does not add a collectible or physics body. Further work includes loader coverage, physical
 objects and general collision, water presentation,

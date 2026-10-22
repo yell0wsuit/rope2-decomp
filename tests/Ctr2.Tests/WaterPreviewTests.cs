@@ -33,10 +33,10 @@ namespace Ctr2.Tests
                     .Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"", StringComparison.Ordinal)
                     .Replace("gravityScale='0.7'", "gravityScale='0'", StringComparison.Ordinal);
                 File.WriteAllText(Path.Combine(maps, "!_MasterGameDesignDocument.xml"), design);
-                foreach (string color in new[] { "red", "green" })
+                foreach (string color in new[] { "red", "green", "clear" })
                 {
                     using SKBitmap texture = new(8, 8);
-                    texture.Erase(color == "red" ? SKColors.Red : SKColors.Lime);
+                    texture.Erase(color == "red" ? SKColors.Red : color == "green" ? SKColors.Lime : SKColors.Transparent);
                     using SKData png = texture.Encode(SKEncodedImageFormat.Png, 100);
                     File.WriteAllBytes(Path.Combine(assets, color + ".png"), png.ToArray());
                 }
@@ -46,6 +46,7 @@ namespace Ctr2.Tests
                 }
                 ResourceCatalog catalog = new(1, "synthetic", "", [new(85, "water.pb", 7, 2, null, 0, 0, []),
                     new(133, "red.png", 0, 2, 1, 8, 8, [new(0, 0, 8, 8, 0, 0), new(0, 0, 8, 8, 0, 0)], Hash("red")),
+                    new(250, "clear.png", 0, 2, 1, 8, 8, [.. Enumerable.Range(0, 9).Select(_ => new ResourceQuad(0, 0, 8, 8, 0, 0))], Hash("clear")),
                     new(7, "green.png", 0, 2, 1, 8, 8, [new(0, 0, 8, 8, 0, 0)], Hash("green"))]);
                 File.WriteAllText(Path.Combine(root, "resources.json"), JsonSerializer.Serialize(catalog));
                 string[] names = ["IDLE", "MOUTH_OPEN", "MOUTH_CLOSE", "CHEWING", "PUZZLED", "FAIL", "FALLING", "FALLING_MOUTH_OPEN",
