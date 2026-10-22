@@ -74,7 +74,11 @@ namespace Ctr2.Tests
                 using SKCanvas canvas = new(bitmap);
                 int GreenLeft()
                 {
+                    // Isolate animation geometry in the native frozen-scene path.
+                    bool paused = session.Paused;
+                    session.Paused = true;
                     preview.Draw(canvas, 640, 960, 1000);
+                    session.Paused = paused;
                     return Enumerable.Range(450, 100).First(x => Enumerable.Range(450, 100).Any(y => bitmap.GetPixel(x, y) == SKColors.Lime));
                 }
                 int initial = GreenLeft();

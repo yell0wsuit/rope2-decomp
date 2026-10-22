@@ -2258,22 +2258,22 @@ ultrawide at resolution4/density1.56, and a released-body 5-2 splash at tick60.
 
 ### Water audio checkpoint
 
-Windows water initialization calls LoopSoundHelper::play(323), looping at volume1
-(0x4AE510/0x4AC780). The existing fast-entry gate emits sound324 or325 at volume1
+Windows water initialization calls LoopSoundHelper::play(323), looping at volume 1
+(0x4AE510/0x4AC780). The existing fast-entry gate emits sound 324 or 325 at volume 1
 before creating its splash (0x4AF1C0). Touch and ambient bubbles have no sound
-request. Fireball::onUnderWater emits255 once when starting its water fade,
+request. Fireball::onUnderWater emits 255 once when starting its water fade,
 including initial immersion (0x489710); it does not pass the splash-speed gate
 because its callback already cleared velocity.
 
-The PE resource registry at0x8EE9E0 (eight-byte entries) maps323 to
-`water_splash_idle.ogg`,324/325 to`water_splash01.ogg`/`water_splash02.ogg`, and255
-to`fire_drown01.ogg`. SoundMgr pause/resume are0x6CA910/0x6CA920. Source choices
+The PE resource registry at 0x8EE9E0 (eight-byte entries) maps 323 to
+`water_splash_idle.ogg`, 324/325 to `water_splash01.ogg`/`water_splash02.ogg`, and 255
+to `fire_drown01.ogg`. SoundMgr pause/resume are 0x6CA910/0x6CA920. Source choices
 and full volume are preserved; random splash selection uses an independent audio
 stream, leaving physics and existing particle trajectories unchanged.
 
 Simulation emits device-independent `SoundPlayed` events. Interactive play owns
-an NVorbis decoder and SDL stereo float stream. The small mixer duplicates mono,
-linearly converts decoded rates to48kHz, loops ambience, sums overlapping voices
+an NVorbis decoder and SDL stereo float stream. The mixer duplicates mono,
+linearly converts decoded rates to 48 kHz, loops ambience, sums overlapping voices
 and clips output. Pause retains phase/queued PCM; restart clears old voices and
 subscriptions and restarts ambience. Cleanup occurs before SDL shutdown. Dry
 levels do not open water audio; snapshots/replay/audit commands never open devices.
@@ -2282,15 +2282,79 @@ This ports these water sounds, not the rest of the original sound manager.
 
 Seven focused regressions cover source cue gates, extinguishing, RNG independence,
 PCM overlap/looping/rate conversion and pause/restart/disposal. A local probe
-successfully decoded all four actual imported clips (mono22050Hz), verified finite
-nonzero PCM and queued/paused/resumed it through SDL's dummy device. This verifies
-decoding and device plumbing; physical speaker listening remains unverified.
+successfully decoded all four actual imported clips (mono, 22050 Hz), verified
+finite nonzero PCM and queued/paused/resumed it through SDL's dummy device. This
+verifies decoding and device plumbing; physical speaker listening remains unverified.
 
-Release verification:725 tests passed, zero skipped; release build and formatting
-verification clean. Replay baseline regenerated unchanged:490 supported journals /
-18027 exact-prefix samples; no prefix shrink. All960 native water body snapshots
-remain exact. Construction166/168; corrected verdicts166/166 main,161/162 challenge,
-155/162 fruit, with all75 admitted water variants winning. FixtureSHA256 remains
+Release verification: 725 tests passed, zero skipped; release build and formatting
+verification clean. Replay baseline regenerated unchanged: 490 supported journals /
+18027 exact-prefix samples; no prefix shrink. All 960 native water body snapshots
+remain exact. Construction 166/168; corrected verdicts 166/166 main, 161/162 challenge,
+155/162 fruit, with all 75 admitted water variants winning. Fixture SHA-256 remains
 `0caa4a88a99c404d8244bd992d4cf6ceddb1f47fdba4e8c6dbcb13ed056f22ff`.
 Independent review confirmed resource IDs and source pause/resume, with no
-outstanding important issues. WaterDrawer distortion is the next checkpoint.
+outstanding important issues. WaterDrawer distortion follows in the next checkpoint.
+
+### Water distortion checkpoint
+
+Windows WaterDrawer always creates its framebuffer and drawer for water scenes;
+the full pass runs while the scene is updateable and the target is ready. This
+port captures at physical output dimensions into a reused Skia raster surface,
+then draws a textured mesh before foreground splash particles and tutorial/UI.
+Rear water, objects, front water, light traces and bubbles are inside capture.
+The background-only path is used when paused or a bounded target cannot be
+allocated. Existing fitted-canvas clipping and letterboxing remain unchanged;
+FULL_SCREEN is reconstructed from physical dimensions divided by viewport scale,
+with SCREEN_OFFSET=(FULL_SCREEN-logicalCanvas)/2.
+
+The embedded shader is at 0x601920; grid setup is at 0x600EE0/0x601040. It emits
+20×20 cells, 2400 vertices, in X-major order, with triangles TL/TR/BR and TL/BL/BR.
+Only outer positions expand by two logical units; UV bounds remain nominal.
+Displacement runs at vertices and interpolates across each triangle. Evaluating
+sine per pixel would produce different motion. For framebuffer UVs, Y is inverted;
+after native vertex displacement the renderer converts it to Skia's top-down
+sampling.
+
+With node position (x,y), phase t, and bounds (maxU,maxV), the shader condition is
+`y-50 > water.level+15`. Its envelope is `sin(y*3.1415926/192)`; U displacement is
+`maxU*sin(y/120+t)*.004*.0112*envelope`; V displacement is
+`maxV*sin(x/60+t)*.0112*envelope`. Each coordinate clamps to its texture bounds.
+All quantities use float operations. Texture filtering is linear; presentation
+uses source replacement, matching disabled native framebuffer blending.
+
+Drawer time is a separate float initially zero, advanced by `+=delta` at the end
+of scene updates (~312525). The renderer reconstructs each fixed increment,
+including skipped draws; it does not substitute tick*delta. Repeated renders
+cannot advance phase. Rewind or simulation replacement resets the drawer.
+
+The paused fallback (0x601450) uses the selected background quad's width/height
+normalized by texture dimensions, with UV origin zero regardless of atlas origin,
+over FULL_SCREEN without the ordinary background height-fit. It uses positive Y
+UVs. Rebuilding this mode adds 3.1415926 to phase once. Resuming framebuffer mode
+preserves that phase. The native comparison checks inversion, origin X and max Y,
+not max X. The renderer follows those checks. Only backgrounds already supported
+by this port participate in this fallback; other location backgrounds remain
+outside this checkpoint.
+
+Tests include independent C++ float shader outputs and triangle-interpolated
+readback references at 640×960, 1280×480 and 1280×1920, native grid/overscan/order,
+strict threshold and UV direction, phase transitions, background mapping, scene
+capture, foreground splash exclusion, resize, repeated draw and restart. Earlier
+sprite/wave geometry tests use the frozen direct path to isolate those contracts
+from postprocess resampling. Native shader expression checks are CPU references,
+not original GPU execution or pixel-parity evidence.
+
+Actual imported-cache frames were inspected at 5-2 tick 60 portrait and 7-24 tick
+360 ultrawide (resolution 4, density 1.56), including tap bubbles, plus 5-2 tick 60
+after release-at 0 for visible splashes. Source/lifetime review found no important
+outstanding issue. Physical speaker listening and original-game GPU/pixel
+comparison remain unverified; the existing letterboxing and unsupported-level
+gaps remain separate.
+
+Release verification: 740 tests passed, zero skipped; build had zero warnings or
+errors, format plus verify passed, and diff checks were clean. All 960 native
+water body snapshots remain exact with the same fixture SHA-256. Replay baseline
+remains 490 supported journals / 18027 exact-prefix samples, regenerated with no
+prefix shrink. Construction remains 166/168. Corrected verdicts remain 166/166
+main, 161/162 challenge and 155/162 fruit; all 75 admitted water variants win,
+with the same known collectible gaps. No decompiled code or game assets are tracked.

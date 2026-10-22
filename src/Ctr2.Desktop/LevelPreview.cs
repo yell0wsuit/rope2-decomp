@@ -26,6 +26,10 @@ namespace Ctr2.Desktop
         private ForestBackground? background;
         private StarSprites? stars;
         private WaterSurface? water;
+        private readonly WaterDistortion waterDistortion = new();
+        private SKSurface? waterTarget;
+        private int waterTargetWidth, waterTargetHeight;
+        private CandySimulation? waterSimulation;
         private int sceneRevision = -1;
         private CandySimulation? animatedSimulation;
         /// <summary>Gets the optional playable session with pause and restart ownership.</summary>
@@ -135,6 +139,70 @@ namespace Ctr2.Desktop
             {
                 throw new ArgumentOutOfRangeException(nameof(seconds));
             }
+
+            Viewport viewport = Viewport.Fit(width, height, Layout.Size.X, Layout.Size.Y);
+            if (waterSimulation != Simulation)
+            {
+                waterDistortion.Reset();
+                waterSimulation = Simulation;
+            }
+            bool capture = water != null && Session?.Paused != true;
+            if (capture)
+            {
+                if (waterTarget == null || waterTargetWidth != width || waterTargetHeight != height)
+                {
+                    waterTarget?.Dispose();
+                    waterTarget = null;
+                    if ((long)width * height * 4 <= 128 * 1024 * 1024)
+                    {
+                        waterTarget = SKSurface.Create(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+                    }
+                    waterTargetWidth = width;
+                    waterTargetHeight = height;
+                }
+                capture = waterTarget != null;
+            }
+            if (capture)
+            {
+                DrawScene(waterTarget!.Canvas, width, height, seconds, false);
+                using SKImage image = waterTarget.Snapshot();
+                int fixedTick = Simulation?.Tick ?? (int)Math.Min(int.MaxValue, seconds / PhysicsWorld.TimeStep);
+                waterDistortion.DrawFrame(canvas, image, Layout.Size, width, height, water!.Level, fixedTick);
+            }
+            else
+            {
+                DrawScene(canvas, width, height, seconds, water != null);
+            }
+            Matrix4x4 m = viewport.Transform;
+            int saved = canvas.Save();
+            try
+            {
+                canvas.Concat(new SKMatrix(m.M11, m.M21, m.M41, m.M12, m.M22, m.M42, 0, 0, 1));
+                canvas.ClipRect(new SKRect(0, 0, Layout.Size.X, Layout.Size.Y));
+                water?.DrawDrops(canvas, Simulation?.WaterEffects);
+                if (Simulation?.Gameplay?.Tutorial is TutorialFinger hint && hint.Opacity > 0)
+                {
+                    // A swipe finger is shifted 90 units along its rotated axis; a tap finger is centered on the hint.
+                    Vector2 origin = (-tutorial!.CanvasSize / 2) + new Vector2(hint.Swipe ? 90 : 0, 0);
+                    Matrix4x4 transformHint = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
+                        Matrix4x4.CreateRotationZ(hint.Swipe ? hint.Angle * MathF.PI / 180 : 0) * Matrix4x4.CreateTranslation(hint.Position.X, hint.Position.Y, 0);
+                    double time = tutorial.Duration > 0 ? hint.AnimationSeconds % tutorial.Duration : 0;
+                    tutorial.DrawTransformed(canvas, transformHint, time, hint.Opacity);
+                }
+            }
+            finally
+            {
+                canvas.RestoreToCount(saved);
+            }
+        }
+
+        private void DrawScene(SKCanvas canvas, int width, int height, double seconds, bool fallback)
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (!double.IsFinite(seconds) || seconds < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(seconds));
+            }
             Viewport viewport = Viewport.Fit(width, height, Layout.Size.X, Layout.Size.Y);
             canvas.Clear(new SKColor(24, 27, 32));
             Matrix4x4 transform = viewport.Transform;
@@ -149,7 +217,15 @@ namespace Ctr2.Desktop
                     IsAntialias = true
                 };
                 canvas.DrawRect(0, 0, Layout.Size.X, Layout.Size.Y, paint);
-                background?.Draw(canvas, Layout.Size);
+                if (fallback && background != null)
+                {
+                    int fixedTick = Simulation?.Tick ?? (int)Math.Min(int.MaxValue, seconds / PhysicsWorld.TimeStep);
+                    background.DrawDistorted(canvas, Layout.Size, waterDistortion, width, height, water!.Level, fixedTick);
+                }
+                else
+                {
+                    background?.Draw(canvas, Layout.Size);
+                }
                 int waterTick = Simulation?.Tick ?? (int)Math.Min(int.MaxValue, seconds / PhysicsWorld.TimeStep);
                 water?.Draw(canvas, Layout.Size, waterTick, foreground: false, Simulation?.WaterEffects);
                 if (Simulation?.Gameplay?.ArrivalLeaves is ForestLeafBurst leaves)
@@ -483,15 +559,7 @@ namespace Ctr2.Desktop
                     }
                 }
                 water?.Draw(canvas, Layout.Size, waterTick, foreground: true, Simulation?.WaterEffects);
-                if (Simulation?.Gameplay?.Tutorial is TutorialFinger hint && hint.Opacity > 0)
-                {
-                    // A swipe finger is shifted 90 units along its rotated axis; a tap finger is centered on the hint.
-                    Vector2 origin = (-tutorial!.CanvasSize / 2) + new Vector2(hint.Swipe ? 90 : 0, 0);
-                    Matrix4x4 transformHint = Matrix4x4.CreateTranslation(origin.X, origin.Y, 0) *
-                        Matrix4x4.CreateRotationZ(hint.Swipe ? hint.Angle * MathF.PI / 180 : 0) * Matrix4x4.CreateTranslation(hint.Position.X, hint.Position.Y, 0);
-                    double time = tutorial.Duration > 0 ? hint.AnimationSeconds % tutorial.Duration : 0;
-                    tutorial.DrawTransformed(canvas, transformHint, time, hint.Opacity);
-                }
+
             }
             finally
             {
@@ -531,6 +599,7 @@ namespace Ctr2.Desktop
                 forestLeaves?.Dispose();
                 tutorial?.Dispose();
                 stars?.Dispose();
+                waterTarget?.Dispose();
                 water?.Dispose();
                 background?.Dispose();
                 disposed = true;

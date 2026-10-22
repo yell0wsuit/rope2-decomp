@@ -17,6 +17,7 @@ namespace Ctr2.Desktop
         private readonly SKShader lightShader;
         private readonly AtlasFrame[] frames;
         private readonly WaterVisualDefinition design;
+        internal float Level => design.Level;
         private int tick;
         private float frontSoft, backSoft;
         private float frontX, backX;
@@ -164,11 +165,36 @@ namespace Ctr2.Desktop
                 Quad(light.Quad, x, design.Level, frame.LogicalWidth, frame.LogicalHeight);
             }
             paint.BlendMode = SKBlendMode.SrcOver;
-            void Particle(WaterParticle particle)
+            foreach (WaterParticle bubble in effects.Bubbles)
             {
-                AtlasFrame frame = frames[particle.Quad];
-                paint.Color = SKColors.White.WithAlpha((byte)(particle.Opacity * 255));
-                _ = canvas.Save();
+                DrawParticle(canvas, bubble, paint);
+            }
+        }
+
+        internal void DrawDrops(SKCanvas canvas, WaterEffects? effects)
+        {
+            if (effects == null)
+            {
+                return;
+            }
+
+            using SKPaint paint = new()
+            {
+                IsAntialias = false
+            };
+            foreach (WaterParticle drop in effects.Drops)
+            {
+                DrawParticle(canvas, drop, paint);
+            }
+        }
+
+        private void DrawParticle(SKCanvas canvas, WaterParticle particle, SKPaint paint)
+        {
+            AtlasFrame frame = frames[particle.Quad];
+            paint.Color = SKColors.White.WithAlpha((byte)(particle.Opacity * 255));
+            int saved = canvas.Save();
+            try
+            {
                 Vector2 center = particle.Position;
                 if (particle.Quad < 3)
                 {
@@ -177,16 +203,13 @@ namespace Ctr2.Desktop
                 canvas.Translate(center.X, center.Y);
                 canvas.RotateRadians(particle.Rotation);
                 canvas.Scale(particle.Scale.X, particle.Scale.Y * particle.BounceY);
-                Quad(particle.Quad, -frame.LogicalWidth / 2, -frame.LogicalHeight / 2, frame.LogicalWidth, frame.LogicalHeight);
-                canvas.Restore();
+                canvas.DrawBitmap(bitmap, new SKRect(frame.PixelX, frame.PixelY, frame.PixelX + frame.PixelWidth, frame.PixelY + frame.PixelHeight),
+                    new SKRect(-frame.LogicalWidth / 2, -frame.LogicalHeight / 2, frame.LogicalWidth / 2, frame.LogicalHeight / 2),
+                    new SKSamplingOptions(SKFilterMode.Linear), paint);
             }
-            foreach (WaterParticle bubble in effects.Bubbles)
+            finally
             {
-                Particle(bubble);
-            }
-            foreach (WaterParticle drop in effects.Drops)
-            {
-                Particle(drop);
+                canvas.RestoreToCount(saved);
             }
         }
 

@@ -198,7 +198,8 @@ fireball extinguishing and Om Nom's righting impulse. Om Nom uses the authored d
 scenes, including root connection squash/recovery. The water surface and underwater tint use the Windows atlas.
 Seven additive light traces, ambient/tap bubbles and fast-entry splashes use the Windows atlas and fixed game clock.
 Interactive play now loops water ambience and plays fast-entry splashes and fire-drowning sounds from the imported Ogg clips.
-Other audio and the optional distortion effect remain pending.
+Water distortion uses the Windows 20×20 vertex mesh, capturing the scene before foreground splashes and UI.
+Paused scenes use the native background-only fallback. Other game audio remains pending.
 Authored clovers are ignored, matching the Windows executable's loader; their
 presence in the map does not add a collectible or physics body. Further work includes loader coverage, physical
 objects and general collision, water presentation,

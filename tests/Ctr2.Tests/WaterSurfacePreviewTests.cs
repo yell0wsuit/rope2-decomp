@@ -19,15 +19,25 @@ namespace Ctr2.Tests
     /// <summary>Generated Windows atlas pixels verify water geometry and ordering without game assets.</summary>
     public sealed class WaterSurfacePreviewTests
     {
-        private sealed class Cache : IDisposable
+        internal sealed class Cache : IDisposable
         {
             internal string Root { get; } = Path.Combine(Path.GetTempPath(), "ctr2-water-surface-" + Guid.NewGuid());
-            internal Cache(int resolution, bool translucent = false, string maximumScale = "1", bool effects = false, byte effectAlpha = 255)
+            internal Cache(int resolution, bool translucent = false, string maximumScale = "1", bool effects = false, byte effectAlpha = 255, bool landmark = false, bool forest = false)
             {
                 string assets = Path.Combine(Root, "assets"), maps = Path.Combine(assets, "maps");
                 _ = Directory.CreateDirectory(maps);
                 File.WriteAllText(Path.Combine(maps, "sortedlist_desktop.xml"), "<filelist><pack id='2'><file short='water.xml'/></pack></filelist>");
                 File.WriteAllText(Path.Combine(maps, "water.xml"), "<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'><candy x='20' y='20'/><omnom x='250' y='108'/><circle_materialized x='100' y='99' radius='12' material='wood_dynamic'/><water x='160' y='100'/></layer></map>");
+                if (forest)
+                {
+                    string levelPath = Path.Combine(maps, "water.xml");
+                    File.WriteAllText(levelPath, File.ReadAllText(levelPath).Replace("height='480'/>", "height='480'/><gameDesign location='forest'/>", StringComparison.Ordinal));
+                }
+                if (landmark)
+                {
+                    string levelPath = Path.Combine(maps, "water.xml");
+                    File.WriteAllText(levelPath, File.ReadAllText(levelPath).Replace("<water x=", "<circle_materialized x='80' y='250' radius='12' material='wood_dynamic'/><water x=", StringComparison.Ordinal));
+                }
                 string design = RopeTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master +
                     "<water_design id='water_design' gravity_multiplier='-0.6' water_damping='3' water_angular_damping='1' gfx_wave_speed='60' gfx_wave_scale_y_min='1' gfx_wave_scale_y_max='1' gfx_wave_scale_time='0.6'/></layer></map>", StringComparison.Ordinal)
                     .Replace("gravityScale=\"0.7\"", "gravityScale=\"0\"", StringComparison.Ordinal)
@@ -71,6 +81,7 @@ namespace Ctr2.Tests
                 ResourceQuad[] water = [clear, clear, clear, clear, clear, Quad(0, 0, 4, 4), Quad(4, 0, 4, 8), Quad(8, 0, 16, 4, 4, 10), Quad(8, 8, 16, 4, 8, 12), clear, clear, clear];
                 ResourceCatalog catalog = new(1, "synthetic", "", [new(85, "character.pb", 7, resolution, null, 0, 0, []),
                     new(133, "surface.png", 0, resolution, density, 40 * density, 16 * density, [green, green], hash),
+                    new(160, "surface.png", 0, 2, density, 40 * density, 16 * density, [green], hash),
                     new(7, "surface.png", 0, resolution, density, 40 * density, 16 * density, [green], hash),
                     new(250, "surface.png", 0, resolution, density, 40 * density, 16 * density, water, hash)]);
                 File.WriteAllText(Path.Combine(Root, "resources.json"), JsonSerializer.Serialize(catalog));
@@ -100,6 +111,7 @@ namespace Ctr2.Tests
             using LevelPreview preview = LevelPreview.Load(cache.Root, 2, 1, resolution, play: true).Preview;
             using SKBitmap bitmap = new(width, height);
             using SKCanvas canvas = new(bitmap);
+            preview.Session!.Paused = true; // Isolate native wave/tint placement from postprocess resampling.
             preview.Draw(canvas, width, height, 0);
             Viewport viewport = Viewport.Fit(width, height, 640, 960);
             SKColor Pixel(float x, float y)
@@ -223,6 +235,7 @@ namespace Ctr2.Tests
             }
 
             WaterParticle bubble = session.Simulation.WaterEffects.Bubbles[0];
+            session.Paused = true;
             preview.Draw(canvas, 640, 960, 0);
             // Native left/top wrapper has zero dimensions; its scale also scales the child harmonic shift.
             Vector2 center = bubble.Position + (bubble.Scale * new Vector2(bubble.HarmonicX + 4, 4));

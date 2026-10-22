@@ -38,6 +38,11 @@ namespace Ctr2.Desktop
             canvas.DrawBitmap(bitmap, source, new SKRect(left, 0, left + width, size.Y), new SKSamplingOptions(SKFilterMode.Linear));
         }
 
+        internal void DrawDistorted(SKCanvas canvas, Vector2 size, WaterDistortion distortion, int width, int height, float level, int tick)
+        {
+            distortion.DrawBackground(canvas, bitmap, frame, size, width, height, level, tick);
+        }
+
         public void Dispose()
         {
             bitmap.Dispose();
