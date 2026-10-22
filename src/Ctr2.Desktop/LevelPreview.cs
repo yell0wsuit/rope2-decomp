@@ -151,7 +151,7 @@ namespace Ctr2.Desktop
                 canvas.DrawRect(0, 0, Layout.Size.X, Layout.Size.Y, paint);
                 background?.Draw(canvas, Layout.Size);
                 int waterTick = Simulation?.Tick ?? (int)Math.Min(int.MaxValue, seconds / PhysicsWorld.TimeStep);
-                water?.Draw(canvas, Layout.Size, waterTick, foreground: false);
+                water?.Draw(canvas, Layout.Size, waterTick, foreground: false, Simulation?.WaterEffects);
                 if (Simulation?.Gameplay?.ArrivalLeaves is ForestLeafBurst leaves)
                 {
                     forestLeaves!.Draw(canvas, leaves.Particles);
@@ -482,7 +482,7 @@ namespace Ctr2.Desktop
                         canvas.DrawCircle(point.X, point.Y, placed.Source.Kind == "grab" ? 6 : 12, paint);
                     }
                 }
-                water?.Draw(canvas, Layout.Size, waterTick, foreground: true);
+                water?.Draw(canvas, Layout.Size, waterTick, foreground: true, Simulation?.WaterEffects);
                 if (Simulation?.Gameplay?.Tutorial is TutorialFinger hint && hint.Opacity > 0)
                 {
                     // A swipe finger is shifted 90 units along its rotated axis; a tap finger is centered on the hint.

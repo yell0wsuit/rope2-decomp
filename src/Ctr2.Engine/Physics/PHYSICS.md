@@ -2170,8 +2170,8 @@ linear sampling does not introduce invented transparent borders.
 Real cached frames were inspected at 5-2 tick 18 (640x960, resolution 2) and 7-24
 tick 60 (1280x480, resolution 4 with density 1.56). These establish decoded atlas
 rendering and viewport placement, not pixel parity with original-game captures.
-Light traces, bubble/splash particles, audio and the optional full-scene WaterEffect
-distortion path (~314083..314118) remain separate checkpoints. The two-pass atlas
+At this checkpoint, light traces, bubble/splash particles, audio and the optional
+full-scene WaterEffect distortion path (~314083..314118) remained separate. The two-pass atlas
 rendering is also the native path when that optional render-target effect is off.
 
 Construction remains 166/168; replay prefixes remain 490 supported journals /
@@ -2184,3 +2184,73 @@ Release verification for this checkpoint: 707 tests passed, zero skipped; build
 completed without warnings or errors, format plus verify passed, and diff checks
 were clean. Review found no important correctness issues; rear motion and wrap
 coverage was added after review.
+
+
+### Water light and particle checkpoint
+
+`WaterEffects` advances on the fixed simulation clock, before the late water body
+walk, and exposes immutable snapshots. Its private xorshift stream never reads or
+writes physics randomness. Repeatable visual trajectories intentionally do not
+reproduce the original global random stream. Static previews advance a separate
+model using preview ticks; drawing a live session cannot advance effects.
+
+Seven traces use atlas 250 quads 3/4, left/top at the initial water origin. Each
+chooses one delay in 0..2 seconds at creation, reuses that delay between cycles,
+and reselects X from `-width/4` through `screenWidth+width/4`. Their linear opacity
+keys are 0, .3, .4, 0 at 0, .7, 1.3, 2 seconds (Windows 0x4ADEA0). Native node RGB
+premultiplication followed by SRC_ALPHA/ONE blending means straight source RGB
+contributes `RGB * textureAlpha² * opacity²`. The renderer composes a sampled-color shader with its sampled alpha after linear
+filtering, then applies opacity squared; imported pixels and metadata stay intact.
+
+Ambient systems start every 4..7 seconds at logical screen bottom+10. Underwater
+touches create short bubble systems and return false, allowing earlier touchable
+children to handle input. Water receives touches after late spawned children and
+before magnets. Bubble quads 0..2 have capacity 3, initial count 1, emission rate
+10, speed 120±80 at -90±12 degrees, position variance (30,30), start scale .75±.25,
+end .3, initial alpha .8±.4, fading to zero. Life and duration are 1.2 seconds for
+touches and **10.2 seconds** for ambient systems (Windows 0x600950, unlike Android).
+Emission occurs before integration, with a strict `counter > 1/rate` condition.
+Existing children update before emission. Life is checked before decrement;
+removal swaps in the last live particle and visits that slot again.
+
+Bubble images have a .2-second-per-leg 1→1.2→1 quadratic ease-in-out Y bounce
+and harmonic X `40*sin(previousElapsed*5)` with initial elapsed in [0,2).
+They use left/top anchors inside zero-sized wrappers. If P is particle position,
+S its scale, H harmonic X, B bounce, and w/h trimmed logical dimensions, the
+rendered center is `P + S*(H+w/2,h/2)` and size `S*(w,h*B)`. Thus wrapper scale
+also scales H. Surface visibility fades through y=initialLevel+17..+5; the base
+particle color is restored each tick, so that extra fade does not compound.
+
+Fast body entries use ten splash quads 9..11 at the logical body center, after
+water callbacks. Fireballs extinguish and clear velocity before this test. The
+strict speed threshold is 1.7 m/s; first-frame entries are suppressed. Recently
+immersed bodies remain remembered for .06 seconds above water. DeltaCollision
+also suppresses the same body within ten logical units, recording entries for
+.2 seconds even when too slow to splash. Its Windows expired-prefix behavior is
+preserved: if every record expired, it retains the records until an unexpired
+record follows them (0x5D7CC0/0x5D7D20).
+
+Drops live 1.3 seconds, with gravity (0,600), position variance (30,10), angle
+-90±90 degrees, speed 280±60, radial acceleration 160±30 and tangential 50±15.
+Scale is .9±.4→.5±.15 with ratio preserved. The initial quad is transparent;
+callbacks prepare opacity `life/1.3` (zero below spawn Y) and velocity-aligned
+rotation for the next quad update (0x600C40/0x600E60). Newly spawned splashes
+first integrate next tick. Foreground traces and bubbles follow the front wave;
+splashes draw afterward in the scene foreground pass.
+
+Verification covers emission timing, Windows ambient duration, surface fade,
+first-frame/speed/re-entry suppression, fireball callback order, immutable
+snapshots, independent randomness, generated-atlas blend/anchor readback at two
+densities and translucent alpha, repeated draws and restart. Audio and optional
+framebuffer distortion remain pending. Actual-cache frames establish asset
+rendering and placement; original-game pixel/particle trajectory parity remains
+unverified.
+
+Release verification: 718 tests passed, zero skipped; build had zero warnings or
+errors, format plus verify passed, and diff checks were clean. All 960 native
+water body snapshots remain exact. Replay baseline remains 490 supported
+journals / 18027 exact-prefix samples, with no prefix shrink. Construction remains
+166/168. Corrected outcomes remain 166/166 main, 161/162 challenge and 155/162 fruit
+verdicts; all 75 admitted water variants win with the same known collectible
+mismatches. Actual-cache inspection includes 5-2 tick60 portrait, 7-24 tick360
+ultrawide at resolution4/density1.56, and a released-body 5-2 splash at tick60.

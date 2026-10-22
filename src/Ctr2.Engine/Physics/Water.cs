@@ -9,6 +9,12 @@ namespace Ctr2.Engine.Physics
 {
     public sealed partial class CandySimulation
     {
+        /// <summary>Gets water decoration, independent of bodies and gameplay randomness.</summary>
+        public WaterEffects? WaterEffects
+        {
+            get; private set;
+        }
+
         private float? waterLevel;
         private float waterFlow;
         private LevelDefinition? waterMaster;
@@ -23,6 +29,7 @@ namespace Ctr2.Engine.Physics
             waterLevel = Value(placed.Source, "y") * 2;
             waterFlow = Value(placed.Source, "flowspeed");
             waterMaster = design;
+            WaterEffects = new(Screen, waterLevel.Value);
         }
 
         private WaterParameters? WaterDesign(PhysicsBody body)
@@ -55,6 +62,7 @@ namespace Ctr2.Engine.Physics
             {
                 return;
             }
+            WaterEffects!.Step();
             foreach (PhysicsBody body in World.Bodies)
             {
                 if (body.Type != PhysicsBodyType.Dynamic)
@@ -97,7 +105,9 @@ namespace Ctr2.Engine.Physics
                 body.GravityScale = below ? (float)(depth * .0125) * parameters.BelowGravity : parameters.Gravity;
                 body.LinearDamping = below ? parameters.BelowLinear : parameters.Linear;
                 body.AngularDamping = below ? parameters.BelowAngular : parameters.Angular;
+                WaterEffects.Observe(body, below);
             }
+            WaterEffects.EndStep();
             waterLevel = level + (waterFlow * PhysicsWorld.TimeStep);
         }
 

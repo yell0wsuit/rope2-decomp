@@ -10,20 +10,22 @@ using SkiaSharp;
 
 namespace Ctr2.Desktop
 {
-    /// <summary>Windows atlas 250 waves and tint in the native rear/front draw passes.</summary>
+    /// <summary>Windows atlas 250 surface, traces and particles in the native rear/front draw passes.</summary>
     internal sealed class WaterSurface : IDisposable
     {
         private readonly SKBitmap bitmap;
+        private readonly SKShader lightShader;
         private readonly AtlasFrame[] frames;
         private readonly WaterVisualDefinition design;
         private int tick;
         private float frontSoft, backSoft;
         private float frontX, backX;
+        private WaterEffects? staticEffects;
 
         internal WaterSurface(string cache, int resolution, WaterVisualDefinition design)
         {
             this.design = design;
-            SelectedResource[] selected = [.. Enumerable.Range(5, 4).Select(q => ResourcePreview.Load(cache, 250, resolution, q))];
+            SelectedResource[] selected = [.. Enumerable.Range(0, 12).Select(q => ResourcePreview.Load(cache, 250, resolution, q))];
             using SKCodec codec = SKCodec.Create(selected[0].TexturePath) ?? throw new InvalidDataException("Cannot decode water texture.");
             if (codec.Info.Width <= 0 || codec.Info.Height <= 0 || codec.Info.Width > 8192 || codec.Info.Height > 8192 ||
                 (long)codec.Info.Width * codec.Info.Height * 4 > 128 * 1024 * 1024 || selected.Any(r => r.TexturePath != selected[0].TexturePath))
@@ -36,14 +38,19 @@ namespace Ctr2.Desktop
                 throw new InvalidDataException("Water quad exceeds texture bounds.");
             }
             bitmap = SKBitmap.Decode(codec) ?? throw new InvalidDataException("Cannot decode water texture.");
+            // RAW textures and node colors are premultiplied before native SRC_ALPHA/ONE.
+            // Multiply the sampled color by its sampled alpha, after linear filtering.
+            using SKShader texture = bitmap.ToShader(SKShaderTileMode.Clamp, SKShaderTileMode.Clamp, new SKSamplingOptions(SKFilterMode.Linear));
+            lightShader = SKShader.CreateCompose(texture, texture, SKBlendMode.DstIn);
             Reset();
         }
 
         private void Reset()
         {
             tick = 0;
+            staticEffects = null;
             frontSoft = backSoft = frontX = 0;
-            backX = frames[3].LogicalOffset.X - frames[2].LogicalOffset.X;
+            backX = frames[8].LogicalOffset.X - frames[7].LogicalOffset.X;
         }
 
         private void Advance(int target)
@@ -70,16 +77,26 @@ namespace Ctr2.Desktop
             }
             for (; tick < target; tick++)
             {
-                frontSoft = Scroll(frontSoft, design.Speed, frames[3].LogicalWidth);
-                backSoft = Scroll(backSoft, -design.Speed, frames[2].LogicalWidth);
+                frontSoft = Scroll(frontSoft, design.Speed, frames[8].LogicalWidth);
+                backSoft = Scroll(backSoft, -design.Speed, frames[7].LogicalWidth);
                 frontX = (int)frontSoft;
                 backX = (int)backSoft;
             }
         }
 
-        internal void Draw(SKCanvas canvas, Vector2 size, int fixedTick, bool foreground)
+        internal void Draw(SKCanvas canvas, Vector2 size, int fixedTick, bool foreground, WaterEffects? effects = null)
         {
+            int previous = fixedTick < tick ? 0 : tick;
             Advance(fixedTick);
+            if (effects == null)
+            {
+                staticEffects ??= new(size, design.Level);
+                for (int i = previous; i < fixedTick; i++)
+                {
+                    staticEffects.Step();
+                }
+                effects = staticEffects;
+            }
             using SKPaint paint = new()
             {
                 IsAntialias = false
@@ -91,6 +108,18 @@ namespace Ctr2.Desktop
                     return;
                 }
                 AtlasFrame frame = frames[index];
+                if (index is 3 or 4)
+                {
+                    _ = canvas.Save();
+                    canvas.Translate(x, y);
+                    canvas.Scale(width / frame.PixelWidth, height / frame.PixelHeight);
+                    canvas.Translate(-frame.PixelX, -frame.PixelY);
+                    paint.Shader = lightShader;
+                    canvas.DrawRect(new SKRect(frame.PixelX, frame.PixelY, frame.PixelX + frame.PixelWidth, frame.PixelY + frame.PixelHeight), paint);
+                    paint.Shader = null;
+                    canvas.Restore();
+                    return;
+                }
                 canvas.DrawBitmap(bitmap, new SKRect(frame.PixelX, frame.PixelY, frame.PixelX + frame.PixelWidth, frame.PixelY + frame.PixelHeight),
                     new SKRect(x, y, x + width, y + height), new SKSamplingOptions(SKFilterMode.Linear), paint);
             }
@@ -117,18 +146,53 @@ namespace Ctr2.Desktop
             }
             if (!foreground)
             {
-                Wave(2, backX, frames[2].LogicalOffset.Y - frames[3].LogicalOffset.Y);
+                Wave(7, backX, frames[7].LogicalOffset.Y - frames[8].LogicalOffset.Y);
                 return;
             }
             float upperY = design.Level + 11;
-            Quad(1, 0, upperY, size.X, frames[1].LogicalHeight);
-            float lowerY = upperY + frames[1].LogicalHeight;
-            Quad(0, 0, lowerY, size.X, size.Y - lowerY);
-            Wave(3, frontX, 0);
+            Quad(6, 0, upperY, size.X, frames[6].LogicalHeight);
+            float lowerY = upperY + frames[6].LogicalHeight;
+            Quad(5, 0, lowerY, size.X, size.Y - lowerY);
+            Wave(8, frontX, 0);
+            paint.BlendMode = SKBlendMode.Plus;
+            foreach (WaterLight light in effects.Lights)
+            {
+                AtlasFrame frame = frames[light.Quad];
+                float quarter = frame.LogicalWidth / 4;
+                float x = -quarter + (light.HorizontalSample % ((uint)(size.X + (quarter * 2)) + 1));
+                paint.Color = SKColors.White.WithAlpha((byte)(Math.Clamp(light.Opacity * light.Opacity, 0, 1) * 255));
+                Quad(light.Quad, x, design.Level, frame.LogicalWidth, frame.LogicalHeight);
+            }
+            paint.BlendMode = SKBlendMode.SrcOver;
+            void Particle(WaterParticle particle)
+            {
+                AtlasFrame frame = frames[particle.Quad];
+                paint.Color = SKColors.White.WithAlpha((byte)(particle.Opacity * 255));
+                _ = canvas.Save();
+                Vector2 center = particle.Position;
+                if (particle.Quad < 3)
+                {
+                    center += particle.Scale * new Vector2(particle.HarmonicX + (frame.LogicalWidth / 2), frame.LogicalHeight / 2);
+                }
+                canvas.Translate(center.X, center.Y);
+                canvas.RotateRadians(particle.Rotation);
+                canvas.Scale(particle.Scale.X, particle.Scale.Y * particle.BounceY);
+                Quad(particle.Quad, -frame.LogicalWidth / 2, -frame.LogicalHeight / 2, frame.LogicalWidth, frame.LogicalHeight);
+                canvas.Restore();
+            }
+            foreach (WaterParticle bubble in effects.Bubbles)
+            {
+                Particle(bubble);
+            }
+            foreach (WaterParticle drop in effects.Drops)
+            {
+                Particle(drop);
+            }
         }
 
         public void Dispose()
         {
+            lightShader.Dispose();
             bitmap.Dispose();
         }
     }

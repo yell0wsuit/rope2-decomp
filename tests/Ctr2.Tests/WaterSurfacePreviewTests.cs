@@ -22,7 +22,7 @@ namespace Ctr2.Tests
         private sealed class Cache : IDisposable
         {
             internal string Root { get; } = Path.Combine(Path.GetTempPath(), "ctr2-water-surface-" + Guid.NewGuid());
-            internal Cache(int resolution, bool translucent = false, string maximumScale = "1")
+            internal Cache(int resolution, bool translucent = false, string maximumScale = "1", bool effects = false, byte effectAlpha = 255)
             {
                 string assets = Path.Combine(Root, "assets"), maps = Path.Combine(assets, "maps");
                 _ = Directory.CreateDirectory(maps);
@@ -56,7 +56,7 @@ namespace Ctr2.Tests
                     canvas.DrawRect(8, 7, 8, 6, paint);
                     paint.Color = SKColors.HotPink;
                     canvas.DrawRect(16, 7, 8, 6, paint);
-                    paint.Color = SKColors.Lime;
+                    paint.Color = SKColors.Lime.WithAlpha(effectAlpha);
                     canvas.DrawRect(24, 0, 8, 8, paint);
                     using SKData png = texture.Encode(SKEncodedImageFormat.Png, 100);
                     File.WriteAllBytes(Path.Combine(assets, "surface.png"), png.ToArray());
@@ -67,7 +67,8 @@ namespace Ctr2.Tests
                     return new(x * density, y * density, width * density, height * density, offsetX * density, offsetY * density);
                 }
                 ResourceQuad green = Quad(24, 0, 8, 8);
-                ResourceQuad[] water = [green, green, green, green, green, Quad(0, 0, 4, 4), Quad(4, 0, 4, 8), Quad(8, 0, 16, 4, 4, 10), Quad(8, 8, 16, 4, 8, 12)];
+                ResourceQuad clear = effects ? green : Quad(34, 0, 4, 4);
+                ResourceQuad[] water = [clear, clear, clear, clear, clear, Quad(0, 0, 4, 4), Quad(4, 0, 4, 8), Quad(8, 0, 16, 4, 4, 10), Quad(8, 8, 16, 4, 8, 12), clear, clear, clear];
                 ResourceCatalog catalog = new(1, "synthetic", "", [new(85, "character.pb", 7, resolution, null, 0, 0, []),
                     new(133, "surface.png", 0, resolution, density, 40 * density, 16 * density, [green, green], hash),
                     new(7, "surface.png", 0, resolution, density, 40 * density, 16 * density, [green], hash),
@@ -185,6 +186,55 @@ namespace Ctr2.Tests
             Assert.Equal(SKColors.Yellow, bitmap.GetPixel(320, 198));
             session.Restart();
             Assert.Equal(SKColors.Purple, Surface(0));
+        }
+
+        /// <summary>Additive traces and centered bubbles sample their Windows quads at both densities, without advancing in Draw.</summary>
+        [Theory]
+        [InlineData(2, 255)]
+        [InlineData(4, 255)]
+        [InlineData(2, 128)]
+        public void EffectQuadsRenderAtLogicalPositionsAndPause(int resolution, byte alpha)
+        {
+            using Cache cache = new(resolution, effects: true, effectAlpha: alpha);
+            using LevelPreview preview = LevelPreview.Load(cache.Root, 2, 1, resolution, play: true).Preview;
+            GameSession session = preview.Session!;
+            for (int i = 0; i < 60; i++)
+            {
+                session.Step();
+            }
+
+            using SKBitmap bitmap = new(640, 960);
+            using SKCanvas canvas = new(bitmap);
+            preview.Draw(canvas, 640, 960, 0);
+            WaterLight light = session.Simulation.WaterEffects!.Lights.First(l => l.Opacity > .1f);
+            int x = (int)(-2 + (light.HorizontalSample % 645)) + 4;
+            SKColor pixel = bitmap.GetPixel(x, 206);
+            Assert.Equal(42, pixel.Red);
+            int contribution = session.Simulation.WaterEffects.Lights.Where(l =>
+            {
+                float left = -2 + (l.HorizontalSample % 645);
+                return x >= left && x < left + 8;
+            }).Sum(l => (((byte)(l.Opacity * l.Opacity * 255) * alpha * alpha) + 32512) / 65025);
+            Assert.InRange(pixel.Green, 55 + contribution - 1, 55 + contribution + 1);
+            Assert.False(session.Simulation.Tap(new(300, 500)));
+            for (int i = 0; i < 20; i++)
+            {
+                session.Step();
+            }
+
+            WaterParticle bubble = session.Simulation.WaterEffects.Bubbles[0];
+            preview.Draw(canvas, 640, 960, 0);
+            // Native left/top wrapper has zero dimensions; its scale also scales the child harmonic shift.
+            Vector2 center = bubble.Position + (bubble.Scale * new Vector2(bubble.HarmonicX + 4, 4));
+            SKColor bubblePixel = bitmap.GetPixel((int)center.X, (int)center.Y);
+            Assert.True(bubblePixel.Green > 0);
+            WaterParticle[] before = [.. session.Simulation.WaterEffects.Bubbles];
+            preview.Draw(canvas, 640, 960, 999);
+            Assert.Equal(bubblePixel, bitmap.GetPixel((int)center.X, (int)center.Y));
+            Assert.Equal(before, session.Simulation.WaterEffects.Bubbles.ToArray());
+            session.Restart();
+            Assert.Empty(session.Simulation.WaterEffects!.Bubbles);
+            Assert.All(session.Simulation.WaterEffects.Lights, l => Assert.Equal(0, l.Opacity));
         }
     }
 }
