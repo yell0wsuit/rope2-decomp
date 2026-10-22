@@ -106,13 +106,19 @@ namespace Ctr2.Engine.Physics
             return underwater.Contains(body);
         }
 
+        internal float UnderwaterAverage(PhysicsBody body, int samples)
+        {
+            return underwaterHistory.TryGetValue(body, out List<int>? history) ?
+                (float)(history.TakeLast(samples).Sum() * (samples == 5 ? .2 : 0.01694915254237288)) : 0;
+        }
+
         /// <summary>The character child consumes the previous water callbacks, before this tick's late water update.</summary>
         private void UpdateUnderwaterCharacters()
         {
-            foreach ((PhysicsBody body, List<int> history) in underwaterHistory)
+            foreach (PhysicsBody body in underwaterHistory.Keys)
             {
                 // Fixed denominator even while the history is still filling; Windows rounds the double product to float.
-                float average = (float)(history.TakeLast(59).Sum() * 0.01694915254237288);
+                float average = UnderwaterAverage(body, 59);
                 if (average <= .5f || body.Type != PhysicsBodyType.Dynamic || !World.Bodies.Contains(body))
                 {
                     continue;

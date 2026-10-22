@@ -2026,8 +2026,8 @@ Om Nom records the latest 60 immersion callbacks. The newest 59, divided by the
 fixed denominator 59 with double arithmetic rounded to float, gate the righting
 impulse above 0.5. The impulse runs after character state updates and motion
 sampling, before the next water callback. Submerged characters do not enter the
-ordinary falling state. Swim/dive artwork and WATER_* presentation states are the
-next checkpoint.
+ordinary falling state. The swim/dive artwork and WATER_* presentation states are described in the
+water presentation checkpoint below.
 
 Candy, Om Nom and Bookas share the Windows offscreen test (0x4A68E0): outside the
 expanded rectangle, or beyond the horizontal margin while submerged with speed
@@ -2069,3 +2069,63 @@ and 160/162 fruit challenges. Full collectible verdicts pass 166/166, 161/162 an
 155/162 respectively; five won fruit challenges differ by one recorded fruit. The
 two fruit losses remain 3-12 and 6-20, described above. These results establish the
 physics checkpoint and its limits, not full water visual or trajectory parity.
+
+### Water presentation checkpoint
+
+Om Nom now selects the Windows water scenes: `WATER_DIVE` (37), `WATER_SWIM`
+(38), `WATER_MOUTH_OPEN` (39), `WATER_MOUTH_CLOSE` (40), `WATER_CHEWING` (41)
+and `WATER_FAIL` (42). The Windows scene name at 38 is `WATER_SWIM`; its gameplay
+state is WaterSwimming. Windows init explicitly loops this scene. Presentation
+wraps its animation time by the loaded scene duration using the fixed simulation
+clock; drawing, pause and restart cannot advance or retain an old scene clock.
+
+Windows update 0x4989F0 enters dive from idle, falling or rolling when the newest
+five immersion callbacks, divided by five, exceed 0.5 and the Booka cooldown is
+negative. It consumes the previous water update's history, like the righting
+impulse. Dive completion selects swimming. Swimming opens its mouth strictly
+inside 150 logical units, closes it beyond 170, and returns to idle when the
+newest-59 immersion average is below 0.4. Mouth logic runs before the water exit
+check, matching Windows. Opening a new water mouth scene also resets artwork
+mirroring before applying the chosen facing.
+
+Physical feeding in water-mouth-open selects water chewing and scene 40. On its
+completion, scene 41 starts; it can finish the level, with the existing 2.8-second
+chewing fallback retained. Closing without food instead returns to scene 38.
+Candy loss from a water state selects scene 42. The existing revision guard rejects
+stale animation callbacks. Water chewing participates in the same capture and
+Booka chewing checks as the other chewing states.
+
+Windows connection timelines, constructed in Om Nom init and configured at
+0x497D40, deform the root for 0.125 seconds before switching to dive, resurfaced
+idle or water failure. Scale changes from (1, 1) to (1.1, 0.9), with a six-unit
+downward offset. The selected child scene starts at that connection's end while
+another 0.125-second timeline restores the root. Mouth-close completion starts
+only this recovery alongside swimming or chewing (0x498960 / 0x499FD0). Child
+scene completion remains active during recovery. A new scene cancels an
+interrupted connection, so a Booka response cannot later be replaced by its old
+pending dive. These transitions reuse the procedural root renderer without
+changing the physics bodies.
+
+Ten invented regressions cover short/long history timing, connection deformation
+and loaded dive timing, mouth hysteresis and facing, stale callbacks, water
+feeding and failure, Booka cooldown/interruption, and a generated-cache rendering
+readback. The readback test distinguishes the repeated swim cycle from a frozen
+terminal pose and verifies pause and restart. All 960 native water physics
+snapshots still match across all nine checked components; the fixture and its
+SHA-256 above are unchanged.
+
+Local Windows-cache render inspection covered all six water animation scenes and
+playable frames from 5-2 (tick 18) and 7-24 (tick 60). This verifies decoded artwork
+and scene rendering, not visual parity with an original-game recording. Water
+surface artwork, particles and audio remain separate presentation work.
+
+The construction audit remains 166/168 (1-8 tutorial sensor and 2-14 negative
+spawn remain blocked). The replay baseline remains 490 journals / 18027 exact
+prefix samples, with no prefix shrinking. The 3-20 main replay compares 10996
+late body samples instead of 11008 as its water chewing changes completion timing;
+its exact prefix remains six samples. Corrected replay outcomes are unchanged:
+all 75 admitted water variants win, with the same missing challenge star in 6-8
+and missing fruit in 2-16 documented above. Full collectible verdicts remain
+25/25 main, 24/25 challenge and 24/25 fruit challenge for water, and
+166/166, 161/162 and 155/162 over all supported content. Release validation:
+701 tests passed, zero skipped; build, format verification and diff checks pass.

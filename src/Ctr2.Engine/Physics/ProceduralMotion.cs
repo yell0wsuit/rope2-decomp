@@ -8,7 +8,7 @@ namespace Ctr2.Engine.Physics
 
     internal enum CharacterProcedure
     {
-        None, Bottom, Top, Left, Right, StandLeft, StandRight
+        None, Bottom, Top, Left, Right, StandLeft, StandRight, WaterConnectionOut, WaterConnectionIn
     }
 
     public sealed partial class PhysicsWorld
@@ -36,6 +36,10 @@ namespace Ctr2.Engine.Physics
         {
             get
             {
+                if (WaterConnection)
+                {
+                    return Vector2.Lerp(Vector2.One, new(1.1f, .9f), ProcedureWeight);
+                }
                 if (procedure is CharacterProcedure.StandLeft or CharacterProcedure.StandRight)
                 {
                     return Vector2.Lerp(Vector2.One, new(.85f, 1.3f), ProcedureWeight);
@@ -54,6 +58,7 @@ namespace Ctr2.Engine.Physics
             CharacterProcedure.Right => procedureImpulse * 60 * Vector2.UnitX,
             CharacterProcedure.StandLeft => new Vector2(-10, 0),
             CharacterProcedure.StandRight => new Vector2(10, 0),
+            CharacterProcedure.WaterConnectionOut or CharacterProcedure.WaterConnectionIn => new Vector2(0, 6),
             CharacterProcedure.None => Vector2.Zero,
             _ => Vector2.Zero
         });
@@ -68,6 +73,11 @@ namespace Ctr2.Engine.Physics
                 }
 
                 float time = (simulation.Tick - procedureStartedAt) * PhysicsWorld.TimeStep;
+                if (WaterConnection)
+                {
+                    float progress = Math.Clamp(time / .125f, 0, 1);
+                    return procedure == CharacterProcedure.WaterConnectionOut ? progress : 1 - progress;
+                }
                 bool standing = procedure is CharacterProcedure.StandLeft or CharacterProcedure.StandRight;
                 float peak = standing ? .1f : .03f;
                 float recovery = standing ? .05f : .06f;
@@ -151,6 +161,23 @@ namespace Ctr2.Engine.Physics
 
         private void AdvanceProcedure()
         {
+            if (WaterConnection)
+            {
+                if ((simulation.Tick - procedureStartedAt) * PhysicsWorld.TimeStep >= .125f)
+                {
+                    if (procedure == CharacterProcedure.WaterConnectionOut)
+                    {
+                        string target = connectedWaterScene!;
+                        connectedWaterScene = null;
+                        RecoverWaterConnection(target);
+                    }
+                    else
+                    {
+                        procedure = CharacterProcedure.None;
+                    }
+                }
+                return;
+            }
             bool standing = procedure is CharacterProcedure.StandLeft or CharacterProcedure.StandRight;
             if (!ProcedureActive || (simulation.Tick - procedureStartedAt) * PhysicsWorld.TimeStep < (standing ? .15f : .09f))
             {

@@ -450,6 +450,11 @@ namespace Ctr2.Desktop
                         {
                             SyncGameAnimation();
                             poseTime = (Simulation.Tick - game.SceneStartedAt) * (double)PhysicsWorld.TimeStep;
+                            // Windows Om Nom explicitly loops scene 38; mouth, dive and chewing scenes play once.
+                            if (game.Scene == "WATER_SWIM" && omnom.Duration > 0)
+                            {
+                                poseTime %= omnom.Duration;
+                            }
                         }
                         omnom.DrawTransformed(canvas, character, poseTime);
                     }

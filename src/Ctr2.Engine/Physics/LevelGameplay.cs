@@ -13,7 +13,7 @@ namespace Ctr2.Engine.Physics
         Running,
         /// <summary>Om Nom has finished chewing.</summary>
         Won,
-        /// <summary>The candy or character left the supported dry scene.</summary>
+        /// <summary>The candy or character left the supported scene.</summary>
         Lost
     }
 
@@ -78,7 +78,17 @@ namespace Ctr2.Engine.Physics
         /// <summary>Cheering while carried by a helicopter, until that scene ends.</summary>
         HelicopterExcited,
         /// <summary>Scared by a Booka, until the WITH_BOOKA scene ends and the character jumps away.</summary>
-        Booed
+        Booed,
+        /// <summary>Diving into the water, before the swimming loop.</summary>
+        WaterDive,
+        /// <summary>Swimming until candy approaches or the long immersion history clears.</summary>
+        WaterSwimming,
+        /// <summary>Swimming with an open mouth near candy.</summary>
+        WaterMouthOpen,
+        /// <summary>Closing the swimming mouth before returning to swimming or chewing.</summary>
+        WaterMouthClose,
+        /// <summary>Chewing after eating with the water mouth open.</summary>
+        WaterChewing
     }
 
     /// <summary>One accepted pre-step candy/character contact.</summary>
@@ -87,7 +97,7 @@ namespace Ctr2.Engine.Physics
     /// <param name="Character">Authored character index.</param>
     public sealed record CandyConsumption(int Tick, int Candy, int Character);
 
-    /// <summary>Opt-in gameplay state for one candy and character in a dry level of any location.</summary>
+    /// <summary>Opt-in gameplay state for one candy and character in a level of any location.</summary>
     public sealed partial class LevelGameplay
     {
         private readonly CandySimulation simulation;
@@ -216,12 +226,13 @@ namespace Ctr2.Engine.Physics
                 simulation.SwapThrowerCapture(candy, character);
                 simulation.DropFromHelicopter(candy);
                 CandyState = CandyState.Eating;
-                bool airborne = CharacterState == CharacterState.FallingMouthOpen, carried = CharacterState == CharacterState.HelicopterMouthOpen;
-                CharacterState = carried ? CharacterState.HelicopterChewing : airborne ? CharacterState.FallingChewing : CharacterState.Chewing;
+                bool airborne = CharacterState == CharacterState.FallingMouthOpen, carried = CharacterState == CharacterState.HelicopterMouthOpen,
+                    swimming = CharacterState == CharacterState.WaterMouthOpen;
+                CharacterState = carried ? CharacterState.HelicopterChewing : swimming ? CharacterState.WaterChewing : airborne ? CharacterState.FallingChewing : CharacterState.Chewing;
                 candy.IsSensor = true;
                 candy.GravityScale = 0;
                 candy.Velocity = 5 * (character.Origin - candy.Position);
-                SetScene(carried ? "WITH_HELICOPTER_MOUTH_CLOSE" : airborne ? "FALLING_MOUTH_CLOSE" : "MOUTH_CLOSE");
+                SetScene(carried ? "WITH_HELICOPTER_MOUTH_CLOSE" : swimming ? "WATER_MOUTH_CLOSE" : airborne ? "FALLING_MOUTH_CLOSE" : "MOUTH_CLOSE");
             }
         }
 
@@ -291,8 +302,16 @@ namespace Ctr2.Engine.Physics
             {
                 simulation.RetireCandy();
                 CandyState = CandyState.Removed;
+                bool water = WaterState;
                 CharacterState = CharacterState.Fail;
-                SetScene("FAIL");
+                if (water)
+                {
+                    StartWaterConnection("WATER_FAIL");
+                }
+                else
+                {
+                    SetScene("FAIL");
+                }
             }
             else
             {
@@ -333,8 +352,10 @@ namespace Ctr2.Engine.Physics
                     CharacterState = CharacterState.HelicopterIdle;
                     SetScene("WITH_HELICOPTER_MOUTH_CLOSE");
                 }
+                UpdateWaterMouth(distance);
                 UpdateAirborneState();
                 UpdateStandingState();
+                UpdateWaterState();
             }
         }
 
@@ -343,7 +364,7 @@ namespace Ctr2.Engine.Physics
         /// <param name="revision">Scene revision captured when playback began.</param>
         public void SceneFinished(string scene, int revision)
         {
-            if (Result != LevelResult.Running || Scene != scene || SceneRevision != revision || ProcedureActive || CharacterState == CharacterState.StandUpChewing)
+            if (Result != LevelResult.Running || Scene != scene || SceneRevision != revision || SceneCompletionBlocked || CharacterState == CharacterState.StandUpChewing)
             {
                 return;
             }
@@ -364,6 +385,27 @@ namespace Ctr2.Engine.Physics
             {
                 CharacterState = CharacterState.Idle;
                 SetScene("IDLE");
+            }
+            else if (scene == "WATER_MOUTH_CLOSE")
+            {
+                if (CharacterState == CharacterState.WaterChewing)
+                {
+                    RecoverWaterConnection("WATER_CHEWING");
+                }
+                else
+                {
+                    CharacterState = CharacterState.WaterSwimming;
+                    RecoverWaterConnection("WATER_SWIM");
+                }
+            }
+            else if (CharacterState == CharacterState.WaterDive && scene == "WATER_DIVE")
+            {
+                CharacterState = CharacterState.WaterSwimming;
+                SetScene("WATER_SWIM");
+            }
+            else if (scene == "WATER_CHEWING")
+            {
+                Finish(LevelResult.Won);
             }
             else if (CharacterState == CharacterState.FallingChewing)
             {
@@ -459,7 +501,7 @@ namespace Ctr2.Engine.Physics
         /// <summary>Completes the current authored scene on the first fixed tick at or beyond its duration, once per revision.</summary>
         private void CompleteAuthoredScene()
         {
-            if (sceneDurations != null && completedRevision != SceneRevision && !ProcedureActive &&
+            if (sceneDurations != null && completedRevision != SceneRevision && !SceneCompletionBlocked &&
                 sceneDurations.TryGetValue(Scene, out double duration) && (simulation.Tick - SceneStartedAt) * (double)PhysicsWorld.TimeStep >= duration)
             {
                 completedRevision = SceneRevision;
@@ -611,7 +653,7 @@ namespace Ctr2.Engine.Physics
         }
 
         /// <summary>Gets whether the character is in a source chewing state.</summary>
-        private bool Chewing => CharacterState is CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing or CharacterState.HelicopterChewing;
+        private bool Chewing => CharacterState is CharacterState.Chewing or CharacterState.FallingChewing or CharacterState.StandUpChewing or CharacterState.HelicopterChewing or CharacterState.WaterChewing;
 
         /// <summary>Gets the character's logical x like the source node, from the body origin.</summary>
         private float CharacterX()
