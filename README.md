@@ -73,7 +73,7 @@ pins, triggers, frogs, balloons, balloon generators, magnets, pumps, throwers, h
 wood and spread the burn through joints to connected shapes. Their first fade update releases carriers and destroys the
 physics body, cutting its ropes; the visual remains until its animation finishes. Om Nom scares Bookas off their
 ropes and jumps away from them. Gameplay is independent of the
-authored location; currently 167 levels across all seven desktop packs use nothing but supported
+authored location; all 168 levels across the seven desktop packs use nothing but supported
 mechanics. Physical candy contact starts eating; candy fades for 0.2 seconds, followed by chewing and completion. Candy
 loss plays FAIL before the result; character loss ends the level immediately.
 Pack 1/entry 1 preserves the authored off-screen arrival and adds the Windows
@@ -191,8 +191,8 @@ location, whether construction succeeds, and the first failure for each entry.
 An unreadable or unsupported level is reported while later entries are still
 checked. An invalid index or master design fails the command. This measures
 session construction, not completion, asset rendering, or original-game parity.
-The supplied Windows 1.0.0.46 content has 168 desktop entries; currently 167 pass.
-The remaining entry is 1-8 (tutorial sensor). Om Nom authored above the screen falls in, as in 2-14; only the first
+The supplied Windows 1.0.0.46 content has 168 desktop entries; all 168 pass.
+1-8's tutorial sensor is simulated; the balloons power-up tutorial it requests is not shown yet. Om Nom authored above the screen falls in, as in 2-14; only the first
 production level adds the forest leaf burst.
 Water physics is supported, including buoyancy, depth-dependent gravity, damping,
 fireball extinguishing and Om Nom's righting impulse. Om Nom uses the authored dive, looping swim, water mouth, chewing and failure

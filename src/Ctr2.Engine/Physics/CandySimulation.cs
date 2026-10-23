@@ -211,6 +211,9 @@ namespace Ctr2.Engine.Physics
                     case "water":
                         AddWater(placed, design);
                         break;
+                    case "tutorial_sensor":
+                        AddTutorialSensor(placed, design);
+                        break;
                     case "magnet":
                         AddMagnet(placed, design);
                         break;
@@ -366,6 +369,7 @@ namespace Ctr2.Engine.Physics
             HandleThrowerContacts(contacts);
             HandleHelicopterContacts(contacts);
             HandleGeneratorContacts(contacts);
+            HandleTutorialSensorContacts(contacts);
             // The scene destroys objects scheduled for removal after the step and before its children update.
             RemoveGenerators();
             if (starsScheduledForRemoval)
@@ -416,6 +420,8 @@ namespace Ctr2.Engine.Physics
             UpdateFruits();
             // Magnets are added as children after stars and fruits.
             UpdateMagnets();
+            // Tutorial sensors follow triggers and tutorial hints; the water is added after them.
+            UpdateTutorialSensors();
             UpdateWater();
             UpdateSpawned(late);
         }

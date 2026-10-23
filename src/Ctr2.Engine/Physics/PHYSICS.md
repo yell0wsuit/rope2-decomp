@@ -1891,6 +1891,30 @@ briefly unknown. Because burned shapes leave the scene's shape list, the initial
 journal size is recorded at construction; without that, 7-22's journaled cut of
 its generated rope failed after a fireball burned a shape.
 
+## Scene tutorial sensors
+
+Windows `TutorialSensor::initWith` (0x4AB990) merges the master `tutorial_sensor` design
+(a static sensor circle) with the placement, so the authored radius replaces the
+design's, and reads `delay`. It disables itself unless `tutorial` is
+`balloons_1candy`. Unlike Android, Windows does not consult the shown-tutorial
+preference here. `loadMap` stores sensors in list `+444`, created in document order.
+The post-pass adds them as children after triggers and tutorial hints and before the
+water, without a journal slot.
+
+The begin-contact delegate (0x4ABD10) sets `timeout = delay` for game-body type 4,
+the candy, and the finished-contact delegate (0x4ABD40) resets it to -1. Each
+update (0x4ABC70) subtracts dt while enabled and counting. At or below zero it sets
+the scene tutorial to 4 unless a global flag (`sub_4F7430()[12]`) is set, asks
+`GameController` (0x4DB940) to show it, and disables the sensor. Outside replays,
+that tutorial grants a `balloons` power-up, records the shown-tutorial preference
+and points the HUD at the power-up. The port records the requesting tick as
+`SimulationTutorialSensor.RequestedAt`. Power-ups and the HUD flow are not ported,
+and neither changes level physics until a player uses the power-up.
+
+Tutorial sensors complete the construction audit: 168 of 168. 1-8's main and
+challenge journals win with the recorded stars, open-loop and corrected, and its
+fruit challenge wins one fruit short of the recording.
+
 ## Scene magnets
 
 Windows `Magnet::initWith` (0x494420) merges the master `magnet` design (a static
