@@ -114,10 +114,11 @@ namespace Ctr2.Engine.Physics
         internal LevelGameplay(CandySimulation simulation, LevelLayout layout, bool firstLevelArrival, IReadOnlyDictionary<string, double>? sceneDurations = null)
         {
             if (simulation.Candies.Count != 1 || simulation.Characters.Count != 1 ||
-                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "clover" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "trigger" or "frog" or "balloon" or "balloonGenerator" or "magnet" or "water" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" or "snail" or "tutorial_swipe" or "tutorial_tap")) ||
-                (!firstLevelArrival && layout.Objects.Any(o => o.Source.Kind == "omnom" && o.Position!.Value.Y < 0)))
+                layout.Objects.Any(o => o.Source.Kind is not ("candy" or "omnom" or "star" or "clover" or "grab" or "polygon_materialized" or "rectangle_materialized" or "circle_materialized" or "pin" or "trigger" or "frog" or "balloon" or "balloonGenerator" or "magnet" or "water" or "rope_instance" or "pump" or "thrower" or "helicopter" or "fireball" or "booka" or "gremlin" or "snail" or "tutorial_swipe" or "tutorial_tap")))
             {
-                throw new InvalidDataException("Play supports one candy and one Om Nom with supported mechanics; negative spawn requires the first production level.");
+                // Native loadMap keys only the leaf burst and greeting suppression to the first production level; any level may
+                // author Om Nom above the screen, and he simply falls in.
+                throw new InvalidDataException("Play supports one candy and one Om Nom with supported mechanics.");
             }
             this.simulation = simulation;
             this.sceneDurations = sceneDurations;

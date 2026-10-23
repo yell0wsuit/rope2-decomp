@@ -102,9 +102,9 @@
 2	13	main	ok	121	22	181
 2	13	challenge	ok	107	20	84
 2	13	fruit_challenge	ok	121	17	743
-2	14	main	unsupported	-	0	0
-2	14	challenge	unsupported	-	0	0
-2	14	fruit_challenge	unsupported	-	0	0
+2	14	main	ok	121	14	39
+2	14	challenge	ok	121	14	73
+2	14	fruit_challenge	ok	181	10	17
 2	15	main	ok	360	46	259
 2	15	challenge	ok	331	44	104
 2	15	fruit_challenge	ok	207	15	392

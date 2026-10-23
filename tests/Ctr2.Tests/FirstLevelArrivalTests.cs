@@ -21,11 +21,12 @@ namespace Ctr2.Tests
             return new(level, design, firstLevelArrival: arrival, variant: variant);
         }
 
-        /// <summary>Only explicitly selected first-entry arrival permits its authored off-screen character.</summary>
+        /// <summary>First-entry arrival adds the leaf burst to the ordinary fall from the authored off-screen position; without it the
+        /// same spawn plays without leaves, as in any other level.</summary>
         [Fact]
         public void ExplicitArrivalFallsFromAuthoredNegativeSpawn()
         {
-            _ = Assert.Throws<System.IO.InvalidDataException>(() => Create(false));
+            Assert.Null(Create(false).Simulation.Gameplay!.ArrivalLeaves);
             GameSession session = Create(true);
             Assert.Equal(new Vector2(1, -.97f), session.Simulation.Characters[0].Origin);
             Assert.Equal(30, session.Simulation.Gameplay!.ArrivalLeaves!.Particles.Count);

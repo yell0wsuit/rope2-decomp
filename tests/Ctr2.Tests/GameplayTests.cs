@@ -204,14 +204,31 @@ namespace Ctr2.Tests
             Assert.Equal(expected, scene.Gameplay!.CharacterState);
         }
 
-        /// <summary>Unsupported mechanics and special arrival fail explicitly before a misleading play session.</summary>
+        /// <summary>Unsupported mechanics fail explicitly before a misleading play session.</summary>
         [Theory]
         [InlineData("<candy id='c' x='100' y='100'/>")]
-        [InlineData("<candy id='c' x='100' y='100'/><omnom x='100' y='-97'/>")]
         [InlineData("<candy id='c' x='100' y='100'/><omnom x='100' y='100'/><bubble x='100' y='100'/>")]
         public void UnsupportedPlayScopesFailExplicitly(string objects)
         {
             _ = Assert.Throws<InvalidDataException>(() => Create(objects));
+        }
+
+        /// <summary>Native loadMap keys only the forest leaf burst and the greeting suppression to the first production level;
+        /// elsewhere an Om Nom authored above the screen simply falls in.</summary>
+        [Fact]
+        public void NegativeSpawnOutsideTheFirstLevelFallsWithoutArrivalLeaves()
+        {
+            string design = CandySimulationTests.Design.Replace("</layer></map>", CharacterBodyDefinitionTests.Master + "</layer></map>");
+            CandySimulation scene = new(LevelReader.Read("<map><layer name='settings'><map width='320' height='480'/></layer><layer name='Objects'>" +
+                "<candy id='c' x='100' y='400'/><omnom x='200' y='-30'/></layer></map>"), LevelReader.Read(design), play: true);
+            Assert.Null(scene.Gameplay!.ArrivalLeaves);
+            float start = scene.Characters[0].Origin.Y;
+            for (int i = 0; i < 10; i++)
+            {
+                scene.Step();
+            }
+            Assert.True(scene.Characters[0].Origin.Y > start);
+            Assert.Equal(LevelResult.Running, scene.Gameplay.Result);
         }
 
         /// <summary>Location selects presentation only; supported gameplay starts in any authored location.</summary>

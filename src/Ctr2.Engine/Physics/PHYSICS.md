@@ -1564,8 +1564,10 @@ are a separate acceptance gate. Presentation expansion follows those gates.
 `CandySimulation(..., play: true)` adds a bounded dry-level slice with one candy
 and one Om Nom. As in the original scene, gameplay does not depend on the authored
 location, which only selects presentation. Other mechanics and multiple protagonists/candies fail
-explicitly. The desktop host selects first-entry arrival only for pack 1/entry 1;
-other negative spawns still fail. Diagnostics remain opt-out
+explicitly. The desktop host selects first-entry arrival only for pack 1/entry 1. Native
+`loadMap` keys only the leaf burst and greeting suppression to that level, so any other
+level may author Om Nom above the screen and he simply falls in (2-14 does, into water).
+Diagnostics remain opt-out
 and retain their numerical fixture behavior.
 
 Current compound polygon/circle overlap at pre-step positions starts consumption
